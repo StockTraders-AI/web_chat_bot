@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>StockTraders AI Chat</title>
+  <link rel="stylesheet" href="/frontend/styles.css?v=case-ideas" />
+</head>
+<body>
+  <section class="auth-screen hidden" id="authScreen" hidden>
+    <div class="auth-panel">
+      <div class="login-card">
+        <div class="login-head">
+          <div>
+            <h2>&#272;&#259;ng nh&#7853;p StockTraders AI</h2>
+            <p>&#272;&#259;ng nh&#7853;p b&#7857;ng t&#224;i kho&#7843;n &#273;&#432;&#7907;c c&#7845;p &#273;&#7875; m&#7903; &#273;&#250;ng quy&#7873;n theo vai tr&#242;.</p>
+          </div>
+        </div>
+
+        <label class="login-field">
+          <span>T&#234;n &#273;&#259;ng nh&#7853;p</span>
+          <input id="loginUsername" autocomplete="username" placeholder="admin" />
+        </label>
+
+        <label class="login-field">
+          <span>M&#7853;t kh&#7849;u</span>
+          <input id="loginPassword" type="password" autocomplete="current-password" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;" />
+        </label>
+
+        <div class="login-error hidden" id="loginError" hidden></div>
+        <button class="login-submit" id="loginSubmit" type="button">&#272;&#259;ng nh&#7853;p</button>
+        <button class="guest-submit" id="guestContinue" type="button">Ti&#7871;p t&#7909;c kh&#244;ng &#273;&#259;ng nh&#7853;p</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="shell hidden" id="appShell" hidden>
+    <aside class="sidebar">
+      <div class="side-title">Khách hàng</div>
+      <div class="user-list" id="userList"></div>
+      <button class="new-user" id="newUser">+ User mới</button>
+    </aside>
+
+    <div class="app">
+      <header class="topbar">
+        <div>
+          <div class="brand">Chatbot.StockTraders AI</div>
+          <div class="active-user" id="activeUser"></div>
+        </div>
+
+        <div class="controls">
+          <select id="modelSelect"></select>
+          <div class="auth-box" id="authBox">
+            <button class="login-button" id="loginOpen" type="button">Đăng nhập</button>
+            <div class="account-menu hidden" id="accountMenu" hidden>
+              <button class="account-trigger" id="accountTrigger" type="button">
+                <span class="account-avatar" id="accountAvatar">?</span>
+                <span class="account-copy">
+                  <strong id="accountName">Guest</strong>
+                  <small id="accountRole">Khách</small>
+                </span>
+                <span class="account-caret">▾</span>
+              </button>
+              <div class="account-dropdown hidden" id="accountDropdown" hidden>
+                <div class="account-dropdown-info" id="accountInfo"></div>
+                <button class="account-nav" type="button" id="chatViewBtn">Chat tư vấn</button>
+                <button class="account-nav hidden" type="button" id="conditionViewBtn" hidden>
+                  Tạo mẫu điều kiện
+                </button>
+                <button class="account-nav hidden" type="button" id="salesTargetViewBtn" hidden>
+                  Target khai thác
+                </button>
+                <button class="account-nav hidden" type="button" id="caseIdeaViewBtn" hidden>
+                  Case ý tưởng
+                </button>
+                <button class="account-nav hidden" type="button" id="accountAdminViewBtn" hidden>Quản lý tài khoản</button>
+                <button type="button" id="logoutBtn">Đăng xuất</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <section class="profile-form hidden" id="profileForm" hidden>
+        <div class="profile-card">
+          <div class="profile-head">
+            <div class="profile-icon">▣</div>
+            <div>
+              <h2>Bảng khai báo thông tin ban đầu</h2>
+              <p>Điền nhanh 3 thông tin trước khi vào tư vấn</p>
+            </div>
+          </div>
+
+          <div class="profile-divider"></div>
+
+          <div class="profile-grid">
+            <label class="field">
+              <span>Giới tính</span>
+              <select id="profileGender">
+                <option value="Nam">Nam</option>
+                <option value="Nữ">Nữ</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Năm sinh</span>
+              <input id="profileBirthYear" placeholder="VD: 1990" />
+            </label>
+
+            <label class="field">
+              <span>Thâm niên đầu tư</span>
+              <select id="profileExperience">
+                <option value="Mới tham gia">Mới tham gia</option>
+                <option value="1-3 năm">1-3 năm</option>
+                <option value="Trên 3 năm">Trên 3 năm</option>
+              </select>
+            </label>
+          </div>
+
+          <button class="profile-submit" id="profileSubmit">Lưu và bắt đầu tư vấn</button>
+        </div>
+
+      </section>
+
+      <section class="progress-panel" id="progressPanel"></section>
+
+      <section class="condition-admin hidden condition-page" id="conditionAdmin" hidden>
+        <div class="condition-topbar">
+          <div class="condition-brand-block">
+            <div class="condition-brand">StockTraders AI</div>
+            <div class="condition-subtitle">Quản trị điều kiện</div>
+          </div>
+
+          <div class="condition-steps">
+            <div class="condition-step active" id="conditionStep1Btn">
+              <span>1</span>
+              <div>
+                <strong>Tạo điều kiện</strong>
+                <small>Tạo và quản lý điều kiện</small>
+              </div>
+            </div>
+
+            <div class="condition-step-line"></div>
+
+            <div class="condition-step" id="conditionStep2Btn">
+              <span>2</span>
+              <div>
+                <strong>Kết hợp điều kiện</strong>
+                <small>Chọn và ghép điều kiện</small>
+              </div>
+            </div>
+
+            <div class="condition-step-line"></div>
+
+            <div class="condition-step" id="conditionStep3Btn">
+              <span>3</span>
+              <div>
+                <strong>Kích hoạt & chạy</strong>
+                <small>Bật / tắt mẫu đã xác nhận</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <section id="conditionStep1">
+          <div class="condition-layout">
+          <div class="condition-card condition-list-card">
+            <div class="condition-card-head">
+              <h3>Danh sách điều kiện</h3>
+
+              <button class="condition-new-btn" type="button">
+                <span>+</span>
+                Tạo điều kiện mới
+              </button>
+            </div>
+
+            <div class="condition-toolbar">
+              <div class="condition-type-group">
+                <select id="conditionFilterType">
+                  <option value="">Tất cả type</option>
+                </select>
+              </div>
+
+              <div class="condition-search-wrap">
+                <span>⌕</span>
+                <input
+                  id="conditionSearch"
+                  placeholder="Tìm theo tên điều kiện..."
+                />
+              </div>
+            </div>
+
+            <div class="condition-table-head">
+              <div>STT</div>
+              <div>Type</div>
+              <div>Tên điều kiện</div>
+              <div>Điều kiện</div>
+              <div>Mô tả</div>
+              <div>Thao tác</div>
+            </div>
+
+            <div id="conditionTemplateList" class="condition-template-list"></div>
+            <div id="conditionPagination" class="condition-pagination"></div>
+          </div>
+
+          <div class="condition-card condition-form-card">
+            <div class="condition-card-head compact">
+              <div>
+                <h3>Tạo điều kiện mới</h3>
+              </div>
+            </div>
+
+            <label class="condition-field">
+              <span>Type <b>*</b></span>
+              <div class="condition-type-create-row">
+                <select id="conditionType"></select>
+
+                <button
+                  type="button"
+                  id="addConditionTypeBtn"
+                  class="condition-add-type-btn"
+                  title="Thêm type mới"
+                >
+                  +
+                </button>
+              </div>
+            </label>
+
+            <label class="condition-field">
+              <span>Tên điều kiện <b>*</b></span>
+              <input id="conditionName" placeholder="Nhập tên điều kiện..." />
+            </label>
+
+            <label class="condition-field condition-logic-field">
+              <span>Điều kiện <b>*</b></span>
+              <textarea
+                id="conditionLogic"
+                rows="3"
+                placeholder="VD: SMDT > SMDT(-1) AND SMDT(-1) > SMDT(-2)"
+              ></textarea>
+            </label>
+
+            <label class="condition-field condition-desc-field">
+              <span>Mô tả <b>*</b></span>
+              <textarea id="conditionDescription" rows="8" maxlength="500" placeholder="Nhập mô tả điều kiện..."></textarea>
+              <small>0/500</small>
+            </label>
+
+            <div class="condition-form-actions">
+              <button class="condition-cancel-btn" type="button">Hủy</button>
+              <button class="condition-save-btn" id="saveConditionTemplateBtn" type="button">
+                Lưu
+              </button>
+            </div>
+          </div>
+          </div>
+        </section>
+
+        <section class="condition-step2 hidden" id="conditionStep2" hidden>
+          <div class="step2-page">
+            <div class="step2-page-head">
+              <div>
+                <h3>Kết hợp điều kiện</h3>
+                <p>Xem danh sách các mẫu điều kiện đã lưu và tạo mới mẫu kết hợp</p>
+              </div>
+            </div>
+
+            <div class="step2-toolbar">
+              <div class="step2-toolbar-left">
+                <div class="condition-search-wrap step2-search-wrap">
+                  <span>⌕</span>
+                  <input
+                    id="flowSearch"
+                    placeholder="Tìm kiếm mẫu kết hợp..."
+                  />
+                </div>
+              </div>
+
+              <button class="step2-add-flow-btn" id="openFlowModalBtn" type="button">
+                <span>+</span>
+                Thêm mẫu
+              </button>
+            </div>
+
+            <div class="condition-card step2-flow-card">
+              <div class="step2-flow-head">
+                <div>Tên mẫu kết hợp</div>
+                <div>Loại mẫu</div>
+                <div>Điều kiện kết hợp</div>
+                <div>Thao tác</div>
+              </div>
+
+              <div id="conditionFlowList" class="step2-flow-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="condition-step3 hidden" id="conditionStep3" hidden>
+          <div class="step3-page">
+            <div class="step2-page-head">
+              <div>
+                <h3>Kích hoạt & chạy</h3>
+                <p>Chỉ hiển thị các mẫu kết hợp đã xác nhận ở bước 2</p>
+              </div>
+            </div>
+
+            <div class="step2-toolbar step3-toolbar">
+              <div class="step2-toolbar-left">
+                <div class="condition-search-wrap step2-search-wrap">
+                  <span>⌕</span>
+                  <input
+                    id="activeFlowSearch"
+                    placeholder="Tìm kiếm mẫu đã xác nhận..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="condition-card step3-flow-card">
+              <div class="step3-flow-head">
+                <div>Tên mẫu kết hợp</div>
+                <div>Loại mẫu</div>
+                <div>Điều kiện kết hợp</div>
+                <div>Prompt</div>
+                <div>Ngày check</div>
+                <div>Kích hoạt</div>
+              </div>
+
+              <div id="activeFlowList" class="step3-flow-list"></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <div class="flow-modal hidden" id="flowModal" hidden>
+        <div class="flow-modal-dialog flow-modal-content">
+          <button class="flow-modal-close" id="flowModalClose" type="button">×</button>
+
+          <div class="flow-modal-head">
+            <h2>Thêm mẫu điều kiện</h2>
+          </div>
+
+          <label class="condition-field builder-field">
+            <span>Tên mẫu điều kiện <b>*</b></span>
+            <input
+              id="flowName"
+              maxlength="100"
+              placeholder="Nhập tên mẫu..."
+            />
+            <small id="flowNameCount" class="builder-count">0/100</small>
+          </label>
+
+          <label class="condition-field condition-desc-field builder-field">
+            <span>Nội dung mẫu <b>*</b></span>
+            <textarea
+              id="flowPromptTemplate"
+              rows="4"
+              maxlength="500"
+              placeholder="Nhập nội dung mẫu..."
+            ></textarea>
+            <small id="flowPromptCount" class="builder-count">0/500</small>
+          </label>
+
+          <input id="flowExpression" type="hidden" />
+
+          <div class="flow-modal-grid">
+            <div class="flow-modal-library">
+              <div class="flow-section-title">Chọn điều kiện</div>
+              <input
+                  id="flowConditionKeyword"
+                  class="flow-condition-keyword"
+                  placeholder="Tìm điều kiện..."
+              />
+
+              <div class="flow-select-row">
+                  <select id="flowConditionSearch">
+                      <option value="">Chọn điều kiện...</option>
+                  </select>
+
+                  <button
+                      type="button"
+                      id="addSelectedConditionBtn"
+                      class="flow-add-condition-btn"
+                  >
+                      Thêm
+                  </button>
+              </div>
+              <div id="confirmedConditionLibrary" class="step2-library-list hidden"></div>
+            </div>
+
+            <div class="flow-modal-operator">
+              <div class="flow-section-title">Kết hợp bằng</div>
+
+              <button
+                type="button"
+                class="logic-btn active"
+                id="nextOperatorAnd"
+              >
+                AND
+              </button>
+
+              <button
+                type="button"
+                class="logic-btn"
+                id="nextOperatorOr"
+              >
+                OR
+              </button>
+            </div>
+          </div>
+
+          <div class="flow-selected-head">
+            <span>Điều kiện đã chọn</span>
+
+            <button
+                class="flow-clear-btn"
+                id="clearSelectedConditions"
+            >
+                Xóa tất cả
+            </button>
+          </div>
+
+          <div
+            id="flowPreview"
+            class="builder-preview-flow"
+          >
+              <span class="builder-preview-empty">
+                Chưa chọn điều kiện nào
+              </span>
+          </div>
+
+          <div class="flow-footer condition-form-actions builder-actions">
+            <button class="condition-cancel-btn" type="button" id="cancelFlowEdit">Hủy</button>
+            <button class="condition-save-btn" type="button" id="saveConditionFlow">
+              Lưu mẫu
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <section class="sales-target-admin hidden" id="salesTargetAdmin" hidden>
+        <div class="account-admin-head">
+          <div>
+            <h1>Target khai thác</h1>
+            <p>Quản lý các gạch đầu dòng thông tin bot cần khai thác trong hội thoại sales.</p>
+          </div>
+        </div>
+
+        <div class="sales-target-grid">
+          <div class="account-panel">
+            <div class="panel-title">Danh sách target</div>
+            <div class="sales-target-table">
+              <div class="sales-target-row sales-target-head">
+                <div>Target</div>
+                <div>Mô tả</div>
+                <div>Prompt gợi ý</div>
+                <div>Thao tác</div>
+              </div>
+              <div id="salesTargetList"></div>
+            </div>
+          </div>
+
+          <div class="account-panel">
+            <div class="panel-title">Thiết lập target</div>
+
+            <label class="login-field">
+              <span>Target *</span>
+              <input id="salesTargetName" autocomplete="off" placeholder="VD: Khẩu vị rủi ro" />
+            </label>
+
+            <label class="login-field">
+              <span>Mô tả</span>
+              <textarea id="salesTargetDescription" rows="4" placeholder="Admin mô tả khi nào xem là đã khai thác đủ target này."></textarea>
+            </label>
+
+            <label class="login-field">
+              <span class="field-label-action">
+                <span>Prompt gợi ý</span>
+                <button class="mini-file-btn" id="importSalesPromptBtn" type="button">Nạp .txt</button>
+              </span>
+              <input id="salesTargetPromptFile" type="file" accept=".txt,text/plain" hidden />
+              <textarea id="salesTargetQuestion" rows="3" placeholder="Viết ý tưởng để GPT tự đặt câu hỏi, không phải câu hỏi cố định."></textarea>
+            </label>
+
+            <div class="form-actions">
+              <button id="cancelSalesTargetBtn" type="button">Hủy</button>
+              <button class="primary-action" id="saveSalesTargetBtn" type="button">Lưu target</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="case-idea-admin hidden" id="caseIdeaAdmin" hidden>
+        <div class="account-admin-head">
+          <div>
+            <h1>Case ý tưởng</h1>
+            <p>Quản lý các ý tưởng case để dev đọc, xử lý và đánh dấu đã hỗ trợ.</p>
+          </div>
+        </div>
+
+        <div class="case-idea-grid">
+          <div class="account-panel">
+            <div class="panel-title">Danh sách case</div>
+            <div class="case-idea-table">
+              <div class="case-idea-row case-idea-head">
+                <div>Case</div>
+                <div>Chỉ số</div>
+                <div>Mô tả</div>
+                <div>Thao tác</div>
+              </div>
+              <div id="caseIdeaList"></div>
+            </div>
+          </div>
+
+          <div class="account-panel">
+            <div class="panel-title">Thiết lập case</div>
+
+            <label class="login-field">
+              <span>Tên case *</span>
+              <input id="caseIdeaName" autocomplete="off" placeholder="VD: Phân tích cổ phiếu" />
+            </label>
+
+            <label class="login-field">
+              <span>Các chỉ số</span>
+              <textarea id="caseIdeaIndicators" rows="3" placeholder="VD: SMDT mã, SMDT ngành, dòng tiền, tín hiệu kỹ thuật"></textarea>
+            </label>
+
+            <label class="login-field">
+              <span>Mô tả</span>
+              <textarea id="caseIdeaDescription" rows="5" placeholder="Admin mô tả mong muốn để dev đọc hiểu và code workflow sau."></textarea>
+            </label>
+
+            <div class="form-actions">
+              <button id="cancelCaseIdeaBtn" type="button">Hủy</button>
+              <button class="primary-action" id="saveCaseIdeaBtn" type="button">Lưu case</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="account-admin hidden" id="accountAdmin" hidden>
+        <div class="account-admin-head">
+          <div>
+            <h1>Quản trị hệ thống</h1>
+            <p>Quản lý tài khoản, quyền truy cập và cấu hình vận hành</p>
+          </div>
+        </div>
+
+        <div class="account-metrics" id="accountMetrics"></div>
+
+        <div class="account-admin-grid">
+          <div class="account-panel">
+            <div class="panel-head">
+              <div class="panel-title">Danh sách tài khoản</div>
+              <button class="start-btn" id="createAccountBtn" type="button">+ Thêm tài khoản</button>
+            </div>
+            <div class="account-table" id="accountTable"></div>
+          </div>
+
+          <div class="account-panel">
+            <div class="panel-title">Chi tiết tài khoản</div>
+            <div class="account-detail" id="accountDetail"></div>
+            <div class="login-error hidden" id="accountAdminError" hidden></div>
+          </div>
+        </div>
+
+        <div class="account-panel audit-panel">
+          <div class="panel-title">Nhật ký thao tác gần đây</div>
+          <div class="audit-table" id="auditTable"></div>
+          <div class="audit-pagination" id="auditPagination"></div>
+        </div>
+      </section>
+
+      <main class="chat" id="chat"></main>
+
+      <footer class="composer">
+        <input id="msg" placeholder="Nhập câu hỏi..." />
+        <button id="send">Gửi</button>
+      </footer>
+    </div>
+  </div>
+
+
+
+  <div class="form-modal hidden" id="conditionTypeModal" hidden>
+    <div class="form-dialog condition-type-dialog">
+      <div class="login-head">
+        <div>
+          <h2>Thêm type mới</h2>
+          <p>Tạo nhóm type để phân loại điều kiện và đồng bộ vào các bộ lọc.</p>
+        </div>
+        <button class="login-close" id="conditionTypeModalClose" type="button">×</button>
+      </div>
+
+      <label class="login-field">
+        <span>Tên type</span>
+        <input
+          id="conditionTypeName"
+          autocomplete="off"
+          placeholder="VD: Phái sinh, Dòng tiền, Candlestick..."
+        />
+      </label>
+
+      <div class="login-error hidden" id="conditionTypeError" hidden></div>
+
+      <div class="form-actions">
+        <button id="conditionTypeCancel" type="button">Hủy</button>
+        <button class="primary-action" id="conditionTypeSave" type="button">Lưu type</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-modal hidden" id="accountCreateModal" hidden>
+    <div class="form-dialog">
+      <div class="login-head">
+        <div>
+          <h2>Tạo tài khoản mới</h2>
+          <p>Thiết lập tài khoản và vai trò ban đầu cho người dùng hệ thống.</p>
+        </div>
+        <button class="login-close" id="accountCreateClose" type="button">×</button>
+      </div>
+
+      <div class="create-account-grid">
+        <label class="login-field">
+          <span>Tên đăng nhập</span>
+          <input id="createUsername" autocomplete="off" placeholder="vd: sale.admin" />
+        </label>
+
+        <label class="login-field">
+          <span>Tên hiển thị</span>
+          <input id="createDisplayName" autocomplete="off" placeholder="vd: Sale Admin" />
+        </label>
+
+        <label class="login-field">
+          <span>Mật khẩu tạm thời</span>
+          <input id="createPassword" type="password" autocomplete="new-password" placeholder="Tối thiểu 8 ký tự" />
+        </label>
+
+        <label class="login-field">
+          <span>Vai trò</span>
+          <select id="createRole">
+            <option value="admin">Admin</option>
+            <option value="member">Member</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="login-error hidden" id="createAccountError" hidden></div>
+      <div class="form-actions">
+        <button id="accountCreateCancel" type="button">Hủy</button>
+        <button class="primary-action" id="accountCreateSubmit" type="button">Tạo tài khoản</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="toast" hidden></div>
+
+  <script src="/frontend/app.js?v=condition-id-stt"></script>
+</body>
+</html>
