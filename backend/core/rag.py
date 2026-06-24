@@ -46,6 +46,7 @@ SEARCH_STOPWORDS = {
 def search_tokens(text: str) -> List[str]:
     normalized = unicodedata.normalize("NFD", text or "")
     normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    normalized = normalized.replace("đ", "d").replace("Đ", "D")
     normalized = re.sub(r"\s+", " ", normalized.lower()).strip()
     tokens = re.findall(r"[a-z0-9]+", normalized)
     return [token for token in tokens if token not in SEARCH_STOPWORDS and len(token) > 1]
@@ -98,8 +99,46 @@ class RAGStore:
         text = text.lower().strip()
         text = unicodedata.normalize("NFD", text)
         text = "".join(c for c in text if unicodedata.category(c) != "Mn")
+        text = text.replace("đ", "d")
         text = re.sub(r"\s+", " ", text)
         return text
+
+    def _pick_explicit_rule_doc(self, query: str, titles: List[str]):
+        normalized = self._normalize_text(query)
+
+        def title_containing(*phrases: str):
+            for title in titles:
+                normalized_title = self._normalize_text(title)
+                if all(phrase in normalized_title for phrase in phrases):
+                    return title
+            return None
+
+        strong_stock_intent = any(
+            phrase in normalized
+            for phrase in (
+                "dat chuan ma manh",
+                "bat dau manh",
+                "ma manh",
+            )
+        )
+        if strong_stock_intent and "nganh" not in normalized:
+            return title_containing("dat chuan ma manh")
+
+        strong_branch_intent = (
+            "nganh" in normalized
+            and any(
+                phrase in normalized
+                for phrase in (
+                    "dat chuan nganh manh",
+                    "nganh manh",
+                    "dan song",
+                )
+            )
+        )
+        if strong_branch_intent:
+            return title_containing("nganh", "dat chuan nganh manh")
+
+        return None
     # =============================
     # LOAD DOCS
     # =============================
@@ -405,6 +444,11 @@ class RAGStore:
 
         titles = self.get_titles()
         debug("AVAILABLE DOCS:", titles)
+
+        explicit_doc = self._pick_explicit_rule_doc(query, titles)
+        if explicit_doc:
+            debug("DOC SELECTED BY INTENT:", explicit_doc)
+            return explicit_doc
 
         titles_text = "\n".join(titles)
 
