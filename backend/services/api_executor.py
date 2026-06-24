@@ -57,6 +57,7 @@ class APIExecutor:
         log("\n================ API CALL ================")
         log("OPERATION:", operation_id)
         log("ARGS FROM GPT:", args)
+        args = dict(args or {})
 
         if operation_id == "getChanSong":
             try:
@@ -109,6 +110,19 @@ class APIExecutor:
                 args["branch_path"] = branch_path
                 args.pop("branch", None)
                 
+        if operation_id == "getSMDTBranch":
+            branch_value = args.get("branch") or args.get("keyName") or args.get("name")
+            branch_path = args.get("path") or args.get("branch_path")
+            if not branch_path and branch_value:
+                branch_path = extract_branch_path(str(branch_value))
+            if branch_path:
+                log("🧠 NORMALIZED getSMDTBranch TO PATH:", branch_path)
+                args["path"] = branch_path
+                args.pop("branch_path", None)
+                args.pop("branch", None)
+                args.pop("keyName", None)
+                args.pop("name", None)
+
         op = self.registry.operations.get(operation_id)
 
         if not op:
@@ -121,7 +135,7 @@ class APIExecutor:
         log("URL:", url)
         log("METHOD:", method)
 
-        args.pop("path", None)
+        args.pop("branch_path", None)
 
         # ============================================================
         # EXTRACT BRANCH NAME

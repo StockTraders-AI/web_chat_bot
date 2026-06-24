@@ -88,6 +88,8 @@ BRANCH_NORMALIZED_MAP = {normalize_text(name): path for name, path in BRANCH_PAT
 
 # Alias phổ biến (đã normalize nên cứ viết tự nhiên)
 BRANCH_NORMALIZED_MAP.update({
+    normalize_text("chung khoan"): "9-246-250-257-271-",
+    normalize_text("moi gioi chung khoan"): "9-246-250-257-271-",
     normalize_text("ngan hang"): BRANCH_PATHS["Ngân hàng thương mại truyền thống"],
     normalize_text("bank"): BRANCH_PATHS["Ngân hàng thương mại truyền thống"],
     normalize_text("bds dan cu"): BRANCH_PATHS["Bất động sản dân cư"],

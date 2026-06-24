@@ -555,6 +555,11 @@ class RAGStore:
                 "cac ma trong nganh",
             )
         )
+        asks_branch_metric = (
+            ("smdt" in query_l or "suc manh dong tien" in query_l)
+            and ("nganh" in query_l or "dong" in query_l)
+            and not asks_branch_tickers
+        )
 
         scored = []
 
@@ -622,6 +627,40 @@ class RAGStore:
                     heading_score += 40
                 if "nganh chu luc" in text or "cac nganh chu luc" in text:
                     score -= 160
+
+            if asks_branch_metric:
+                is_ticker_collection_chunk = (
+                    "cac ma dong" in text
+                    or "cac ma nganh" in text
+                    or "ma dong" in text
+                    or "ma nganh" in text
+                    or "getbranchpath" in text
+                    or "getsmdtticker" in text
+                )
+                is_branch_metric_chunk = (
+                    "getsmdtbranch" in text
+                    and not is_ticker_collection_chunk
+                )
+                is_single_branch_chunk = (
+                    "[nganh]" in text
+                    or "smdt nganh" in text
+                    or "smdt dong" in text
+                )
+                is_core_branch_chunk = (
+                    "nganh chu luc" in text
+                    or "cac nganh chu luc" in text
+                    or "dong chu luc" in text
+                )
+                if is_branch_metric_chunk:
+                    score += 220
+                    heading_score += 60
+                if is_single_branch_chunk:
+                    score += 140
+                    heading_score += 30
+                if is_core_branch_chunk and not asks_core_branches:
+                    score -= 180
+                if is_ticker_collection_chunk:
+                    score -= 220
 
             # =============================
             # DATE / MONTH / YEAR MATCH
