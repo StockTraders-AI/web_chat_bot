@@ -71,6 +71,11 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mình có thể đi theo", result.message)
         self.assertNotIn("Case bịa thêm", result.message)
         self.assertEqual(result.message.count("\n"), 5)
+    async def test_ticker_with_digit_is_not_replaced_by_business_word(self):
+        question = "PC1 đạt chuẩn mã mạnh khi nào"
+        result = await self.guide.handle("pc1-strong", question)
+        self.assertEqual(result.action, "run")
+        self.assertEqual(result.canonical_question, question)
     async def test_specific_rule_case_runs_instead_of_generic_chat(self):
         result = await self.guide.handle("rule1", "ACB có đạt chuẩn mã mạnh không?")
         self.assertEqual(result.action, "run")

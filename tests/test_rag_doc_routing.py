@@ -40,6 +40,24 @@ class RAGDocumentRoutingTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIn("getBranchPath", context["refs"])
         self.assertIn("getSMDTTicker", context["refs"])
+    def test_specific_digit_ticker_strong_query_selects_latest_cross_chunk(self):
+        rag = RAGStore.__new__(RAGStore)
+        chunks = [
+            'Guide "Mã [X] đạt chuẩn mã mạnh từ khi nào?" Gọi getSMDTTickerCross với keyValue=[mã], không truyền date.',
+            'Guide "Mã nào đạt chuẩn mã mạnh vào tháng mm-yyyy hoặc năm yyyy". Gọi getSMDTTickerCross với date.',
+            'Guide Giá và SMDT cùng ngày. Gọi getTotalTradeWithSMDT.',
+        ]
+
+        context = rag.build_context(
+            "Câu hỏi về mã, cổ phiếu, đạt chuẩn mã mạnh.txt",
+            chunks,
+            "PC1 đạt chuẩn mã mạnh khi nào",
+            max_chunks=1,
+        )
+
+        self.assertIn("keyValue=[mã]", context["refs"])
+        self.assertIn("không truyền date", context["refs"])
+        self.assertNotIn("getTotalTradeWithSMDT", context["refs"])
     async def test_strong_stock_question_selects_strong_stock_rule(self):
         rag = RAGStore.__new__(RAGStore)
         rag.rule_docs = {

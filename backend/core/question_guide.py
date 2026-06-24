@@ -41,7 +41,7 @@ STOCK_WORDS = {
     "nay", "the", "nao", "phan", "tich", "giup", "minh", "nganh",
     "dong", "ngan", "hang", "chung", "khoan", "thep", "bat", "san",
     "on", "muc", "gom", "xuc", "hom", "hien", "gia", "tin", "hieu",
-    "ngay", "thang", "nam", "bao", "nhieu",
+    "ngay", "thang", "nam", "bao", "nhieu", "manh", "dat", "chuan",
 }
 NON_TICKERS = {"SMDT", "RSI", "MACD", "NAV", "API", "GPT", "AI", "VNINDEX"}
 GENERIC_GUIDE_PREFIXES = (
@@ -62,13 +62,13 @@ def normalize_text(text: str) -> str:
 
 def extract_ticker(text: str) -> Optional[str]:
     raw = text or ""
-    for item in re.findall(r"\b[A-Z]{2,5}\b", raw):
+    for item in re.findall(r"\b[A-Z]{2,5}\d?\b", raw):
         if item not in NON_TICKERS:
             return item
 
     normalized = normalize_text(raw)
     action_match = re.search(
-        r"\b(?:mua|ban|muc|gom|xuc|ma|co phieu|phan tich|smdt|gia)\s+([a-z]{2,5})\b",
+        r"\b(?:mua|ban|muc|gom|xuc|ma|co phieu|phan tich|smdt|gia)\s+([a-z]{2,5}\d?)\b",
         normalized,
     )
     if action_match and action_match.group(1) not in STOCK_WORDS:
@@ -424,7 +424,7 @@ class QuestionGuide:
         if subject_kind == "stock" and stock_intent:
             canonical_question = (
                 user_text
-                if extract_date_value(user_text)
+                if stock_intent == "strong" or extract_date_value(user_text)
                 else self._canonical_stock_question(stock_intent, ticker)
             )
             return GuideResult("run", canonical_question=canonical_question)

@@ -58,7 +58,7 @@ def enforce_main_branch_terms(text: str) -> str:
 
     return fixed
 
-TICKER_RE = re.compile(r"\b[A-Z]{2,5}\b")
+TICKER_RE = re.compile(r"\b[A-Z]{2,5}\d?\b")
 NON_TICKER_SYMBOLS = frozenset({"RSI", "NAV", "SMDT", "GPT", "AI", "API", "MACD"})
 NORMALIZED_STOCK_KEYWORDS = (
     "gia", "co phieu", "smdt", "nganh", "ma", "tin hieu", "suy yeu",

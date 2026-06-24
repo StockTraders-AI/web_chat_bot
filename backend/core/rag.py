@@ -560,6 +560,11 @@ class RAGStore:
             and ("nganh" in query_l or "dong" in query_l)
             and not asks_branch_tickers
         )
+        asks_specific_strong_ticker = (
+            bool(re.search(r"\b[A-Z]{2,5}\d?\b", query or ""))
+            and any(phrase in query_l for phrase in ("dat chuan ma manh", "bat dau manh", "ma manh"))
+            and "ma nao" not in query_l
+        )
 
         scored = []
 
@@ -628,6 +633,30 @@ class RAGStore:
                 if "nganh chu luc" in text or "cac nganh chu luc" in text:
                     score -= 160
 
+            if asks_specific_strong_ticker:
+                is_specific_strong_ticker_chunk = (
+                    ("ma [x]" in text or "ma [ticker]" in text or "ma [ma]" in text)
+                    and ("dat chuan ma manh" in text or "bat dau manh" in text)
+                    and ("tu khi nao" in text or "khong truyen date" in text)
+                )
+                is_strong_ticker_list_chunk = (
+                    "ma nao" in text
+                    or "danh sach ma manh" in text
+                    or "thang mm" in text
+                    or "nam yyyy" in text
+                )
+                is_unrelated_trade_chunk = (
+                    "gettotaltrade" in text
+                    or "gettotaltradewithsmdt" in text
+                    or bool(re.search(r"\bgetsmdtticker\b", text))
+                )
+                if is_specific_strong_ticker_chunk:
+                    score += 300
+                    heading_score += 80
+                if is_strong_ticker_list_chunk:
+                    score -= 220
+                if is_unrelated_trade_chunk:
+                    score -= 240
             if asks_branch_metric:
                 is_ticker_collection_chunk = (
                     "cac ma dong" in text
