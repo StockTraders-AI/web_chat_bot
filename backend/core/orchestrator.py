@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import unicodedata
@@ -239,6 +240,7 @@ class Orchestrator:
             memory=self.memory,
             openai_client=self.oa,
         )
+        self._user_chat_locks: Dict[str, asyncio.Lock] = {}
 
     # =====================================================
     # BUILD BASE MESSAGES
@@ -292,14 +294,14 @@ class Orchestrator:
         user_id: str,
         user_text: str,
         language: str
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool]:
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool, List[str], Optional[str]]:
 
         raw_user_text = user_text.strip()
-        self.query_source = self.classify_query_source(raw_user_text)
-        self.allowed_apis = []
-        self.current_doc = None
+        query_source = self.classify_query_source(raw_user_text)
+        allowed_apis: List[str] = []
+        current_doc: Optional[str] = None
 
-        print("QUERY SOURCE:", self.query_source)
+        print("QUERY SOURCE:", query_source)
         history_all = await self.memory.recent_messages(user_id)
 
         def is_semantically_related(current: str, previous: str) -> bool:
@@ -387,7 +389,7 @@ class Orchestrator:
         # RAG CONTEXT
         # ======================================
 
-        if self.query_source == "BOOKS":
+        if query_source == "BOOKS":
             book_result = self.rag.retrieve_best_book(raw_user_text, top_k=3)
             doc = book_result.get("doc_name")
             score = book_result.get("score")
@@ -399,7 +401,7 @@ class Orchestrator:
                 preview = ch.replace("\n", " ")[:120]
                 print(f"CHUNK {i}: {preview}...")
 
-            self.current_doc = book_result.get("doc_name")
+            current_doc = book_result.get("doc_name")
             book_chunks = book_result.get("chunks") or []
 
             if book_chunks:
@@ -420,14 +422,14 @@ class Orchestrator:
 
         elif stock_related:
             doc = await self.rag.pick_doc(raw_user_text)
-            self.current_doc = doc
+            current_doc = doc
 
             chunks = self.rag.load_chunks(doc)
             ctx = self.rag.build_context(doc, chunks, raw_user_text)
 
             rules = (ctx.get("rules") or "").strip()
             refs = (ctx.get("refs") or "").strip()
-            self.allowed_apis = extract_api_from_context(refs)
+            allowed_apis = extract_api_from_context(refs)
 
             if rules:
                 system_parts.append(
@@ -465,8 +467,8 @@ class Orchestrator:
             "content": raw_user_text
         })
 
-        enable_tools = (self.query_source == "RULES" and stock_related)
-        return messages, sources, enable_tools
+        enable_tools = (query_source == "RULES" and stock_related)
+        return messages, sources, enable_tools, allowed_apis, current_doc
 
     # =====================================================
     # TOOL LOOP
@@ -476,7 +478,9 @@ class Orchestrator:
             self,
             model: str,
             messages: List[Dict[str, Any]],
-            enable_tools: bool
+            enable_tools: bool,
+            allowed_apis: Optional[List[str]] = None,
+            current_doc: Optional[str] = None,
         ) -> Tuple[List[Dict[str, Any]], str]:
 
         if not enable_tools:
@@ -497,11 +501,11 @@ class Orchestrator:
 
         tools = self.registry.tools
 
-        if getattr(self, "allowed_apis", None):
+        if allowed_apis:
 
             tools = [
                 t for t in tools
-                if t["function"]["name"] in self.allowed_apis
+                if t["function"]["name"] in allowed_apis
             ]
         loops = 0
 
@@ -563,7 +567,7 @@ class Orchestrator:
                 except Exception:
                     args = {}
 
-                result = self.executor.call(op_name, args, doc_name=getattr(self, "current_doc", None))
+                result = self.executor.call(op_name, args, doc_name=current_doc)
 
                 log("API RESULT TYPE:", type(result))
 
@@ -686,6 +690,23 @@ Yêu cầu:
         language: str,
         selected_model: Optional[str]
     ):
+        lock = self._user_chat_locks.setdefault(user_id, asyncio.Lock())
+        async with lock:
+            async for event, data in self._chat_stream_unlocked(
+                user_id=user_id,
+                user_text=user_text,
+                language=language,
+                selected_model=selected_model,
+            ):
+                yield event, data
+
+    async def _chat_stream_unlocked(
+        self,
+        user_id: str,
+        user_text: str,
+        language: str,
+        selected_model: Optional[str]
+    ):
         model = pick_model(selected_model)
         await self.memory.add(user_id, "user", user_text)
 
@@ -720,8 +741,18 @@ Yêu cầu:
             yield ("done", {"sources": []})
             return
 
-        base_messages, sources, enable_tools = await self.build_base_messages(user_id, user_text, language)
-        _, final_text = self._run_tool_loop(model, base_messages, enable_tools=enable_tools)
+        base_messages, sources, enable_tools, allowed_apis, current_doc = await self.build_base_messages(
+            user_id,
+            user_text,
+            language,
+        )
+        _, final_text = self._run_tool_loop(
+            model,
+            base_messages,
+            enable_tools=enable_tools,
+            allowed_apis=allowed_apis,
+            current_doc=current_doc,
+        )
         final_text = enforce_main_branch_terms(final_text)
         final_text = ensure_smdt_percent(final_text)
         final_text = clean_chat_output(final_text)

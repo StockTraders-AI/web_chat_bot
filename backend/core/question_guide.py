@@ -149,7 +149,7 @@ def is_affirmative(text: str) -> bool:
 
 def option_number(text: str) -> Optional[int]:
     normalized = normalize_text(text)
-    match = re.search(r"\b(?:chon|cau|so)?\s*([1-9])\b", normalized)
+    match = re.fullmatch(r"(?:chon|cau|so)?\s*([1-9])", normalized)
     return int(match.group(1)) if match else None
 
 
@@ -282,10 +282,8 @@ class QuestionGuide:
             if is_affirmative(user_text) and suggestions:
                 await self._clear_state(user_id)
                 return GuideResult("run", canonical_question=suggestions[0])
-            return GuideResult("ask", message=await self._naturalize_question(
-                user_text,
-                "Anh/chị chọn một hướng ở trên bằng số, hoặc nói ngắn như SMDT, dòng tiền, giá, mã mạnh hay tín hiệu mua bán.",
-            ))
+            await self._clear_state(user_id)
+            return GuideResult("pass")
 
         if kind == "missing_subject":
             intent = str(pending.get("intent") or "analysis")
@@ -520,7 +518,8 @@ class QuestionGuide:
             return "smdt"
         if "dong tien" in normalized:
             return "cashflow"
-        if re.search(r"\bgia\b", normalized):
+        price_text = re.sub(r"\b(?:tham|danh|chuyen)\s+gia\b", "", normalized)
+        if re.search(r"\bgia\b", price_text):
             return "price"
         if "ma manh" in normalized or "dat chuan" in normalized:
             return "strong"
@@ -645,14 +644,18 @@ class QuestionGuide:
         aliases = (
             ("smdt", "suc manh dong tien"),
             ("dong tien", "cashflow"),
-            ("gia",),
-            ("manh", "dat chuan"),
-            ("mua ban", "tin hieu", "mua", "ban"),
+            ("gia", "gia co phieu"),
+            ("ma manh", "manh", "dat chuan"),
+            ("mua ban", "tin hieu", "tin hieu mua ban", "mua", "ban"),
         )
+
+        def contains_term(text: str, term: str) -> bool:
+            return bool(re.search(rf"(?:^|\s){re.escape(term)}(?:$|\s)", text))
+
         for suggestion in suggestions:
             candidate = normalize_text(suggestion)
             for terms in aliases:
-                if any(term in normalized for term in terms) and any(term in candidate for term in terms):
+                if normalized in terms and any(contains_term(candidate, term) for term in terms):
                     return suggestion
         return None
 
