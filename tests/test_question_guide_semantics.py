@@ -127,6 +127,22 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.action, "ask")
         self.assertIn("ngân hàng", second.message)
 
+    async def test_explicit_stock_smdt_date_routes_as_stock(self):
+        question = "SMDT ACB ngày 9/4/2025"
+        result = await self.guide.handle("stock-date", question)
+        self.assertEqual(result.action, "run")
+        self.assertEqual(result.canonical_question, question)
+
+    async def test_question_with_stock_and_branch_is_not_forced_to_either(self):
+        question = "SMDT ACB so với dòng ngân hàng ngày 9/4/2025"
+        result = await self.guide.handle("stock-branch", question)
+        self.assertEqual(result.action, "pass")
+        self.assertEqual(result.canonical_question, "")
+    async def test_explicit_branch_smdt_date_does_not_ask_for_ticker(self):
+        question = "SMDT dòng chứng khoán ngày 9/4/2025"
+        result = await self.guide.handle("branch-date", question)
+        self.assertEqual(result.action, "run")
+        self.assertEqual(result.canonical_question, question)
     async def test_ambiguous_smdt_asks_stock_or_branch(self):
         first = await self.guide.handle("u9", "smdt hôm nay")
         second = await self.guide.handle("u9", "ACB")

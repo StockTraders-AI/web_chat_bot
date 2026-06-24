@@ -84,7 +84,7 @@ def extract_branch(text: str) -> Optional[str]:
     if not match:
         return None
     value = re.split(
-        r"\b(?:hôm nay|hom nay|hiện nay|hien nay|thế nào|the nao|có nên|co nen|không|ko|bao nhiêu|bao nhieu|từ khi nào|tu khi nao)\b",
+        r"\b(?:ngày|ngay|hôm nay|hom nay|hiện nay|hien nay|thế nào|the nao|có nên|co nen|không|ko|bao nhiêu|bao nhieu|từ khi nào|tu khi nao)\b",
         match.group(1),
         maxsplit=1,
         flags=re.IGNORECASE,
@@ -386,11 +386,18 @@ class QuestionGuide:
 
         stock_intent = self._stock_intent(normalized)
         branch_intent = self._branch_intent(normalized)
+        subject_kind = (
+            "both" if ticker and branch
+            else "stock" if ticker
+            else "branch" if branch
+            else "missing"
+        )
 
-        if (
+        if subject_kind == "both":
+            return GuideResult("pass")
+
+        if subject_kind == "missing" and (
             (stock_intent or branch_intent)
-            and not ticker
-            and not branch
             and not any(k in normalized for k in ("co phieu", " ma ", "nganh", "dong"))
         ):
             intent = stock_intent or branch_intent or "analysis"
@@ -398,35 +405,40 @@ class QuestionGuide:
             return GuideResult("ask", message=await self._naturalize_question(
                 user_text, "Anh/chị đang muốn kiểm tra một mã cổ phiếu hay một ngành cụ thể?"
             ))
-        if stock_intent and not ticker:
+
+        if subject_kind == "missing" and stock_intent:
             await self._save_state(user_id, {"kind": "missing_ticker", "intent": stock_intent, "original": user_text})
             return GuideResult("ask", message=await self._naturalize_question(
                 user_text, "Anh/chị muốn kiểm tra mã cổ phiếu nào?"
             ))
 
-        if branch_intent and not branch:
+        if subject_kind == "missing" and branch_intent:
             await self._save_state(user_id, {"kind": "missing_branch", "intent": branch_intent, "original": user_text})
             return GuideResult("ask", message=await self._naturalize_question(
                 user_text, "Anh/chị muốn kiểm tra ngành hoặc dòng nào?"
             ))
 
-        if ticker and stock_intent == "analysis":
+        if subject_kind == "stock" and stock_intent == "analysis":
             return await self._offer_stock_cases(user_id, ticker, user_text)
 
-        if ticker and stock_intent:
-            return GuideResult(
-                "run",
-                canonical_question=self._canonical_stock_question(stock_intent, ticker),
+        if subject_kind == "stock" and stock_intent:
+            canonical_question = (
+                user_text
+                if extract_date_value(user_text)
+                else self._canonical_stock_question(stock_intent, ticker)
             )
+            return GuideResult("run", canonical_question=canonical_question)
 
-        if "branch" in groups and branch and branch_intent == "analysis":
+        if subject_kind == "branch" and "branch" in groups and branch_intent == "analysis":
             return await self._offer_branch_cases(user_id, branch, user_text)
 
-        if branch and branch_intent:
-            return GuideResult(
-                "run",
-                canonical_question=self._canonical_branch_question(branch_intent, branch),
+        if subject_kind == "branch" and branch_intent:
+            canonical_question = (
+                user_text
+                if extract_date_value(user_text)
+                else self._canonical_branch_question(branch_intent, branch)
             )
+            return GuideResult("run", canonical_question=canonical_question)
 
         if "cho mua" in normalized:
             month = extract_month(user_text)
@@ -530,7 +542,10 @@ class QuestionGuide:
     def _branch_intent(self, normalized: str) -> Optional[str]:
         if "phan tich nganh" in normalized or "phan tich dong" in normalized:
             return "analysis"
-        if "smdt nganh" in normalized or "suc manh dong tien nganh" in normalized:
+        if any(
+            phrase in normalized
+            for phrase in ("smdt nganh", "smdt dong", "suc manh dong tien nganh", "suc manh dong tien dong")
+        ):
             return "smdt"
         if "dong tien nganh" in normalized or "dong tien dong" in normalized:
             return "cashflow"
