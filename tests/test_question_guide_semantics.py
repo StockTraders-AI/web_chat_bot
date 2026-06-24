@@ -75,6 +75,17 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         result = await self.guide.handle("rule1", "ACB có đạt chuẩn mã mạnh không?")
         self.assertEqual(result.action, "run")
         self.assertEqual(result.canonical_question, "ACB có đạt chuẩn mã mạnh không?")
+    async def test_new_question_does_not_select_price_from_tham_gia(self):
+        await self.guide.handle("route1", "co nen mua DAN ko")
+        result = await self.guide.handle("route1", "lộ trình các dòng tham gia dẫn sóng 3/2026")
+        self.assertEqual(result.action, "pass")
+        self.assertEqual(result.canonical_question, "")
+
+    async def test_price_alias_still_selects_price_suggestion(self):
+        await self.guide.handle("route2", "co nen mua DAN ko")
+        result = await self.guide.handle("route2", "giá")
+        self.assertEqual(result.action, "run")
+        self.assertEqual(result.canonical_question, "Giá DAN hiện nay là bao nhiêu?")
     async def test_selected_case_survives_question_guide_restart(self):
         await self.guide.handle("u2", "co nen mua ACB ko")
         restarted = QuestionGuide(FakeRAG(), memory=self.memory)

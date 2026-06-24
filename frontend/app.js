@@ -152,6 +152,7 @@ let conditionPage = 1;
 const CONDITION_PAGE_SIZE = 7;
 let currentView = "chat";
 let lastRenderedHistorySignature = "";
+let isChatStreaming = false;
 
 const TARGET_LABELS = {
   investment_experience: "Thâm niên đầu tư",
@@ -269,14 +270,16 @@ function canViewProgress() {
 
 function setChatAccessState() {
   const allowed = canUseChat();
-  msgEl.disabled = !allowed;
-  sendBtn.disabled = !allowed;
+  msgEl.disabled = !allowed || isChatStreaming;
+  sendBtn.disabled = !allowed || isChatStreaming;
   newUserBtn.disabled = !allowed;
   profileSubmitBtn.disabled = !allowed;
   document.body.classList.toggle("chat-locked", !allowed);
-  msgEl.placeholder = allowed
-    ? "Nhap cau hoi..."
-    : "Tài khoản này chưa có quyền sử dụng chatbot";
+  msgEl.placeholder = isChatStreaming
+    ? "Đang xử lý câu hỏi..."
+    : allowed
+      ? "Nhap cau hoi..."
+      : "Tài khoản này chưa có quyền sử dụng chatbot";
 }
 
 function renderAuthState() {
@@ -1721,7 +1724,12 @@ function chatHistorySignature(messages) {
 }
 
 async function refreshVisibleChatHistory() {
-  if (currentView !== "chat" || !currentUserId || profileFormEl && !profileFormEl.hidden) return;
+  if (
+    isChatStreaming ||
+    currentView !== "chat" ||
+    !currentUserId ||
+    profileFormEl && !profileFormEl.hidden
+  ) return;
 
   const messages = await loadChatHistory(currentUserId);
   const signature = chatHistorySignature(messages);
@@ -3052,18 +3060,18 @@ async function streamChat(payload, aiBubble) {
     });
   } catch {
     aiBubble.textContent = "Không thể kết nối server.";
-    return;
+    return false;
   }
 
   if (res.status === 403) {
     const data = await res.json().catch(() => ({}));
     aiBubble.textContent = data?.detail || "Tài khoản này chưa có quyền sử dụng chatbot.";
-    return;
+    return false;
   }
 
   if (!res.ok || !res.body) {
     aiBubble.textContent = "Server lỗi.";
-    return;
+    return false;
   }
 
   const reader = res.body.getReader();
@@ -3090,6 +3098,8 @@ async function streamChat(payload, aiBubble) {
       handleSSEEvent(evt, aiBubble);
     });
   }
+
+  return true;
 }
 
 /* =========================
@@ -3110,16 +3120,26 @@ async function send() {
     return;
   }
 
-  if (!message) return;
+  if (!message || isChatStreaming) return;
 
+  isChatStreaming = true;
+  setChatAccessState();
   addBubble(message, "user");
   msgEl.value = "";
 
   const aiBubble = addBubble("", "ai");
 
-  const payload = buildPayload(user_id, message);
-  await streamChat(payload, aiBubble);
-  await refreshProgress(user_id);
+  let streamCompleted = false;
+  try {
+    const payload = buildPayload(user_id, message);
+    streamCompleted = await streamChat(payload, aiBubble);
+    if (streamCompleted) await refreshProgress(user_id);
+  } finally {
+    isChatStreaming = false;
+    setChatAccessState();
+    if (streamCompleted) await refreshVisibleChatHistory();
+    msgEl.focus();
+  }
 }
 
 /* =========================
@@ -3265,7 +3285,10 @@ document.addEventListener("click", (e) => {
 });
 
 msgEl.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") send();
+  if (e.key === "Enter") {
+    e.preventDefault();
+    send();
+  }
 });
 
 setInterval(() => {
