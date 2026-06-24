@@ -71,6 +71,10 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mình có thể đi theo", result.message)
         self.assertNotIn("Case bịa thêm", result.message)
         self.assertEqual(result.message.count("\n"), 5)
+    async def test_specific_rule_case_runs_instead_of_generic_chat(self):
+        result = await self.guide.handle("rule1", "ACB có đạt chuẩn mã mạnh không?")
+        self.assertEqual(result.action, "run")
+        self.assertEqual(result.canonical_question, "ACB có đạt chuẩn mã mạnh không?")
     async def test_selected_case_survives_question_guide_restart(self):
         await self.guide.handle("u2", "co nen mua ACB ko")
         restarted = QuestionGuide(FakeRAG(), memory=self.memory)

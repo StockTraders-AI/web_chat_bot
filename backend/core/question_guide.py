@@ -54,6 +54,7 @@ GENERIC_GUIDE_PREFIXES = (
 def normalize_text(text: str) -> str:
     normalized = unicodedata.normalize("NFD", text or "")
     normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    normalized = normalized.replace("đ", "d").replace("Đ", "D")
     normalized = normalized.lower()
     normalized = re.sub(r"[^a-z0-9%/\-\s\[\]]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
@@ -414,8 +415,20 @@ class QuestionGuide:
         if ticker and stock_intent == "analysis":
             return await self._offer_stock_cases(user_id, ticker, user_text)
 
+        if ticker and stock_intent:
+            return GuideResult(
+                "run",
+                canonical_question=self._canonical_stock_question(stock_intent, ticker),
+            )
+
         if "branch" in groups and branch and branch_intent == "analysis":
             return await self._offer_branch_cases(user_id, branch, user_text)
+
+        if branch and branch_intent:
+            return GuideResult(
+                "run",
+                canonical_question=self._canonical_branch_question(branch_intent, branch),
+            )
 
         if "cho mua" in normalized:
             month = extract_month(user_text)

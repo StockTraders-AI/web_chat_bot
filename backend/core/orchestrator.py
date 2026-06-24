@@ -68,6 +68,7 @@ FORCE_RULES_PHRASES = (
     "phan tich nganh", "phan tich co phieu", "phan tich ma", "smdt co phieu",
     "smdt nganh", "dong tien", "cho mua", "cho ban", "tin hieu",
     "nganh nao", "ma nao", "gia co phieu", "gia hom nay", "vuot", "cross",
+    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song",
 )
 SMDT_DATA_INTENT_WORDS = (
     "hom nay", "ngay", "co phieu", "ma", "nganh", "bao nhieu", "tang",
@@ -86,6 +87,7 @@ DATA_INTENT_PHRASES = (
 def normalize_search_text(text: str) -> str:
     normalized = unicodedata.normalize("NFD", text or "")
     normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    normalized = normalized.replace("đ", "d").replace("Đ", "D")
     normalized = normalized.lower()
     return re.sub(r"\s+", " ", normalized).strip()
 
@@ -176,7 +178,10 @@ def should_force_rules(user_text: str) -> bool:
         return True
     if "smdt" in normalized and any(k in normalized for k in SMDT_DATA_INTENT_WORDS):
         return True
-    if has_real_ticker(user_text) and any(k in normalized for k in ("phan tich", "smdt", "gia", "tin hieu", "dong tien", "mua", "ban")):
+    if has_real_ticker(user_text) and any(k in normalized for k in (
+        "phan tich", "smdt", "gia", "tin hieu", "dong tien", "mua", "ban",
+        "dat chuan", "ma manh", "bat dau manh", "hieu suat",
+    )):
         return True
     return False
 
