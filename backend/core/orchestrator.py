@@ -229,7 +229,11 @@ class Orchestrator:
 
         self.executor = APIExecutor(registry)
         self.oa = OpenAIClient()
-        self.question_guide = QuestionGuide(self.rag)
+        self.question_guide = QuestionGuide(
+            self.rag,
+            memory=self.memory,
+            openai_client=self.oa,
+        )
 
     # =====================================================
     # BUILD BASE MESSAGES
@@ -680,7 +684,7 @@ Yêu cầu:
         model = pick_model(selected_model)
         await self.memory.add(user_id, "user", user_text)
 
-        guide_result = self.question_guide.handle(user_id, user_text)
+        guide_result = await self.question_guide.handle(user_id, user_text)
         if guide_result.action == "ask":
             final_text = clean_chat_output(guide_result.message)
             full = ""

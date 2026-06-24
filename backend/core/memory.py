@@ -24,6 +24,15 @@ CREATE TABLE IF NOT EXISTS chat_history (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_user_id ON chat_history(user_id, id);
 
+CREATE TABLE IF NOT EXISTS semantic_guide_states (
+  user_id TEXT PRIMARY KEY,
+  state_json TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_semantic_guide_states_expires
+ON semantic_guide_states(expires_at);
 CREATE TABLE IF NOT EXISTS sales_discovery_sessions (
   user_id TEXT PRIMARY KEY,
   stage TEXT NOT NULL DEFAULT 'collecting',
@@ -1029,9 +1038,79 @@ class MemoryStore:
             )
             await db.commit()
 
+    async def get_semantic_guide_state(self, user_id: str):
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                """
+                SELECT state_json, expires_at
+                FROM semantic_guide_states
+                WHERE user_id=?
+                """,
+                (user_id,),
+            )
+            row = await cur.fetchone()
+
+            if not row:
+                return None
+
+            expires_at = row[1]
+            if expires_at:
+                try:
+                    expired = datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S") <= datetime.now()
+                except (TypeError, ValueError):
+                    expired = False
+                if expired:
+                    await db.execute(
+                        "DELETE FROM semantic_guide_states WHERE user_id=?",
+                        (user_id,),
+                    )
+                    await db.commit()
+                    return None
+
+        try:
+            value = json.loads(row[0])
+        except (TypeError, json.JSONDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    async def set_semantic_guide_state(
+        self,
+        user_id: str,
+        state: dict,
+        ttl_minutes: int = 60,
+    ):
+        expires_at = datetime.now() + timedelta(minutes=max(1, ttl_minutes))
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO semantic_guide_states(
+                  user_id, state_json, updated_at, expires_at
+                )
+                VALUES(?, ?, CURRENT_TIMESTAMP, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                  state_json=excluded.state_json,
+                  updated_at=CURRENT_TIMESTAMP,
+                  expires_at=excluded.expires_at
+                """,
+                (
+                    user_id,
+                    json.dumps(state, ensure_ascii=False),
+                    self._format_dt(expires_at),
+                ),
+            )
+            await db.commit()
+
+    async def clear_semantic_guide_state(self, user_id: str):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "DELETE FROM semantic_guide_states WHERE user_id=?",
+                (user_id,),
+            )
+            await db.commit()
     async def clear(self):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("DELETE FROM chat_history")
+            await db.execute("DELETE FROM semantic_guide_states")
             await db.commit()
 
     async def recent_messages(self, user_id: str, turns: int | None = None):
@@ -1385,6 +1464,7 @@ class MemoryStore:
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("DELETE FROM chat_history WHERE user_id=?", (user_id,))
             await db.execute("DELETE FROM sales_discovery_sessions WHERE user_id=?", (user_id,))
+            await db.execute("DELETE FROM semantic_guide_states WHERE user_id=?", (user_id,))
             await db.execute("DELETE FROM customer_profiles WHERE user_id=?", (user_id,))
             await db.execute("DELETE FROM sales_demo_users WHERE user_id=?", (user_id,))
             await db.commit()

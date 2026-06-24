@@ -1,6 +1,10 @@
+import tempfile
 import unittest
+from datetime import datetime
+from pathlib import Path
 
-from backend.core.question_guide import QuestionGuide
+from core.memory import MemoryStore
+from core.question_guide import QuestionGuide
 
 
 class FakeRAG:
@@ -20,39 +24,115 @@ class FakeRAG:
         "Câu hỏi về giá của mã.txt": {
             "chunks": ['Guide Khi người dùng hỏi giá cổ phiếu tại thời điểm hiện tại']
         },
+        "Câu hỏi về ngành, dẫn sóng, đạt chuẩn ngành mạnh.txt": {
+            "chunks": ['Guide "Ngành [X] bắt đầu mạnh từ khi nào?"']
+        },
     }
 
 
-class QuestionGuideSemanticTests(unittest.TestCase):
-    def setUp(self):
-        self.guide = QuestionGuide(FakeRAG())
 
-    def test_broad_stock_question_uses_rule_cases(self):
-        result = self.guide.handle("u1", "co nen mua acb ko")
+class FakeOpenAI:
+    class _Message:
+        content = "Mình có thể đi theo một trong các hướng phù hợp dưới đây.\n6. Case bịa thêm"
+
+    class _Choice:
+        message = None
+
+    class _Response:
+        choices = []
+
+    def chat(self, **kwargs):
+        choice = self._Choice()
+        choice.message = self._Message()
+        response = self._Response()
+        response.choices = [choice]
+        return response
+
+class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = str(Path(self.temp_dir.name) / "semantic.db")
+        self.memory = MemoryStore(self.db_path)
+        await self.memory.init()
+        self.guide = QuestionGuide(FakeRAG(), memory=self.memory)
+
+    async def asyncTearDown(self):
+        self.temp_dir.cleanup()
+
+    async def test_broad_stock_question_uses_rule_cases(self):
+        result = await self.guide.handle("u1", "co nen mua acb ko")
         self.assertEqual(result.action, "ask")
         self.assertIn("SMDT ACB hiện tại là bao nhiêu?", result.message)
         self.assertIn("Dòng tiền ACB hiện nay thế nào?", result.message)
 
-    def test_colloquial_buy_question_is_guided(self):
-        result = self.guide.handle("u5", "muc acb on khong")
-        self.assertEqual(result.action, "ask")
-        self.assertIn("ACB", result.message)
-    def test_selected_case_keeps_pending_context(self):
-        self.guide.handle("u2", "co nen mua ACB ko")
-        result = self.guide.handle("u2", "2")
+    async def test_gpt_only_writes_intro_and_cannot_add_cases(self):
+        guide = QuestionGuide(FakeRAG(), memory=self.memory, openai_client=FakeOpenAI())
+        result = await guide.handle("gpt1", "co nen mua ACB ko")
+        self.assertIn("Mình có thể đi theo", result.message)
+        self.assertNotIn("Case bịa thêm", result.message)
+        self.assertEqual(result.message.count("\n"), 5)
+    async def test_selected_case_survives_question_guide_restart(self):
+        await self.guide.handle("u2", "co nen mua ACB ko")
+        restarted = QuestionGuide(FakeRAG(), memory=self.memory)
+        result = await restarted.handle("u2", "2")
         self.assertEqual(result.action, "run")
         self.assertEqual(result.canonical_question, "Dòng tiền ACB hiện nay thế nào?")
 
-    def test_waitbuy_accepts_dash_date_follow_up(self):
-        first = self.guide.handle("u3", "cho mua thang 3 bao nhieu")
-        second = self.guide.handle("u3", "15-3 đi")
+    async def test_waitbuy_accepts_dash_date_follow_up(self):
+        year = datetime.now().year
+        first = await self.guide.handle("u3", "cho mua thang 3 bao nhieu")
+        second = await self.guide.handle("u3", "15-3 đi")
         self.assertEqual(first.action, "ask")
-        self.assertEqual(second.canonical_question, "Chờ mua ngày 15/03/2026 là bao nhiêu?")
+        self.assertEqual(second.canonical_question, f"Chờ mua ngày 15/03/{year} là bao nhiêu?")
 
-    def test_wave_month_follow_up(self):
-        self.guide.handle("u4", "chan song gan nhat la bao nhieu")
-        result = self.guide.handle("u4", "thang 4")
-        self.assertEqual(result.canonical_question, "Trong tháng 4/2026, ngày nào xác nhận chân sóng?")
+    async def test_wave_month_follow_up(self):
+        year = datetime.now().year
+        await self.guide.handle("u4", "chan song gan nhat la bao nhieu")
+        result = await self.guide.handle("u4", "thang 4")
+        self.assertEqual(result.canonical_question, f"Trong tháng 4/{year}, ngày nào xác nhận chân sóng?")
+
+    async def test_colloquial_buy_question_is_guided(self):
+        result = await self.guide.handle("u5", "muc acb on khong")
+        self.assertEqual(result.action, "ask")
+        self.assertIn("ACB", result.message)
+
+    async def test_missing_ticker_is_collected_then_routed(self):
+        first = await self.guide.handle("u6", "phan tich co phieu")
+        second = await self.guide.handle("u6", "ACB")
+        self.assertEqual(first.action, "ask")
+        self.assertIn("mã cổ phiếu", first.message)
+        self.assertEqual(second.action, "ask")
+        self.assertIn("ACB", second.message)
+
+    async def test_missing_branch_is_collected_then_routed(self):
+        first = await self.guide.handle("u7", "phan tich nganh")
+        second = await self.guide.handle("u7", "ngân hàng")
+        self.assertEqual(first.action, "ask")
+        self.assertIn("ngành", first.message)
+        self.assertEqual(second.action, "ask")
+        self.assertIn("ngân hàng", second.message)
+
+    async def test_ambiguous_smdt_asks_stock_or_branch(self):
+        first = await self.guide.handle("u9", "smdt hôm nay")
+        second = await self.guide.handle("u9", "ACB")
+        self.assertEqual(first.action, "ask")
+        self.assertIn("mã cổ phiếu", first.message)
+        self.assertEqual(second.canonical_question, "SMDT ACB hiện nay là bao nhiêu?")
+
+    async def test_subject_then_time_are_collected_in_sequence(self):
+        first = await self.guide.handle("u10", "smdt tháng")
+        second = await self.guide.handle("u10", "ngành ngân hàng")
+        third = await self.guide.handle("u10", "tháng 5")
+        self.assertEqual(first.action, "ask")
+        self.assertEqual(second.action, "ask")
+        self.assertEqual(third.action, "run")
+        self.assertEqual(third.canonical_question, f"SMDT ngành ngân hàng tháng 5/{datetime.now().year} là bao nhiêu?")
+    async def test_missing_waitbuy_time_is_collected(self):
+        first = await self.guide.handle("u8", "cho mua bao nhieu")
+        second = await self.guide.handle("u8", "hom nay")
+        self.assertEqual(first.action, "ask")
+        self.assertEqual(second.action, "run")
+        self.assertEqual(second.canonical_question, "Chờ mua hôm nay là bao nhiêu?")
 
 
 if __name__ == "__main__":
