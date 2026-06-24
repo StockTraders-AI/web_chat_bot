@@ -1,0 +1,39 @@
+Guide "Sức mạnh dòng tiền (smdt) các ngành chủ lực ngày [date]"
+Gọi getSMDTBranch với các path ngành chủ lực và truyền date được hỏi. Rồi lập bảng trả lời.
+Guide SMDT ngành ngân hàng từ [date] đến nay
+Gọi api getSMDTBranch với path ngành ngân hàng, không truyền date lần lượt là tháng-năm được hỏi cho tới tháng-năm hiện tại và lập bảng trả kết quả
+Guide Khi hỏi: "SMDT [ngành] là bao nhiêu?". Gọi getSMDTBranch với ngành và date được hỏi kèm %.
+Guide Khi hỏi: "SMDT [mã] là bao nhiêu?". Gọi getSMDTTicker với mã và date được hỏi kèm %.
+Guide "Lập bảng thống kê mã giá giảm hôm nay mà SMDT tăng dần đều"
+gọi api getTickersPriceDownSMDTIncreasing KHÔNG TRUYỀN DATE và trả lời toàn bộ những mã được trả về, không được 3 chấm...
+Guide SMDT (sức mạnh dòng tiền) cổ phiếu [X] từ tháng [month] đến nay
+Gọi api getSMDTTicker với mã được hỏi và date là từng tháng được hỏi cho đến tháng hiện tại. Rồi trả lời
+Guide "SMDT (sức mạnh dòng tiền) các mã dòng [ngành] của [ngày]"
+Gọi getBranchPath với ngành được hỏi để lấy list mã của ngành đó.
+Gọi lần lượt getSMDTTicker của từng mã trong list với date là ngày được hỏi
+Tổng hợp và trả lời
+Guide "SMDT (sức mạnh dòng tiền) các mã dòng (ngành) từ tháng [month] đến nay?"
+gọi api getBranchSMDTTickers truyền ngành và date được hỏi
+Guide "SMDT (sức mạnh dòng tiền) của [mã] hoặc [ngành] trong X phiên vừa qua"?
+Gọi api getSMDTLastN truyền n=X và ticker là mã được hỏi hoặc keyName, brand_path của ngành được hỏi.
+Guide "Lập bảng thống kê mã có SMDT tăng dần đều"
+Gọi API getSMDTIncreasing3.
+Nếu người dùng không nêu rõ mã cụ thể thì không truyền ticker.
+Sau đó lập bảng
+Guide "Lộ trình các mã suy yếu trong khoảng năm [date]"
+Gọi API getSMDTTickerDrop.
+date được hỏi, hoặc dateFrom&dateTo
+Sau đó lập bảng.
+Guide
+Lộ trình các dòng chủ lực suy yếu trong [date]
+Gọi API getSMDTBranchDrop.
+date được hỏi, hoặc dateFrom&dateTo
+Sau đó lập bảng.
+Guide "Ngành nào có số mã có SMDT tăng dần đều nhiều nhất vào [date]"
+Gọi API getTopBranchSMDTIncreasing. Date được hỏi. Nếu câu hỏi không có date thì không truyền date
+Sau đó lập bảng.
+Guide "lập danh sách các mã vượt 70% kèm giá của [ngành] vào [date]"
+Gọi API getBranchStrongSMDTWithPrice.
+keyName hoặc path của ngành được hỏi và date được hỏi
+Sau đó lập bảng.
+

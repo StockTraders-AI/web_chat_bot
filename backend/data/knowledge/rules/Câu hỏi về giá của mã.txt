@@ -1,0 +1,10 @@
+Guide
+Khi người dùng hỏi giá cổ phiếu tại thời điểm hiện tại
+(ví dụ: "hôm nay", "hiện tại", "bây giờ", "latest", "current")
+→ gọi API getTotalTradeReal
+→ chỉ truyền tham số ticker
+Guide
+Khi người dùng hỏi giá cổ phiếu tại một ngày cụ thể
+(ví dụ: "ngày yyyy-mm-dd", "ngày dd-mm-yyyy")
+→ gọi API getTotalTrade
+→ truyền ticker và date

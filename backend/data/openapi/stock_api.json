@@ -1,0 +1,1717 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Stock Wave Proxy API",
+    "version": "1.0.0",
+    "description": "Proxy endpoints for real-time, historical trade, stock wave, stock signal, BranchPathHap, SMDT branch, SMDT ticker, CashFlowBranch, CashFlowTicker, Candlestick and Moving Average signal data"
+  },
+  "servers": [
+    { "url": "https://stocktradersai.vn" }
+  ],
+  "paths": {
+    "/service/data/getTotalTradeReal": {
+      "post": {
+        "summary": "Real-time trade data",
+        "operationId": "getTotalTradeReal",
+        "parameters": [
+          { "name": "ticker", "in": "query", "schema": { "type": "string" } },
+          { "name": "field",  "in": "query", "schema": { "type": "string" } },
+          { "name": "value",  "in": "query", "schema": { "type": "string" } },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true để bỏ cache và fetch mới"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of matching real-time records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Record" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/service/data/getTotalTrade": {
+      "post": {
+        "summary": "Historical trade data",
+        "operationId": "getTotalTrade",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Mã cổ phiếu (optional)"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"},
+            "description": "YYYY-MM-DD (optional)"
+          },
+          {
+            "name": "lastDates",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "integer", "minimum": 1},
+            "description": "Số phiên giao dịch gần nhất (chỉ dùng khi có ticker, không dùng chung với date/date_from/date_to)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of matching historical records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Record" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/service/data/getStockWave": {
+      "post": {
+        "summary": "Stock wave data by date",
+        "operationId": "getStockWave",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$" },
+            "description": "Filter by year (YYYY), month (YYYY-MM) or full date (YYYY-MM-DD)"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "default": "ALL" },
+            "description": "Tên nhóm sóng, default ALL"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean" },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "StockWave object",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StockWave" }
+              }
+            }
+          },
+          "404": { "description": "No data found for given date or group" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getSMDTLastN": {
+      "post": {
+        "summary": "Lấy X phiên SMDT gần nhất cho ticker hoặc ngành",
+        "operationId": "getSMDTLastN",
+        "parameters": [
+          {
+            "name": "n",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "example": 3
+            },
+            "description": "Số phiên gần nhất"
+          },
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Mã cổ phiếu (optional)"
+          },
+          {
+            "name": "keyName",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Tên ngành (optional)"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Branch path ngành (optional)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean" },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kết quả SMDT gần nhất",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SMDTLastNItem" },
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/SMDTLastNItem" }
+                    },
+                    { "type": "null" }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Không được truyền đồng thời ticker và keyName/path"
+          },
+          "404": {
+            "description": "Không có dữ liệu phù hợp"
+          },
+          "502": {
+            "description": "Internal service error"
+          }
+        }
+      }
+    },
+    "/service/data/getAnalyzeWave": {
+      "post": {
+        "summary": "Phân tích xác nhận chân sóng theo ngày",
+        "operationId": "getAnalyzeWave",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Ngày cần kiểm tra (YYYY-MM-DD)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean" },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Kết quả phân tích chân sóng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/getAnalyzeWaveReply"
+                }
+              }
+            }
+          },
+          "404": { "description": "Không có dữ liệu cho ngày" },
+          "502": { "description": "Internal service error" }
+        }
+      }
+    },
+    "/service/data/getBranchSMDTTickers": {
+      "post": {
+        "summary": "SMDT của toàn bộ ticker trong một branch",
+        "operationId": "getBranchSMDTTickers",
+        "parameters": [
+          {
+            "name": "branch",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Tên ngành/branch_path"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Branch path (ví dụ: 9-246-250-259-273-)"
+          },
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2025-12-01"
+            },
+            "description": "Lọc dữ liệu SMDT từ ngày này trở đi (YYYY-MM-DD)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách ticker thuộc branch cùng dữ liệu SMDT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchSMDTTickersReply"
+                }
+              }
+            }
+          },
+          "404": { "description": "Branch không tồn tại hoặc không có dữ liệu SMDT" },
+          "502": { "description": "Internal service error" }
+        }
+      }
+    },
+    "/service/data/getStockSignal": {
+      "post": {
+        "summary": "Stock signal data",
+        "operationId": "getStockSignal",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Mã cổ phiếu (optional)"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": { "type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$" },
+            "description": "Filter by year (YYYY), month (YYYY-MM) or full date (YYYY-MM-DD)"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "schema": { "type": "integer", "format": "int32", "minimum": 1900, "maximum": 2100 },
+            "description": "Lọc theo năm (optional)"
+          },
+          {
+            "name": "trade",
+            "in": "query",
+            "schema": { "type": "integer", "enum": [1, 2] },
+            "description": "1=buy, 2=sell (optional)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of StockSignal",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/StockSignal" }
+                }
+              }
+            }
+          },
+          "404": { "description": "No matching stock signal records" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getBranchPathHap": {
+      "post": {
+        "summary": "BranchPathHap industry data",
+        "operationId": "getBranchPathHap",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date" },
+            "description": "YYYY-MM-DD – window end"
+          },
+          {
+            "name": "num_time",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["1W", "1M", "3M", "6M", "1Y", "3Y"]
+            },
+            "description": "Time window"
+          },
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Filter ticker (optional)"
+          },
+          {
+            "name": "date_value",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "date" },
+            "description": "Specific date (optional)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "BranchPathHapReply object",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/BranchPathHapReply" }
+              }
+            }
+          },
+          "404": { "description": "No data found" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getSMDTBranch": {
+      "post": {
+        "summary": "Branch SMDT data",
+        "operationId": "getSMDTBranch",
+        "parameters": [
+          {
+            "name": "keyName",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by branch name (partial/full)"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by branch path (partial match)"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": { "type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$" },
+            "description": "Filter by year (YYYY), month (YYYY-MM) or full date (YYYY-MM-DD)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SMDTBranchReply object",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SMDTBranchReply" }
+              }
+            }
+          },
+          "404": { "description": "No matching branch or date" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getSMDTTicker": {
+      "post": {
+        "summary": "Ticker SMDT data",
+        "operationId": "getSMDTTicker",
+        "parameters": [
+          {
+            "name": "keyValue",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by ticker symbol"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": { "type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$" },
+            "description": "Filter by year (YYYY), month (YYYY-MM) or full date (YYYY-MM-DD)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SMDTTickerReply object",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SMDTTickerReply" }
+              }
+            }
+          },
+          "404": { "description": "No matching ticker or date" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getSMDTTickerCross": {
+      "post": {
+        "summary": "Ticker SMDT Cross data",
+        "operationId": "getSMDTTickerCross",
+        "parameters": [
+          {
+            "name": "keyName",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by company name (exact match)"
+          },
+          {
+            "name": "keyValue",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by ticker symbol (exact match)"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "YYYY-MM-DD (mutually exclusive with year)"
+          },
+          {
+            "name": "year",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1900,
+              "maximum": 2100
+            },
+            "description": "Filter by year (mutually exclusive with date)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of SMDTTickerCross",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/SMDTTickerCross" }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Cannot specify both keyName & keyValue, or both date & year"
+          },
+          "404": { "description": "No matching records" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getCashFlowBranch": {
+      "post": {
+        "summary": "CashFlowBranch historical data", 
+        "operationId": "getCashFlowBranch",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "schema": { "type": "string", "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$" },
+            "description": "Filter by year (YYYY), month (YYYY-MM) or full date (YYYY-MM-DD)"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter branch name (optional)"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter branch path (example: 9-245-249-255-265-)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CashFlowBranchReply object",  
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CashFlowBranchReply" }
+              }
+            }
+          },
+          "404": { "description": "No matching date or branch" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getCashFlowTicker": {
+      "post": {
+        "summary": "Ticker Cash Flow historical data", 
+        "operationId": "getCashFlowTicker",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by ticker symbol"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "YYYY-MM-DD (optional)"
+          },
+          {
+            "name": "exclude_content",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Exclude records whose content exactly matches this string (optional)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CashFlowTickerReply object",  
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CashFlowTickerReply" }
+              }
+            }
+          },
+          "404": { "description": "No matching ticker or date" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getBranchPath": {
+      "post": {
+        "summary": "Branch Path Data",
+        "operationId": "getBranchPath",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by branch name (partial match)"
+          },
+          {
+            "name": "ticker",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by ticker symbol (optional)"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by full branch path (example: 8-215-217-221-223-)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of BranchPath",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/BranchPath" }
+                }
+              }
+            }
+          },
+          "404": { "description": "No matching branch name or ticker" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getTickersPriceDownSMDTIncreasing": {
+      "post": {
+        "summary": "Danh sách cổ phiếu giảm giá nhưng SMDT tăng 3 phiên gần nhất",
+        "operationId": "getTickersPriceDownSMDTIncreasing",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "YYYY-MM-DD (optional)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách cổ phiếu giá giảm nhưng SMDT tăng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PriceDownSMDTIncreasingReply"
+                }
+              }
+            }
+          },
+          "404": { "description": "No matching data" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getTotalTradeWithSMDT": {
+      "post": {
+        "summary": "Lấy giá close + SMDT theo ticker, lọc theo YYYY / YYYY-MM / YYYY-MM-DD",
+        "operationId": "getTotalTradeWithSMDT",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Mã cổ phiếu, ví dụ 'SSI'"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+            },
+            "description": "Lọc theo năm (YYYY), tháng (YYYY-MM) hoặc ngày (YYYY-MM-DD)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean" },
+            "description": "true để bypass cache SMDT"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách bản ghi gồm date, close và smdt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TickerMergedDatum" }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Không có dữ liệu phù hợp"
+          }
+        }
+      }
+    },
+    "/service/data/getPerformance": {
+        "post": {
+            "summary": "Hiệu suất tăng giá cổ phiếu theo ngành (từ DB nội bộ)",
+            "operationId": "getPerformance",
+            "parameters": [
+            {
+                "name": "branch",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "string" },
+                "description": "Tên ngành (ví dụ: Ngân hàng)"
+            },
+            {
+                "name": "branch_path",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "string" },
+                "description": "Path ngành (ví dụ: 7-211-212-213-214-)"
+            },
+            {
+                "name": "date",
+                "in": "query",
+                "required": false,
+                "schema": {
+                  "type": "string",
+                  "pattern": "^(0[1-9]|1[0-2])-\\d{4}$",
+                  "example": "07-2025"
+                },
+                "description": "Tháng dẫn sóng (MM-YYYY). Nếu không truyền → lấy toàn bộ lịch sử"
+            }
+            ],
+            "responses": {
+            "200": {
+                "description": "PerformanceReply object",
+                "content": {
+                "application/json": {
+                    "schema": { "$ref": "#/components/schemas/PerformanceReply" }
+                }
+                }
+            },
+            "400": { "description": "Thiếu branch hoặc branch_path" },
+            "404": { "description": "Không có dữ liệu phù hợp" },
+            "502": { "description": "Internal service error" }
+            }
+        }
+    },
+    "/service/data/ZigZagPoint": {
+        "post": {
+            "summary": "ZigZag peak/trough points (percent method)",
+            "operationId": "getZigZagPoint",
+            "parameters": [
+            {
+                "name": "ticker",
+                "in": "query",
+                "required": true,
+                "schema": { "type": "string" },
+                "description": "Mã cổ phiếu, ví dụ 'CTG'"
+            },
+            {
+                "name": "threshold_pct",
+                "in": "query",
+                "required": false,
+                "schema": { "type": "number", "default": 6.5 },
+                "description": "Ngưỡng phần trăm thay đổi để xác định đỉnh/đáy (mặc định 6.5)"
+            },
+            {
+                "name": "refresh",
+                "in": "query",
+                "schema": { "type": "boolean" },
+                "description": "true để bypass cache"
+            }
+            ],
+            "responses": {
+            "200": {
+                "description": "Danh sách điểm ZigZag (peak/trough)",
+                "content": {
+                "application/json": {
+                    "schema": {
+                    "type": "object",
+                    "properties": {
+                        "ticker":         { "type": "string" },
+                        "threshold_pct":  { "type": "number" },
+                        "points": {
+                        "type": "array",
+                        "items": { "$ref": "#/components/schemas/ZigZagPoint" }
+                        }
+                    },
+                    "required": ["ticker", "threshold_pct", "points"]
+                    }
+                }
+                }
+            },
+            "400": { "description": "Thiếu ticker hoặc sai định dạng" },
+            "404": { "description": "Không có dữ liệu nến phù hợp" }
+            }
+        }
+    },
+    "/service/data/getSMDTBranchCross": {
+      "post": {
+        "summary": "BranchCross SMDT data",
+        "operationId": "getSMDTBranchCross",
+        "parameters": [
+          {
+            "name": "keyName",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by branch name (exact match)"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+            },
+            "description": "Filter by year (YYYY), month (YYYY-MM) or day (YYYY-MM-DD)"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by branch path (example: 9-246-250-259-273-)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean" },
+            "description": "true to bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of SMDTBranchCross",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/SMDTBranchCross" }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid date format" },
+          "404": { "description": "No matching branch or data" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getSMDTIncreasing3": {
+      "post": {
+        "summary": "Lấy mã có SMDT tăng liên tiếp 3 phiên gần nhất và phiên cao nhất >= 70",
+        "operationId": "getSMDTIncreasing3",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Mã cổ phiếu cần kiểm tra. Nếu không truyền thì trả về danh sách tất cả mã thỏa điều kiện."
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Một mã thỏa điều kiện hoặc danh sách các mã thỏa điều kiện",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/SMDTIncreasing3Item" },
+                    {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/SMDTIncreasing3Item" }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": { "description": "Không có mã thỏa điều kiện" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getSMDTTickerDrop": {
+      "post": {
+        "summary": "Lấy các mốc SMDT của mã suy yếu từ >= 70 xuống < 70",
+        "operationId": "getSMDTTickerDrop",
+        "parameters": [
+          {
+            "name": "keyValue",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Mã cổ phiếu cần lọc, ví dụ 'SSI'"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+            },
+            "description": "Lọc theo năm (YYYY), tháng (YYYY-MM) hoặc ngày (YYYY-MM-DD)"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "Ngày bắt đầu lọc, định dạng YYYY-MM-DD"
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "Ngày kết thúc lọc, định dạng YYYY-MM-DD"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách mã và các mốc SMDT suy yếu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/SMDTTickerDropItem" }
+                }
+              }
+            }
+          },
+          "404": { "description": "Không có dữ liệu phù hợp" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getSMDTBranchDrop": {
+      "post": {
+        "summary": "Lấy các mốc SMDT của ngành suy yếu từ >= 70 xuống < 70",
+        "operationId": "getSMDTBranchDrop",
+        "parameters": [
+          {
+            "name": "keyName",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Tên ngành cần lọc"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Path ngành cần lọc"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+            },
+            "description": "Lọc theo năm (YYYY), tháng (YYYY-MM) hoặc ngày (YYYY-MM-DD)"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "Ngày bắt đầu lọc, định dạng YYYY-MM-DD"
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "schema": { "type": "string", "format": "date" },
+            "description": "Ngày kết thúc lọc, định dạng YYYY-MM-DD"
+          },
+          {
+            "name": "onlyCore",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false },
+            "description": "true để chỉ lấy 6 ngành chủ lực"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách ngành và các mốc SMDT suy yếu",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/SMDTBranchDropItem" }
+                }
+              }
+            }
+          },
+          "404": { "description": "Không có dữ liệu phù hợp" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getTopBranchSMDTIncreasing": {
+      "post": {
+        "summary": "Lấy ngành có nhiều mã có SMDT tăng dần 3 phiên liên tiếp nhất",
+        "operationId": "getTopBranchSMDTIncreasing",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+            },
+            "description": "Lọc theo năm (YYYY), tháng (YYYY-MM) hoặc ngày (YYYY-MM-DD)"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "schema": { "type": "boolean", "default": false },
+            "description": "true để bypass cache"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ngành có nhiều mã có SMDT tăng dần đều nhất",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TopBranchSMDTIncreasingReply" }
+              }
+            }
+          },
+          "404": { "description": "No data found" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getBranchStrongSMDTWithPrice": {
+      "post": {
+        "summary": "Lấy các mã trong ngành có SMDT mạnh kèm giá tại thời điểm hỏi",
+        "operationId": "getBranchStrongSMDTWithPrice",
+        "parameters": [
+          {
+            "name": "keyName",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Tên ngành cần lọc"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Path ngành cần lọc"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+            },
+            "description": "Lọc theo năm (YYYY), tháng (YYYY-MM) hoặc ngày (YYYY-MM-DD)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách mã mạnh trong ngành kèm SMDT và giá",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/BranchStrongSMDTWithPriceItem" }
+                }
+              }
+            }
+          },
+          "400": { "description": "Thiếu keyName/path hoặc ngành không hợp lệ" },
+          "404": { "description": "Không có dữ liệu" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
+    "/service/data/getCoreBranchLeader": {
+      "post": {
+        "summary": "Ngành chủ lực dẫn sóng theo tháng",
+        "operationId": "getCoreBranchLeader",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}(-\\d{2}(-\\d{2})?)?$"
+            },
+            "description": "YYYY / YYYY-MM / YYYY-MM-DD"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sách ngành chủ lực dẫn sóng",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CoreBranchLeaderReply"
+                }
+              }
+            }
+          },
+          "404": { "description": "Không có dữ liệu phù hợp" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Record": {
+        "type": "object",
+        "properties": {
+          "date":   { "type": "string", "format": "date" },
+          "open":   { "type": "number" },
+          "high":   { "type": "number" },
+          "low":    { "type": "number" },
+          "close":  { "type": "number" },
+          "ticker": { "type": "string" },
+          "type":   { "type": "string" },
+          "vol":    { "type": "integer" }
+        },
+        "required": ["date","open","high","low","close","ticker","type","vol"]
+      },
+      "SMDTIncreasing3Item": {
+        "type": "object",
+        "properties": {
+          "ticker": { "type": "string" },
+          "smdt_last3": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": ["ticker", "smdt_last3"]
+      },
+      "SMDTTickerDropDatum": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "smdt": { "type": "number" }
+        },
+        "required": ["date", "smdt"]
+      },
+      "SMDTTickerDropItem": {
+        "type": "object",
+        "properties": {
+          "keyName": { "type": "string" },
+          "keyValue": { "type": "string" },
+          "smdts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SMDTTickerDropDatum" }
+          }
+        },
+        "required": ["keyName", "keyValue", "smdts"]
+      },
+      "SMDTBranchDropDatum": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "smdt": { "type": "number" }
+        },
+        "required": ["date", "smdt"]
+      },
+      "SMDTBranchDropItem": {
+        "type": "object",
+        "properties": {
+          "keyName": { "type": "string" },
+          "keyValue": { "type": "string" },
+          "smdts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SMDTBranchDropDatum" }
+          }
+        },
+        "required": ["keyName", "keyValue", "smdts"]
+      },
+      "TopBranchSMDTIncreasingTicker": {
+        "type": "object",
+        "properties": {
+          "ticker": { "type": "string" },
+          "smdt_last3": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        },
+        "required": ["ticker", "smdt_last3", "dates"]
+      },
+      "TopBranchSMDTIncreasingReply": {
+        "type": "object",
+        "properties": {
+          "branch": { "type": "string" },
+          "path": { "type": "string" },
+          "tickers": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TopBranchSMDTIncreasingTicker" }
+          }
+        },
+        "required": ["branch", "path", "tickers"]
+      },
+      "BranchStrongSMDTWithPriceItem": {
+        "type": "object",
+        "properties": {
+          "ticker": { "type": "string" },
+          "date": { "type": "string", "format": "date" },
+          "smdt": { "type": "number" },
+          "price": { "type": "number" }
+        },
+        "required": ["ticker", "date", "smdt", "price"]
+      },
+      "StockWave": {
+        "type": "object",
+        "properties": {
+          "name":      { "type": "string" },
+          "waveDatas": { "type": "array", "items": { "$ref": "#/components/schemas/StockWaveData" } }
+        },
+        "required": ["name","waveDatas"]
+      },
+      "StockWaveData": {
+        "type": "object",
+        "properties": {
+          "buy":      { "type": "integer" },
+          "sell":     { "type": "integer" },
+          "total":    { "type": "integer" },
+          "waitbuy":  { "type": "integer" },
+          "waitsell": { "type": "integer" },
+          "date":     { "type": "string", "format": "date" }
+        },
+        "required": ["buy","sell","total","waitbuy","waitsell","date"]
+      },
+      "PriceDownSMDTIncreasingReply": {
+        "type": "object",
+        "required": ["total", "data"],
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PriceDownSMDTIncreasingItem"
+            }
+          }
+        }
+      },
+      "PriceDownSMDTIncreasingItem": {
+        "type": "object",
+        "required": ["ticker", "price_now", "price_yesterday", "pct_change", "smdt_last3"],
+        "properties": {
+          "ticker": {
+            "type": "string"
+          },
+          "price_now": {
+            "type": "number"
+          },
+          "price_yesterday": {
+            "type": "number"
+          },
+          "pct_change": {
+            "type": "number"
+          },
+          "smdt_last3": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 3,
+            "maxItems": 3
+          }
+        }
+      },
+      "AnalyzeWaveReply": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Kết luận chân sóng"
+          }
+        },
+        "required": ["message"]
+      },
+      "StockSignal": {
+        "type": "object",
+        "properties": {
+          "ticker":      { "type": "string" },
+          "signalDatas": { "type": "array", "items": { "$ref": "#/components/schemas/SignalData" } }
+        },
+        "required": ["ticker","signalDatas"]
+      },
+      "SignalData": {
+        "type": "object",
+        "properties": {
+          "date":    { "type": "string","format":"date" },
+          "percent": { "type": "integer" },
+          "price":   { "type":"number" },
+          "trade":   { "type":"integer" }
+        },
+        "required": ["date","percent","price","trade"]
+      },
+      "PerformanceReply": {
+        "type": "object",
+        "required": ["status", "total", "data"],
+        "properties": {
+            "status": { "type": "string" },
+            "total": { "type": "integer" },
+            "filter": {
+            "type": "object",
+            "properties": {
+                "branch": { "type": ["string", "null"] },
+                "branch_path": { "type": ["string", "null"] },
+                "date": { "type": ["string", "null"] }
+            }
+            },
+            "data": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                "ticker": { "type": "string" },
+                "branch": { "type": ["string", "null"] },
+                "branch_path": { "type": "string" },
+                "lead_date": { "type": "string", "format": "date" },
+                "lead_month": { "type": "string" },
+                "bottom_date": { "type": "string", "format": "date" },
+                "top_date": { "type": "string", "format": "date" },
+                "bottom_price": { "type": "number" },
+                "top_price": { "type": "number" },
+                "performance_pct": { "type": "number" },
+                "updated_at": { "type": "string", "format": "date-time" }
+                }
+            }
+            }
+        }
+      },
+      "BranchSMDTTickersReply": {
+        "type": "object",
+        "properties": {
+          "branch": { "type": "string" },
+          "tickers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BranchSMDTTicker"
+            }
+          }
+        },
+        "required": ["branch", "tickers"]
+      },
+      "BranchSMDTTicker": {
+        "type": "object",
+        "properties": {
+          "ticker": { "type": "string" },
+          "smdts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SMDTTickerData"
+            }
+          }
+        },
+        "required": ["ticker", "smdts"]
+      },
+      "BranchPathHapReply": {
+        "type": "object",
+        "properties": {
+          "branchPathDatas": { "type":"array","items":{ "$ref":"#/components/schemas/BranchPathData"} },
+          "change":     { "type":"string" },
+          "date":       { "type":"string","format":"date" },
+          "lastUpdate": { "type":"string","format":"date-time" },
+          "liquidity":  { "type":"string" },
+          "name":       { "type":"string" },
+          "path":       { "type":"string" }
+        },
+        "required":["branchPathDatas","change","date","lastUpdate","liquidity","name","path"]
+      },
+      "BranchPathData": {
+        "type":"object",
+        "properties":{
+          "ticker":      { "type":"string" },
+          "branchDatas": { "type":"array","items":{ "$ref":"#/components/schemas/BranchData" }}
+        },
+        "required":["ticker","branchDatas"]
+      },
+      "BranchData": {
+        "type":"object",
+        "properties":{
+          "content":{ "type":"string" },
+          "name":   { "type":"string" },
+          "path":   { "type":"string" }
+        },
+        "required":["content","name","path"]
+      },
+      "SMDTBranchReply": {
+        "type":"object",
+        "properties":{
+          "SMDTDatas": { "type":"array","items":{ "$ref":"#/components/schemas/SMDTBranch"} }
+        },
+        "required":["SMDTDatas"]
+      },
+      "SMDTBranch": {
+        "type":"object",
+        "properties":{
+          "keyName":  { "type":"string" },
+          "keyValue": { "type":"string" },
+          "smdts":    { "type":"array","items":{ "$ref":"#/components/schemas/SMDTData" }}
+        },
+        "required":["keyName","keyValue","smdts"]
+      },
+      "SMDTData": {
+        "type":"object",
+        "properties":{
+          "date":{ "type":"string","format":"date" },
+          "smdt":{ "type":"number" }
+        },
+        "required":["date","smdt"]
+      },
+      "SMDTBranchCross": {
+        "type":"object",
+        "properties":{
+          "keyName":  { "type":"string" },
+          "keyValue": { "type":"string" },
+          "smdts":    { "type":"array","items":{ "$ref":"#/components/schemas/SMDTBranchCrossData" }}
+        },
+        "required":["keyName","keyValue","smdts"]
+      },
+      "SMDTBranchCrossData": {
+        "type":"object",
+        "properties":{
+          "date":{ "type":"string","format":"date" },
+          "smdt":{ "type":"number" }
+        },
+        "required":["date","smdt"]
+      },
+      "CoreBranchLeaderReply": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string" },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CoreBranchLeaderItem"
+            }
+          }
+        }
+      },
+      "CoreBranchLeaderItem": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "path": { "type": "string" },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SMDTBranchCrossData"
+            }
+          }
+        }
+      },
+      "SMDTLastNItem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["ticker", "branch"],
+            "description": "Loại dữ liệu trả về"
+          },
+          "ticker": {
+            "type": ["string", "null"],
+            "description": "Mã cổ phiếu nếu type = ticker"
+          },
+          "keyName": {
+            "type": ["string", "null"],
+            "description": "Tên ngành nếu type = branch"
+          },
+          "path": {
+            "type": ["string", "null"],
+            "description": "Branch path nếu type = branch"
+          },
+          "smdts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SMDTTickerData"
+            },
+            "description": "Danh sách N phiên gần nhất"
+          }
+        },
+        "required": ["type", "smdts"]
+      },
+      "SMDTTickerReply": {
+        "type":"object",
+        "properties":{
+          "SMDTDatas": { "type":"array","items":{ "$ref":"#/components/schemas/SMDTTicker"} }
+        },
+        "required":["SMDTDatas"]
+      },
+      "SMDTTicker": {
+        "type":"object",
+        "properties":{
+          "keyName":  { "type":"string" },
+          "keyValue": { "type":"string" },
+          "smdts":    { "type":"array","items":{ "$ref":"#/components/schemas/SMDTTickerData" }}
+        },
+        "required":["keyName","keyValue","smdts"]
+      },
+      "SMDTTickerData": {
+        "type":"object",
+        "properties":{
+          "date":{ "type":"string","format":"date" },
+          "smdt":{ "type":"number" }
+        },
+        "required":["date","smdt"]
+      },
+      "SMDTTickerCross": {
+        "type":"object",
+        "properties":{
+          "keyName":  { "type":"string" },
+          "keyValue": { "type":"string" },
+          "smdts":    { "type":"array","items":{ "$ref":"#/components/schemas/SMDTTickerCrossData" }}
+        },
+        "required":["keyName","keyValue","smdts"]
+      },
+      "SMDTTickerCrossData": {
+        "type":"object",
+        "properties":{
+          "date":{ "type":"string","format":"date" },
+          "smdt":{ "type":"number" }
+        },
+        "required":["date","smdt"]
+      },
+      "CashFlowBranchReply": {
+        "type":"object",
+        "properties":{
+          "cashFlowBranchs":{ "type":"array","items":{ "$ref":"#/components/schemas/CashFlowBranch" }}
+        },
+        "required":["cashFlowBranchs"]
+      },
+  
+      "CashFlowBranch": {
+        "type":"object",
+        "properties":{
+          "date":{ "type":"string","format":"date" },
+          "cashFlowBranchDatas":{ "type":"array","items":{ "$ref":"#/components/schemas/CashFlowBranchData" }}
+        },
+        "required":["date","cashFlowBranchDatas"]
+      },
+      "CashFlowBranchData": {
+        "type":"object",
+        "properties":{
+          "content":{ "type":"string" },
+          "name":   { "type":"string" },
+          "path":   { "type":"string" }
+        },
+        "required":["content","name","path"]
+      },
+      "CashFlowTickerReply": {
+        "type":"object",
+        "properties":{
+          "cashFlowTickers":{ "type":"array","items":{ "$ref":"#/components/schemas/CashFlowTicker" }}
+        },
+        "required":["cashFlowTickers"]
+      },
+      "CashFlowTicker": {
+        "type":"object",
+        "properties":{
+          "keyName":  { "type":"string" },
+          "keyValue": { "type":"string" },
+          "cashFlows":{"type":"array","items":{ "$ref":"#/components/schemas/CashFlowTickerData" }}
+        },
+        "required":["keyName","keyValue","cashFlows"]
+      },
+      "CashFlowTickerData": {
+        "type":"object",
+        "properties":{
+          "date":  { "type":"string","format":"date" },
+          "value": { "type":"number" }
+        },
+        "required":["date","value"]
+      },
+      "BranchPath": {
+        "type": "object",
+        "properties": {
+          "name":    { "type": "string" },
+          "path":    { "type": "string" },
+          "tickers": {
+            "oneOf": [
+              { "type": "array", "items": { "type": "string" } },
+              { "type": "string" }
+            ]
+          },
+          "val":     { "type": "integer" }
+        },
+        "required": ["name","path","tickers","val"]
+      },
+      "ZigZagPoint": {
+        "type": "object",
+        "properties": {
+            "type": {
+            "type": "integer",
+            "enum": [1, 2],
+            "description": "1 = peak, 2 = trough"
+            },
+            "price": {
+            "type": "number",
+            "description": "Giá tại đỉnh hoặc đáy"
+            },
+            "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Ngày xảy ra đỉnh/đáy"
+            }
+        },
+        "required": ["type", "price", "date"]
+      },
+      "TickerMergedDatum": {
+        "type": "object",
+        "properties": {
+          "date":   { "type": "string", "format": "date" },
+          "open":   { "type": "number" },
+          "high":   { "type": "number" },
+          "low":    { "type": "number" },
+          "close":  { "type": "number" },
+          "ticker": { "type": "string" },
+          "vol":    { "type": "integer" },
+          "smdt":   { "type": "number" }
+        },
+        "required": ["date", "open", "high", "low", "close", "ticker", "vol", "smdt"]
+      }
+    }
+  }
+}

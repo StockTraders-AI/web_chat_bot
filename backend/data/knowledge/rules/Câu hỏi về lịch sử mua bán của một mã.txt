@@ -1,0 +1,26 @@
+Guide Xử lý câu hỏi: "Lịch sử mua bán [mã cổ phiếu] trong giai đoạn YYYY-YYYY"
+
+Khi người dùng yêu cầu xem lịch sử mua/bán của một mã trong nhiều năm, hệ thống phải xử lý theo các bước sau:
+
+1. Gọi API
+
+Gọi API getStockSignal với ticker = [mã được hỏi].
+Sau đó hệ thống lọc ra dữ liệu với các năm được hỏi.
+
+2. Trình bày kết quả
+
+Kết quả trả lời cho người dùng phải được trình bày theo dạng tường thuật đơn giản:
+liệt kê theo thứ tự thời gian, mỗi dòng gồm:
+
+ngày – tín hiệu – thay đổi tỷ trọng
+
+Tránh dùng từ khóa kỹ thuật, chỉ nêu thông tin như cách một trợ lý đầu tư chia sẻ.
+
+3. Quy tắc dữ liệu
+
+Không được suy diễn tín hiệu hoặc giả định dữ liệu nếu API không trả về.
+Chỉ sử dụng dữ liệu thật có trong kết quả API.
+
+4. Phần kết luận
+
+Trong phần kết luận, hệ thống có thể tóm tắt số lần mua, số lần bán, hoặc điểm đáng chú ý nếu cần thiết, theo phong cách thân thiện và dễ hiểu.

@@ -1,0 +1,19 @@
+Guide 
+Khi người dùng hỏi: "Ngày [DD/MM] có xác nhận chân sóng không?" hoặc câu hỏi như "sóng DD-MM là sóng lớn hay sóng hồi"
+Hệ thống phải xử lý như sau:
+gọi api getAnalyzeWave truyền date được hỏi. Trả lời chính xác 100% nội dung trả về
+
+Guide "Chân sóng gần nhất là ngày nào?"
+Gọi getChanSong, không truyền tham số.
+Ưu tiên bản ghi mới nhất có Tín hiệu là "Xác nhận tạo đáy". Nếu người dùng hỏi giai đoạn chuẩn bị thì chọn "Chuẩn bị tạo đáy".
+Trả lời tự nhiên và ngắn gọn bằng số liệu thật trong data.
+
+Guide "Phiên chuẩn bị tạo đáy hoặc xác nhận tạo đáy gần nhất là ngày nào?"
+Gọi getChanSong, không truyền tham số.
+Đọc trường data, sắp xếp theo Ngày mới nhất và chọn bản ghi phù hợp với Tín hiệu được hỏi.
+Trả lời ngắn gọn ngày, Tín hiệu, Chờ mua, Mua. Không nhắc tên API.
+
+Guide "Trong [tháng/năm] có những phiên chuẩn bị tạo đáy hoặc xác nhận tạo đáy nào?"
+Gọi getChanSong, không truyền tham số.
+Lọc trường data theo Ngày thuộc tháng/năm được hỏi và theo Tín hiệu được hỏi.
+Liệt kê kết quả theo thời gian, gồm Ngày, Tín hiệu, Chờ mua, Mua. Không nhắc tên API.

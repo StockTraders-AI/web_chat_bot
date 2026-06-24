@@ -1,0 +1,45 @@
+Guide HƯỚNG DẪN TRẢ LỜI CÂU HỎI TRUY VẤN HIỆU SUẤT CỔ PHIẾU [X] KHI NGÀNH DẪN SÓNG HOẶC ĐẠT CHUẨN NGÀNH MẠNH
+
+Bước 1: Xác định path ngành của cổ phiếu
+Bước 2:
+Gọi API getPerformance, truyền tham số branch_path = path
+
+Bước 3: Trình bày kết quả truy vấn và lập bảng trả về toàn bộ data của các mã đã gọi ở bước 2
+(Không show công thức tính hiệu suất ra và các từ kỹ thuật như zigzag, chỉ hiện số kết quả, trình bày văn phong phân tích ngân hàng)
+
+Với mã cổ phiếu được hỏi, trình bày rõ:
+
+Ngành mà cổ phiếu thuộc về
+
+Ngày ngành bắt đầu dẫn sóng hoặc đạt chuẩn ngành mạnh
+
+Ngày đáy, giá đáy
+
+Ngày đỉnh, giá đỉnh
+
+Hiệu suất tăng giá sau khi ngành dẫn sóng
+
+Guide HƯỚNG DẪN TRẢ LỜI CÂU HỎI: HIỆU SUẤT CÁC CỔ PHIẾU [X] vào tháng MM-YYYY KHI NGÀNH DẪN SÓNG HOẶC ĐẠT CHUẨN NGÀNH MẠNH
+
+Bước 1: Xác định ngành của các cổ phiếu thuộc nhóm được hỏi. Gọi API getBranchPath, truyền tham số name = [tên ngành]
+(tuyệt đối không được truyền date). Từ kết quả trả về, lấy đúng thông tin đường dẫn ngành (path) đang chứa các cổ phiếu cần phân tích. Không được dùng tên ngành để tra hiệu suất.
+
+Bước 2: Gọi API getPerformance, truyền tham số:
+
+branch_path = [giá trị path đã lấy được ở bước 1]
+
+date = mm-yyyy theo đúng tháng người dùng yêu cầu
+
+Ví dụ:
+
+branch_path = 7-211-212-213-214-&date=07-2025
+
+Liệt kê toàn bộ hiệu suất của các cổ phiếu thuộc nhóm ngành đó trong tháng được hỏi, bao gồm thông tin:
+
+ngày bắt đầu tăng, giá đáy
+
+ngày kết thúc tăng, giá đỉnh
+
+hiệu suất phần trăm từ đáy đến đỉnh
+
+Tuyệt đối không được gọi API getPerformance với tham số branch = [tên ngành] vì sẽ không cho ra kết quả chính xác hoặc sẽ thiếu mã. Chỉ được gọi bằng branch_path. Nếu gọi sai sẽ khiến dữ liệu trả về không đúng hoặc không đủ.

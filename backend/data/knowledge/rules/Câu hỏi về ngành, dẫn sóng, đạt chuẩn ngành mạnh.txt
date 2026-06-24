@@ -1,0 +1,94 @@
+Guide Hướng dẫn xử lý câu hỏi
+Lộ trình các dòng dẫn sóng ?
+Gọi api getCoreBranchLeader truyền [date] được hỏi và lập bảng trả lời.
+Guide Ngành chủ lực nào dẫn sóng vào [date]
+Goi api getSMDTBranchCross truyền date = thời gian được hỏi
+Lọc ra ngành chủ lực trả lời kèm smdt tương ứng
+
+Guide Điều kiện ngành mạnh
+Khi Sức mạnh dòng tiền của một ngành trước đó dưới 60%, sau đó vượt lên 60% nhưng vẫn nhỏ hơn 70% thì được xem là có tiềm năng dẫn sóng hoặc sắp tham gia dẫn sóng đối với 6 ngành chủ lực.
+
+Guide Sóng ngành chủ lực (gồm 6 ngành chủ lực)
+Để được coi là đang "dẫn sóng", ngành đó phải đạt SMDT = 70%.
+Dòng tiền cần ở trạng thái vào ổn định, lan tỏa sang nhiều mã trong ngành, chứ không tập trung vào một số mã đơn lẻ.
+Các cổ phiếu vốn hóa lớn trong ngành cũng phải thể hiện tín hiệu tích cực, tạo tác động rõ rệt đến chỉ số chung của thị trường.
+Đạt chuẩn ngành mạnh là khi Sức mạnh dòng tiền vượt lên 70% đối với các ngành không chủ lực.
+
+Guide Hướng dẫn chuẩn xử lý câu hỏi:
+"Ngành [X] bắt đầu dẫn sóng (đối với 6 ngành chủ lực) từ khi nào?"
+hoặc
+"Ngành [X] bắt đầu mạnh (đạt chuẩn mạnh) từ khi nào?"
+Bước 1: Gọi API getSMDTBranchCross
+• Truy vấn keyName = [tên ngành]
+• Chỉ lấy 1 ngày gần nhất so với ngày hôm nay trong danh sách dữ liệu trả về.
+• Không được đề cập các mốc cũ trước đó, chỉ ghi nhận và phản hồi duy nhất ngày mới nhất.
+Khuôn mẫu trả lời bắt buộc:
+"Ngành [X] bắt đầu dẫn sóng (đạt chuẩn ngành mạnh) từ ngày [ngày mới nhất]"
+Ví dụ: nếu trong danh sách có ngày 24/09/2024, 07/07/2025 và 22/12/2025 thì chỉ trả lời:
+"Ngành [X] bắt đầu dẫn sóng từ ngày 22/12/2025."
+Lưu ý quan trọng
+Không áp dụng quy trình này cho các câu hỏi dạng:
+"Sóng vào [date] ngành nào dẫn sóng?"
+"Sóng [date] ngành nào đạt chuẩn ngành mạnh?"
+
+Guide Hướng dẫn xử lý câu hỏi:
+"Thời điểm dòng đạt chuẩn ngành mạnh của các mã"
+Xác định mã đó thuộc ngành nào.
+Bước 1: Gọi API getSMDTBranchCross
+• Truy vấn keyName = [tên ngành]
+• Chỉ lấy 1 ngày gần nhất so với ngày hôm nay trong danh sách dữ liệu trả về.
+• Không được đề cập các mốc cũ trước đó, chỉ ghi nhận và phản hồi duy nhất ngày mới nhất.
+Khuôn mẫu trả lời bắt buộc:
+"Ngành [X] bắt đầu dẫn sóng (đạt chuẩn ngành mạnh) từ ngày [ngày mới nhất]"
+Ví dụ: nếu trong danh sách có ngày 24/09/2024, 07/07/2025 và 22/12/2025 thì chỉ trả lời:
+"Ngành [X] bắt đầu dẫn sóng từ ngày 22/12/2025."
+Lưu ý quan trọng
+Không áp dụng quy trình này cho các câu hỏi dạng:
+"Sóng vào [date] ngành nào dẫn sóng?"
+"Sóng [date] ngành nào đạt chuẩn ngành mạnh?"
+
+Guide Hướng dẫn xử lý câu hỏi:
+"Ngành chủ lực nào dẫn sóng hôm nay?"
+Gọi API getSMDTBranch với date = hôm nay.
+Lọc 6 ngành chủ lực có Sức Mạnh Dòng Tiền (SMDT) ≥ 70% thì được xem là ngành chủ lực đang dẫn sóng trong phiên.
+Kết quả trả về là danh sách các ngành chủ lực thỏa điều kiện đó.
+Các câu hỏi tương tự bao gồm:
+"Cho [x] mã cổ phiếu dòng [ngành] còn mua được"
+Các câu hỏi liên quan đến ngành mạnh hoặc dẫn sóng kèm các từ khóa "hôm nay", "hiện tại"
+→ đều áp dụng công thức trên.
+
+Guide Đối với các câu hỏi như:
+"Hôm qua dòng nào dẫn sóng?"
+"Sóng tháng mm/yyyy ngành nào dẫn sóng?"
+"Sóng năm yyyy dòng ngành nào dẫn sóng?"
+"Tháng mm/yyyy ngành nào bắt đầu dẫn sóng?"
+"Năm yyyy ngành nào bắt đầu dẫn sóng?"
+"Ngành nào dẫn sóng vào tháng mm-yyyy?"
+"Ngành nào dẫn sóng vào năm yyyy?"
+Gọi API getSMDTBranchCross với date = thời gian được hỏi.
+Sau đó lọc kết quả giữ lại các ngành chủ lực, rồi trả lời.
+
+Guide Đối với các câu hỏi như:
+"Hôm qua dòng nào đạt chuẩn ngành mạnh?"
+"Sóng tháng mm/yyyy ngành nào đạt chuẩn ngành mạnh?"
+"Sóng năm yyyy dòng ngành nào đạt chuẩn ngành mạnh?"
+"Tháng mm/yyyy ngành nào bắt đầu đạt chuẩn ngành mạnh?"
+"Năm yyyy ngành nào bắt đầu đạt chuẩn ngành mạnh?"
+"Ngành nào đạt chuẩn ngành mạnh vào tháng mm-yyyy?"
+"Ngành nào đạt chuẩn ngành mạnh vào năm yyyy?"
+Gọi API getSMDTBranchCross với date = thời gian được hỏi.
+Sau đó không trả lời những ngành thuộc nhóm chủ lực, chỉ trả lời các ngành còn lại.
+
+Guide Khi gặp câu hỏi: "phân tích ngành [X]"
+Thay vì hiểu là phân tích tại thời điểm hiện tại (hôm nay), hệ thống phải hiểu là yêu cầu xem xét toàn bộ năm gần nhất có dữ liệu.
+
+Guide Khi gặp câu hỏi:
+"Sức mạnh dòng tiền ngành chủ lực vào yyyy-mm-dd thế nào?"
+Gọi lần lượt API getSMDTBranch với date = ngày được hỏi cho từng ngành chủ lực, sau đó tổng hợp trả về kết quả.
+
+Guide Hướng dẫn xử lý câu hỏi:
+"[Ngày] cổ phiếu nào mạnh nhất dòng [ngành X]?"
+Gọi API getSMDTTicker với:
+date = ngày được hỏi
+keyValue = từng mã trong list mã của ngành được hỏi
+Mã nào có SMDT cao nhất chính là cổ phiếu mạnh nhất ngành tại thời điểm truy vấn.

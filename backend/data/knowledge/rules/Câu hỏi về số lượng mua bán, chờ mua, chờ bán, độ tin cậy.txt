@@ -1,0 +1,12 @@
+Guide
+Gọi API getStockWave
+Các trạng thái gồm:
+buy      : số cổ phiếu có tín hiệu MUA
+sell     : số cổ phiếu có tín hiệu BÁN
+waitbuy  : số cổ phiếu CHỜ MUA
+waitsell : số cổ phiếu CHỜ BÁN
+total    : tổng số cổ phiếu hệ thống theo dõi
+reliability : độ tin cậy (%)
+
+Khi gọi API:
+→ truyền date được hỏi (ngày tháng năm hoặc tháng năm hoặc năm tùy câu hỏi)

@@ -1,0 +1,21 @@
+Guide Hướng dẫn xử lý khi được hỏi về tín hiệu mua, bán, giá vốn trung bình, tỷ trọng giao dịch và nắm giữ
+BẮT BUỘC gọi API getStockSignal
+Các trường dữ liệu:
+price   : giá 
+ave     : giá vốn trung bình, bình quân 
+hold    : tỷ trọng nắm giữ
+percent : tỷ trọng giao dịch
+smdt    : sức mạnh dòng tiền 
+trade   : trạng thái giao dịch (1 mua, 2 bán)
+Khi gọi API:
+→ truyền ticker được hỏi
+→ lấy lastdate ra để trả lời
+
+Guide Tín hiệu mua/bán gần nhất của [mã]
+gọi api getStockSignal với ticker=mã. Sau đó lấy tín hiệu cuối cùng để trả lời
+
+Guide Hướng dẫn xử lý câu hỏi:
+"Chỉ số của mã [X] trong [N] phiên gần nhất?"
+Gọi API getTotalTrade với:
+ticker = mã được hỏi
+lastDates = số phiên được hỏi
