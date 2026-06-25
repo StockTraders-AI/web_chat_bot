@@ -30,7 +30,7 @@ NON_TICKER_TERMS = frozenset(
     }
 )
 
-TICKER_TOKEN_RE = re.compile(r"\b[A-Z]{2,5}\d?\b")
+TICKER_TOKEN_RE = re.compile(r"\b[A-Z][A-Z0-9]{1,4}\b")
 TICKER_FIELDS = frozenset(
     {"ticker", "symbol", "stockcode", "stock_code", "stockticker", "stock_ticker"}
 )
@@ -146,14 +146,33 @@ def sanitize_api_result(operation_id: str, data: Any) -> Any:
 
 
 def sanitize_response_text(text: str) -> str:
-    """Remove unsupported uppercase ticker-like tokens from the final answer."""
-    def replace(match: re.Match) -> str:
-        token = match.group(0)
-        if token in ALLOWED_TICKERS or token in NON_TICKER_TERMS:
-            return token
-        return ""
+    """Remove unsupported ticker mentions and renumber ordered ticker lists."""
+    cleaned_lines = []
+    ordered_item = re.compile(r"^(\s*)\d+(?:\.0%)?\.\s*(.+)$")
 
-    cleaned = TICKER_TOKEN_RE.sub(replace, text or "")
+    for line in (text or "").splitlines():
+        disallowed = find_disallowed_tickers(line)
+        if disallowed and ordered_item.match(line):
+            continue
+
+        def replace(match: re.Match) -> str:
+            token = match.group(0)
+            if token in ALLOWED_TICKERS or token in NON_TICKER_TERMS:
+                return token
+            return ""
+
+        cleaned_lines.append(TICKER_TOKEN_RE.sub(replace, line))
+
+    number = 0
+    renumbered = []
+    for line in cleaned_lines:
+        match = ordered_item.match(line)
+        if match:
+            number += 1
+            line = f"{match.group(1)}{number}. {match.group(2)}"
+        renumbered.append(line)
+
+    cleaned = "\n".join(renumbered)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"([,;:])(?:\s*[,;:])+", r"\1", cleaned)

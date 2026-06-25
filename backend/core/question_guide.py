@@ -72,7 +72,7 @@ def normalize_text(text: str) -> str:
 
 def extract_ticker(text: str) -> Optional[str]:
     raw = text or ""
-    for item in re.findall(r"\b[A-Z]{2,5}\d?\b", raw):
+    for item in re.findall(r"\b[A-Z][A-Z0-9]{1,4}\b", raw):
         if item not in NON_TICKERS and item in ALLOWED_TICKERS:
             return item
 

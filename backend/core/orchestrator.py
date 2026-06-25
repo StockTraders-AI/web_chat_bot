@@ -63,7 +63,7 @@ def enforce_main_branch_terms(text: str) -> str:
 
     return fixed
 
-TICKER_RE = re.compile(r"\b[A-Z]{2,5}\d?\b")
+TICKER_RE = re.compile(r"\b[A-Z][A-Z0-9]{1,4}\b")
 NON_TICKER_SYMBOLS = frozenset({"RSI", "NAV", "SMDT", "GPT", "AI", "API", "MACD"})
 NORMALIZED_STOCK_KEYWORDS = (
     "gia", "co phieu", "smdt", "nganh", "ma", "tin hieu", "suy yeu",
@@ -107,10 +107,19 @@ def ensure_smdt_percent(text: str) -> str:
     def should_skip(match: re.Match) -> bool:
         raw = match.group(0)
         start, end = match.span()
-        after = (text[end:end + 16] or "").lower()
-        before = (text[max(0, start - 16):start] or "").lower()
+        after = (text[end:end + 24] or "").lower()
+        before = (text[max(0, start - 24):start] or "").lower()
+        local_context = normalize_search_text(before + raw + after)
 
+        # Only format a number that is locally associated with the SMDT metric.
+        if "smdt" not in local_context:
+            return True
         if after.lstrip().startswith("%"):
+            return True
+        # Ordered-list markers such as "10. BCM" are not SMDT values.
+        if re.match(r"\s*[.)]\s+\S", after):
+            return True
+        if after.lstrip().startswith(("/", "-")) or before.rstrip().endswith(("/", "-")):
             return True
         if re.match(r"\s*(phien|phiên|ngay|ngày|thang|tháng|nam|năm|ma|mã|co phieu|cổ phiếu)", after):
             return True
