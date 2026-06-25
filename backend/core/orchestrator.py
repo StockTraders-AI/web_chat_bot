@@ -15,6 +15,11 @@ from core.question_guide import QuestionGuide
 
 from services.api_executor import APIExecutor
 from services.openai_client import OpenAIClient
+from services.ticker_policy import (
+    allowed_tickers_text,
+    find_disallowed_tickers,
+    sanitize_response_text,
+)
 from settings import MAX_TOOL_LOOPS, CLASSIFIER_MODEL
 from core.constants import MAIN_BRANCHES, MAIN_BRANCH_ALIASES
 
@@ -352,6 +357,10 @@ class Orchestrator:
             SYSTEM_PROMPT,
             "Output format rule: trả lời dạng text thường, không dùng markdown, không dùng dấu ** hoặc __ để in đậm.",
             "SMDT formatting rule: SMDT is a percentage metric. Whenever you mention a numeric SMDT value, always append the % symbol, for example 15.57% or 70%.",
+            "QUY TẮC WHITELIST MÃ CỔ PHIẾU BẮT BUỘC:\n"
+            "- Chỉ được sử dụng hoặc nhắc tới các mã sau: " + allowed_tickers_text() + ".\n"
+            "- Không được tự bổ sung, suy đoán, ví dụ hoặc nhắc tới bất kỳ mã cổ phiếu nào ngoài danh sách.\n"
+            "- Nếu dữ liệu chứa mã ngoài danh sách thì phải bỏ qua hoàn toàn mã đó.",
         ]
 
         if stock_related:
@@ -458,7 +467,7 @@ class Orchestrator:
             if h["role"] in ("user", "assistant"):
                 messages.append({
                     "role": h["role"],
-                    "content": h["content"]
+                    "content": sanitize_response_text(h["content"])
                 })
 
         # Current user message
@@ -710,9 +719,19 @@ Yêu cầu:
         model = pick_model(selected_model)
         await self.memory.add(user_id, "user", user_text)
 
+        if find_disallowed_tickers(user_text):
+            final_text = "Mã được hỏi không nằm trong danh sách mã được hệ thống hỗ trợ."
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", final_text)
+            yield ("done", {"sources": []})
+            return
+
         guide_result = await self.question_guide.handle(user_id, user_text)
         if guide_result.action == "ask":
-            final_text = clean_chat_output(guide_result.message)
+            final_text = clean_chat_output(sanitize_response_text(guide_result.message))
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
                 chunk = final_text[i:i + STREAM_CHUNK_CHARS]
@@ -730,7 +749,7 @@ Yêu cầu:
 
         if not guided_question and is_waitbuy_explain_query(user_text):
             final_text = await self._answer_waitbuy_explanation(user_text=user_text, model=model)
-            final_text = clean_chat_output(final_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
                 chunk = final_text[i:i + STREAM_CHUNK_CHARS]
@@ -755,7 +774,7 @@ Yêu cầu:
         )
         final_text = enforce_main_branch_terms(final_text)
         final_text = ensure_smdt_percent(final_text)
-        final_text = clean_chat_output(final_text)
+        final_text = clean_chat_output(sanitize_response_text(final_text))
 
         full = ""
         for i in range(0, len(final_text), STREAM_CHUNK_CHARS):

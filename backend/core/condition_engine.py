@@ -1,5 +1,7 @@
 import json
 import httpx
+
+from services.ticker_policy import sanitize_api_result
 from datetime import datetime
 import re
 import unicodedata
@@ -26,7 +28,7 @@ async def post_data_api(endpoint: str, params: dict | None = None):
         ) as client:
             res = await client.post(url, params=params or {})
             res.raise_for_status()
-            return res.json()
+            return sanitize_api_result(endpoint, res.json())
 
     except httpx.ReadTimeout:
         return {

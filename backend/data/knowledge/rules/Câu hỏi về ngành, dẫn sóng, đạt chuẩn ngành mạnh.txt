@@ -7,7 +7,6 @@ Lọc ra ngành chủ lực trả lời kèm smdt tương ứng
 
 Guide Điều kiện ngành mạnh
 Khi Sức mạnh dòng tiền của một ngành trước đó dưới 60%, sau đó vượt lên 60% nhưng vẫn nhỏ hơn 70% thì được xem là có tiềm năng dẫn sóng hoặc sắp tham gia dẫn sóng đối với 6 ngành chủ lực.
-
 Guide Sóng ngành chủ lực (gồm 6 ngành chủ lực)
 Để được coi là đang "dẫn sóng", ngành đó phải đạt SMDT = 70%.
 Dòng tiền cần ở trạng thái vào ổn định, lan tỏa sang nhiều mã trong ngành, chứ không tập trung vào một số mã đơn lẻ.

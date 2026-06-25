@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 from settings import CLASSIFIER_MODEL
+from services.ticker_policy import ALLOWED_TICKERS
 
 
 @dataclass
@@ -49,6 +50,14 @@ GENERIC_GUIDE_PREFIXES = (
     "đối với", "doi voi", "mỗi lần", "moi lan", "để tránh", "de tranh",
     "điều kiện", "dieu kien",
 )
+DIRECT_RULE_STOPWORDS = {
+    "anh", "chi", "cho", "toi", "minh", "vui", "long", "hay",
+    "lap", "bang", "thong", "ke", "danh", "sach", "cac", "co",
+    "ve", "cua", "vao", "trong", "hien", "nay", "hom", "ngay",
+}
+STOCK_PLACEHOLDERS = ("[ma]", "[ma co phieu]", "[ticker]", "[x]")
+BRANCH_PLACEHOLDERS = ("[nganh]",)
+DATE_PLACEHOLDERS = ("[date]", "[ngay]", "[month]", "mm-yyyy", "yyyy")
 
 
 def normalize_text(text: str) -> str:
@@ -63,7 +72,7 @@ def normalize_text(text: str) -> str:
 def extract_ticker(text: str) -> Optional[str]:
     raw = text or ""
     for item in re.findall(r"\b[A-Z]{2,5}\d?\b", raw):
-        if item not in NON_TICKERS:
+        if item not in NON_TICKERS and item in ALLOWED_TICKERS:
             return item
 
     normalized = normalize_text(raw)
@@ -213,6 +222,64 @@ class RuleCaseCatalog:
                     found.append(RuleCase(question, frozenset(doc_groups), document))
         return found
 
+    def direct_match(self, query: str) -> Optional[RuleCase]:
+        """Return a rule only when the user's wording is already specific enough."""
+        normalized_query = normalize_text(query)
+        if not normalized_query:
+            return None
+
+        ticker = extract_ticker(query)
+        branch = extract_branch(query)
+        query_tokens = {
+            token
+            for token in normalized_query.split()
+            if len(token) > 1 and token not in DIRECT_RULE_STOPWORDS
+        }
+        best_case: Optional[RuleCase] = None
+        best_score = 0.0
+        second_best_score = 0.0
+
+        for case in self.cases():
+            normalized_case = normalize_text(case.question)
+            if any(value in normalized_case for value in STOCK_PLACEHOLDERS) and not ticker:
+                continue
+            if any(value in normalized_case for value in BRANCH_PLACEHOLDERS) and not branch:
+                continue
+            if any(value in normalized_case for value in DATE_PLACEHOLDERS) and not extract_date_value(query):
+                continue
+
+            if normalized_query == normalized_case:
+                return case
+
+            # Do not infer intent from short/generic phrases. Fuzzy matching is
+            # reserved for queries carrying at least three meaningful terms.
+            if len(query_tokens) < 3:
+                continue
+            case_tokens = {
+                token
+                for token in normalized_case.split()
+                if len(token) > 1 and token not in DIRECT_RULE_STOPWORDS
+            }
+            overlap = query_tokens & case_tokens
+            coverage = len(overlap) / len(query_tokens)
+            if coverage < 0.8 or len(overlap) < 3:
+                continue
+
+            containment_bonus = 0.25 if (
+                normalized_query in normalized_case or normalized_case in normalized_query
+            ) else 0.0
+            score = coverage + containment_bonus + min(len(overlap), 8) / 100
+            if score > best_score:
+                second_best_score = best_score
+                best_case = case
+                best_score = score
+            elif score > second_best_score:
+                second_best_score = score
+
+        if best_case and best_score - second_best_score >= 0.08:
+            return best_case
+        return None
+
     def _extract_questions(self, chunk: str) -> Iterable[str]:
         text = chunk or ""
         candidates = re.findall(r'["“]([^"”\n]{8,180})["”]', text)
@@ -258,6 +325,17 @@ class QuestionGuide:
             self._fallback_states.pop(user_id, None)
 
     async def handle(self, user_id: str, user_text: str) -> GuideResult:
+        direct_case = self.catalog.direct_match(user_text)
+        if direct_case:
+            await self._clear_state(user_id)
+            print(
+                "QUESTION GUIDE DIRECT RULE MATCH:",
+                direct_case.document,
+                "|",
+                direct_case.question,
+            )
+            return GuideResult("run", canonical_question=user_text)
+
         pending = await self._load_state(user_id)
         if pending:
             resolved = await self._resolve_pending(user_id, user_text, pending)

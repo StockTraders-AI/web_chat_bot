@@ -1,5 +1,7 @@
 # backend/data/branch_tickers.py
 
+from services.ticker_policy import ALLOWED_TICKERS
+
 BRANCH_DATA = [
     {
         "name": "Bất động sản dân cư",
@@ -123,6 +125,13 @@ BRANCH_DATA = [
         "val": 214
     }
 ]
+
+for _branch in BRANCH_DATA:
+    _branch["tickers"] = [
+        ticker for ticker in _branch.get("tickers", [])
+        if ticker in ALLOWED_TICKERS
+    ]
+
 
 def get_branch_by_name(name: str):
 

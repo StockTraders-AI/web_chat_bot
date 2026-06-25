@@ -104,10 +104,7 @@ Sau đó ghép dữ liệu từ tất cả các năm lại để trả về bả
 
 Guide Hướng dẫn xử lý câu hỏi:
 "[Ngày] cổ phiếu nào mạnh nhất dòng [ngành X]?"
-
 Gọi API getSMDTTicker với:
-
 date = ngày được hỏi
 keyValue = từng mã trong list mã của ngành được hỏi
-
 Mã nào có SMDT cao nhất chính là cổ phiếu mạnh nhất ngành tại thời điểm truy vấn.

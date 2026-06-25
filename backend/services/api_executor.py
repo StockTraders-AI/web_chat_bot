@@ -6,6 +6,7 @@ from core.tool_engine import ToolRegistry
 from services.branch_map import extract_branch_path
 from services.branch_tickers import BRANCH_DATA
 from services.chan_song_client import get_chan_song
+from services.ticker_policy import invalid_api_ticker, sanitize_api_result
 
 DEBUG_API = True
 
@@ -59,9 +60,16 @@ class APIExecutor:
         log("ARGS FROM GPT:", args)
         args = dict(args or {})
 
+        if invalid_api_ticker(operation_id, args):
+            log("BLOCKED TICKER OUTSIDE PROJECT ALLOWLIST")
+            return {
+                "error": "Ticker is not supported by this system",
+                "unsupported_ticker": True,
+            }
+
         if operation_id == "getChanSong":
             try:
-                return get_chan_song()
+                return sanitize_api_result(operation_id, get_chan_song())
             except Exception as e:
                 log("CHAN SONG API EXCEPTION:", str(e))
                 return {"error": str(e)}
@@ -215,7 +223,7 @@ class APIExecutor:
             if isinstance(data, list):
                 log("RESULT SIZE:", len(data))
 
-            return data
+            return sanitize_api_result(operation_id, data)
 
         except Exception as e:
 

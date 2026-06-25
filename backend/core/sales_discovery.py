@@ -3,6 +3,7 @@ import re
 import unicodedata
 from datetime import datetime
 from typing import Any, Dict, List
+from services.ticker_policy import ALLOWED_TICKERS
 
 from services.openai_client import OpenAIClient
 from settings import CLASSIFIER_MODEL
@@ -229,7 +230,7 @@ def extract_user_tickers(text: str) -> List[str]:
         if normalized in IGNORED_TICKER_WORDS:
             continue
         ticker = raw.upper()
-        if ticker not in tickers:
+        if ticker in ALLOWED_TICKERS and ticker not in tickers:
             tickers.append(ticker)
 
     return tickers
