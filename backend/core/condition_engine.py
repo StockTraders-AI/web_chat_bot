@@ -1,7 +1,7 @@
 import json
 import httpx
 
-from services.ticker_policy import sanitize_api_result
+from services.ticker_policy import invalid_api_ticker, sanitize_api_result
 from datetime import datetime
 import re
 import unicodedata
@@ -20,13 +20,23 @@ SUPPORTED_CONDITION_KEYS = {
 
 
 async def post_data_api(endpoint: str, params: dict | None = None):
+    params = params or {}
+    if invalid_api_ticker(endpoint, params):
+        return {
+            "_error": True,
+            "type": "unsupported_ticker",
+            "message": "Ticker is not supported by this system",
+            "endpoint": endpoint,
+            "params": {},
+        }
+
     url = f"{API_BASE}/service/data/{endpoint}"
 
     try:
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(40.0, connect=10.0)
         ) as client:
-            res = await client.post(url, params=params or {})
+            res = await client.post(url, params=params)
             res.raise_for_status()
             return sanitize_api_result(endpoint, res.json())
 

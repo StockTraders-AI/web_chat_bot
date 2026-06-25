@@ -21,6 +21,7 @@ class RuleCase:
     question: str
     groups: frozenset[str]
     document: str
+    date_optional: bool = False
 
 
 RULE_GROUPS: Dict[str, Set[str]] = {
@@ -81,7 +82,9 @@ def extract_ticker(text: str) -> Optional[str]:
         normalized,
     )
     if action_match and action_match.group(1) not in STOCK_WORDS:
-        return action_match.group(1).upper()
+        ticker = action_match.group(1).upper()
+        if ticker in ALLOWED_TICKERS:
+            return ticker
     return None
 
 
@@ -219,7 +222,12 @@ class RuleCaseCatalog:
                     if key in seen:
                         continue
                     seen.add(key)
-                    found.append(RuleCase(question, frozenset(doc_groups), document))
+                    found.append(RuleCase(
+                        question,
+                        frozenset(doc_groups),
+                        document,
+                        self._date_is_optional(chunk),
+                    ))
         return found
 
     def direct_match(self, query: str) -> Optional[RuleCase]:
@@ -245,10 +253,16 @@ class RuleCaseCatalog:
                 continue
             if any(value in normalized_case for value in BRANCH_PLACEHOLDERS) and not branch:
                 continue
-            if any(value in normalized_case for value in DATE_PLACEHOLDERS) and not extract_date_value(query):
+            if (
+                any(value in normalized_case for value in DATE_PLACEHOLDERS)
+                and not case.date_optional
+                and not extract_date_value(query)
+            ):
                 continue
 
-            if normalized_query == normalized_case:
+            if normalized_query == normalized_case or self._template_matches(
+                normalized_query, normalized_case
+            ):
                 return case
 
             # Do not infer intent from short/generic phrases. Fuzzy matching is
@@ -279,6 +293,39 @@ class RuleCaseCatalog:
         if best_case and best_score - second_best_score >= 0.08:
             return best_case
         return None
+
+    @staticmethod
+    def _template_matches(query: str, template: str) -> bool:
+        pattern = re.escape(template)
+        replacements = {
+            "[ma co phieu]": r"[a-z]{2,5}\d?",
+            "[ticker]": r"[a-z]{2,5}\d?",
+            "[ma]": r"[a-z]{2,5}\d?",
+            "[x]": r"[a-z]{2,5}\d?",
+            "[nganh]": r".+?",
+            "[date]": r"(?:20\d{2}(?:-\d{2}(?:-\d{2})?)?|\d{1,2}/\d{1,2}(?:/20\d{2})?|hom nay|hien tai)",
+            "[ngay]": r"(?:20\d{2}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/20\d{2})?|hom nay)",
+            "[month]": r"(?:20\d{2}-\d{2}|\d{1,2}-20\d{2}|thang \d{1,2}(?:/20\d{2})?)",
+            "mm-yyyy": r"\d{1,2}-20\d{2}",
+            "yyyy": r"20\d{2}",
+        }
+        for placeholder, placeholder_pattern in replacements.items():
+            pattern = pattern.replace(re.escape(placeholder), placeholder_pattern)
+        return re.fullmatch(pattern, query) is not None
+
+    @staticmethod
+    def _date_is_optional(chunk: str) -> bool:
+        normalized = normalize_text(chunk)
+        return any(
+            marker in normalized
+            for marker in (
+                "khong neu ro date",
+                "khong neu date",
+                "khong co date",
+                "khong truyen date",
+                "date la tuy chon",
+            )
+        )
 
     def _extract_questions(self, chunk: str) -> Iterable[str]:
         text = chunk or ""

@@ -364,7 +364,7 @@ def merge_obvious_user_facts(
             text_l,
         )
         has_inline_ticker_cost = any(
-            ticker not in IGNORED_TICKER_WORDS
+            ticker not in IGNORED_TICKER_WORDS and ticker.upper() in ALLOWED_TICKERS
             for ticker, _ in ticker_cost_pairs
         )
         mentions_holding = any(

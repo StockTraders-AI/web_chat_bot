@@ -924,6 +924,13 @@
             "description": "Mã cổ phiếu cần kiểm tra. Nếu không truyền thì trả về danh sách tất cả mã thỏa điều kiện."
           },
           {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "date" },
+            "description": "Ngày cần kiểm tra theo định dạng YYYY-MM-DD. Nếu không truyền thì dùng dữ liệu gần nhất."
+          },
+          {
             "name": "refresh",
             "in": "query",
             "schema": { "type": "boolean", "default": false },

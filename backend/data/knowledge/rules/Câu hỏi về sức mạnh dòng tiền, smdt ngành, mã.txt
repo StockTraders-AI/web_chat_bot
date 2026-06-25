@@ -16,7 +16,7 @@ Guide "SMDT (sức mạnh dòng tiền) các mã dòng (ngành) từ tháng [mon
 gọi api getBranchSMDTTickers truyền ngành và date được hỏi
 Guide "SMDT (sức mạnh dòng tiền) của [mã] hoặc [ngành] trong X phiên vừa qua"?
 Gọi api getSMDTLastN truyền n=X và ticker là mã được hỏi hoặc keyName, brand_path của ngành được hỏi.
-Guide "Lập bảng thống kê mã có SMDT tăng dần đều" hoặc "Các mã có smdt tăng dần đều"
+Guide "Lập bảng thống kê mã có SMDT tăng dần đều vào [date]" hoặc "Các mã có smdt tăng dần đều vào [date]"
 Gọi API getSMDTIncreasing3 và truyền date user hỏi
 Nếu người dùng không nêu rõ mã cụ thể thì không truyền ticker. 
 Nếu người dùng không nêu rõ date thể thì không truyền date. 
