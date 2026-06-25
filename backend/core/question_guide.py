@@ -52,7 +52,7 @@ GENERIC_GUIDE_PREFIXES = (
     "điều kiện", "dieu kien",
 )
 DIRECT_RULE_STOPWORDS = {
-    "anh", "chi", "cho", "toi", "minh", "vui", "long", "hay",
+    "anh", "chi", "cho", "toi", "minh", "vui", "long", "hay", "dang",
     "lap", "bang", "thong", "ke", "danh", "sach", "cac", "co",
     "ve", "cua", "vao", "trong", "hien", "nay", "hom", "ngay",
 }
@@ -246,6 +246,7 @@ class RuleCaseCatalog:
         best_case: Optional[RuleCase] = None
         best_score = 0.0
         second_best_score = 0.0
+        best_signature: Optional[frozenset[str]] = None
 
         for case in self.cases():
             normalized_case = normalize_text(case.question)
@@ -279,15 +280,28 @@ class RuleCaseCatalog:
             if coverage < 0.8 or len(overlap) < 3:
                 continue
 
+            semantic_case_tokens = {
+                token
+                for token in case_tokens
+                if token not in {
+                    "date", "[date]", "ngay", "[ngay]", "month", "[month]",
+                    "yyyy", "mm-yyyy",
+                }
+            }
+            semantic_overlap = query_tokens & semantic_case_tokens
+            precision = len(semantic_overlap) / max(len(semantic_case_tokens), 1)
             containment_bonus = 0.25 if (
                 normalized_query in normalized_case or normalized_case in normalized_query
             ) else 0.0
-            score = coverage + containment_bonus + min(len(overlap), 8) / 100
+            score = coverage + (precision * 0.5) + containment_bonus + min(len(overlap), 8) / 100
+            signature = frozenset(semantic_case_tokens)
             if score > best_score:
-                second_best_score = best_score
+                if best_case and signature != best_signature:
+                    second_best_score = max(second_best_score, best_score)
                 best_case = case
                 best_score = score
-            elif score > second_best_score:
+                best_signature = signature
+            elif signature != best_signature and score > second_best_score:
                 second_best_score = score
 
         if best_case and best_score - second_best_score >= 0.08:
