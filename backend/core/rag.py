@@ -13,9 +13,12 @@ import unicodedata
 DEBUG_RAG = True
 
 
+def _safe_console(value: Any) -> str:
+    return str(value).encode("ascii", errors="backslashreplace").decode("ascii")
+
 def debug(*args):
     if DEBUG_RAG:
-        print(*args)
+        print(*(_safe_console(arg) for arg in args))
 
 
 SEARCH_STOPWORDS = {

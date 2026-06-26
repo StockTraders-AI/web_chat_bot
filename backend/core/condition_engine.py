@@ -1307,33 +1307,27 @@ async def condition_smdt_branch_up_3_sessions(context: dict):
         ),
     }
 
+CONDITION_HANDLERS = {
+    "waitbuy_over_200": condition_waitbuy_over_200,
+    "vnindex_down_10_waitbuy_reversal": condition_vnindex_down_10_waitbuy_reversal,
+    "core_branch_smdt_cross_70": condition_core_branch_smdt_cross_70,
+    "core_branch_smdt_cross_70_cashflow_in": condition_core_branch_smdt_cross_70_cashflow_in,
+    "smdt_ticker_cross_70_prev_up": condition_smdt_ticker_cross_70_prev_up,
+    "smdt_up_3_sessions": condition_smdt_up_3_sessions,
+    "smdt_branch_up_3_sessions": condition_smdt_branch_up_3_sessions,
+}
+
+
 async def run_condition(template_id: int, context: dict):
     condition_key = resolve_condition_key(context.get("condition_key"))
+    handler = CONDITION_HANDLERS.get(condition_key)
 
-    if condition_key == "waitbuy_over_200":
-        return await condition_waitbuy_over_200(context)
-
-    if condition_key == "vnindex_down_10_waitbuy_reversal":
-        return await condition_vnindex_down_10_waitbuy_reversal(context)
-
-    if condition_key == "core_branch_smdt_cross_70":
-        return await condition_core_branch_smdt_cross_70(context)
-
-    if condition_key == "core_branch_smdt_cross_70_cashflow_in":
-        return await condition_core_branch_smdt_cross_70_cashflow_in(context)
-
-    if condition_key == "smdt_ticker_cross_70_prev_up":
-        return await condition_smdt_ticker_cross_70_prev_up(context)
-
-    if condition_key == "smdt_up_3_sessions":
-        return await condition_smdt_up_3_sessions(context)
-
-    if condition_key == "smdt_branch_up_3_sessions":
-        return await condition_smdt_branch_up_3_sessions(context)
+    if handler:
+        return await handler(context)
 
     return {
         "ok": False,
         "matched": False,
-        "message": "Chưa hỗ trợ condition_key này",
+        "message": r"Ch\u01b0a h\u1ed7 tr\u1ee3 condition_key n\u00e0y".encode("ascii").decode("unicode_escape"),
         "condition_key": condition_key,
     }

@@ -1,5 +1,4 @@
 import requests
-import unicodedata
 import json
 from typing import Any, Dict
 from core.tool_engine import ToolRegistry
@@ -10,24 +9,13 @@ from services.ticker_policy import invalid_api_ticker, sanitize_api_result
 
 DEBUG_API = True
 
+def _safe_console(value: Any) -> str:
+    return str(value).encode("ascii", errors="backslashreplace").decode("ascii")
+
 def log(*args):
     if DEBUG_API:
-        print(*args)
+        print(*(_safe_console(arg) for arg in args))
 
-
-# ============================================================
-# NORMALIZE TEXT
-# ============================================================
-
-def normalize_text(text: str):
-
-    if not text:
-        return ""
-
-    text = unicodedata.normalize("NFD", text)
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-
-    return text.lower().strip()
 
 def get_branch_path_by_ticker(ticker: str):
 
@@ -49,6 +37,115 @@ class APIExecutor:
 
     def __init__(self, registry: ToolRegistry):
         self.registry = registry
+
+    def _apply_special_branch_alias(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        real_estate_branch = "B\\u1ea5t \\u0111\\u1ed9ng s\\u1ea3n d\\u00e2n c\\u01b0".encode("ascii").decode("unicode_escape")
+        special_branch_map = {
+            "BDS": real_estate_branch,
+            "B\\u0110S".encode("ascii").decode("unicode_escape"): real_estate_branch,
+        }
+        ticker = args.get("ticker")
+        if not ticker:
+            return args
+
+        value = str(ticker).upper().strip()
+        if value not in special_branch_map:
+            return args
+
+        log("DETECTED BRANCH KEYWORD:", value)
+        args = dict(args)
+        args.pop("ticker", None)
+        args["keyName"] = special_branch_map[value]
+        return args
+
+    def _resolve_branch_path(self, *values: Any) -> str | None:
+        for value in values:
+            if not value:
+                continue
+            branch_path = extract_branch_path(str(value))
+            if branch_path:
+                return branch_path
+        return None
+
+    def _normalize_args(self, operation_id: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize GPT tool arguments per API, avoiding global side effects."""
+        args = self._apply_special_branch_alias(dict(args or {}))
+
+        ticker = args.get("ticker")
+        if ticker and "branch_path" not in args and operation_id == "getPerformance":
+            branch_path = get_branch_path_by_ticker(str(ticker))
+            if branch_path:
+                log("BACKEND FOUND BRANCH PATH:", branch_path)
+                args["branch_path"] = branch_path
+
+        if operation_id == "getSMDTBranch":
+            branch_value = args.get("branch") or args.get("keyName") or args.get("name")
+            branch_path = args.get("path") or args.get("branch_path")
+            if not branch_path:
+                branch_path = self._resolve_branch_path(branch_value)
+            if branch_path:
+                log("NORMALIZED getSMDTBranch TO PATH:", branch_path)
+                args["path"] = branch_path
+                for key in ("branch_path", "branch", "keyName", "name"):
+                    args.pop(key, None)
+            return args
+
+        if operation_id == "getBranchSMDTTickers":
+            if "date" in args and "from_date" not in args:
+                args["from_date"] = args.pop("date")
+
+            branch_value = args.get("branch") or args.get("keyName") or args.get("name")
+            branch_path = args.get("path") or args.get("branch_path")
+            if branch_value and "branch" not in args:
+                args["branch"] = branch_value
+            if not branch_path:
+                branch_path = self._resolve_branch_path(branch_value)
+            if branch_path:
+                args["path"] = branch_path
+            for key in ("branch_path", "keyName", "name"):
+                args.pop(key, None)
+            return args
+
+        if operation_id == "getPerformance":
+            if args.get("branch") and not args.get("branch_path"):
+                branch_path = self._resolve_branch_path(args.get("branch"))
+                if branch_path:
+                    args["branch_path"] = branch_path
+            return args
+
+        if operation_id == "getSMDTLastN":
+            branch_path = (
+                args.get("path")
+                or args.get("branch_path")
+                or args.get("brand_path")
+                or self._resolve_branch_path(args.get("branch"), args.get("keyName"), args.get("name"))
+            )
+            if branch_path:
+                args["path"] = branch_path
+            for key in ("branch_path", "brand_path", "branch", "name"):
+                args.pop(key, None)
+            return args
+
+        branch_path_operations = {
+            "getCashFlowBranch",
+            "getSMDTBranchCross",
+            "getSMDTBranchDrop",
+            "getBranchStrongSMDTWithPrice",
+        }
+        if operation_id in branch_path_operations:
+            branch_value = args.get("branch") or args.get("keyName") or args.get("name")
+            branch_path = args.get("path") or args.get("branch_path")
+            if not branch_path:
+                branch_path = self._resolve_branch_path(branch_value)
+            if branch_path:
+                args["path"] = branch_path
+            if args.get("branch") and not args.get("name") and operation_id == "getCashFlowBranch":
+                args["name"] = args["branch"]
+            for key in ("branch_path", "branch"):
+                args.pop(key, None)
+            return args
+
+        return args
     # ============================================================
     # MAIN TOOL CALL
     # ============================================================
@@ -58,7 +155,7 @@ class APIExecutor:
         log("\n================ API CALL ================")
         log("OPERATION:", operation_id)
         log("ARGS FROM GPT:", args)
-        args = dict(args or {})
+        args = self._normalize_args(operation_id, args)
 
         if invalid_api_ticker(operation_id, args):
             log("BLOCKED TICKER OUTSIDE PROJECT ALLOWLIST")
@@ -74,62 +171,15 @@ class APIExecutor:
                 log("CHAN SONG API EXCEPTION:", str(e))
                 return {"error": str(e)}
 
-        MONTH_ONLY_DOCS = {
-            "Câu hỏi về [tháng, năm] là sóng lớn hay sóng hồi.txt"   # tên file guide chân sóng của bạn
+        month_only_docs = {
+            r"C\u00e2u h\u1ecfi v\u1ec1 x\u00e1c nh\u1eadn ch\u00e2n s\u00f3ng, [th\u00e1ng, n\u0103m] l\u00e0 s\u00f3ng l\u1edbn hay s\u00f3ng h\u1ed3i.txt".encode("ascii").decode("unicode_escape"),
+            r"C\u00e2u h\u1ecfi v\u1ec1 [th\u00e1ng, n\u0103m] l\u00e0 s\u00f3ng l\u1edbn hay s\u00f3ng h\u1ed3i.txt".encode("ascii").decode("unicode_escape"),
         }
-
         date = args.get("date")
-
-        if doc_name in MONTH_ONLY_DOCS and isinstance(date, str):
-
-            # nếu GPT gửi yyyy-mm-dd → convert yyyy-mm
+        if doc_name in month_only_docs and isinstance(date, str):
             if len(date) == 10 and date.count("-") == 2:
-                log("⚙️ DOC RULE NORMALIZE DATE:", date, "->", date[:7])
+                log("DOC RULE NORMALIZE DATE:", date, "->", date[:7])
                 args["date"] = date[:7]
-
-        SPECIAL_BRANCH_MAP = {
-            "BDS": "Bất động sản dân cư",
-            "BĐS": "Bất động sản dân cư",
-        }
-
-        ticker = args.get("ticker")
-
-        if ticker:
-            t = ticker.upper().strip()
-
-            if t in SPECIAL_BRANCH_MAP:
-                log("🧠 DETECTED BRANCH KEYWORD:", t)
-
-                args.pop("ticker", None)
-                args["keyName"] = SPECIAL_BRANCH_MAP[t]
-
-        ticker = args.get("ticker")
-        if ticker and "branch_path" not in args:
-            branch_path = get_branch_path_by_ticker(ticker)
-            if branch_path:
-                log("🧠 BACKEND FOUND BRANCH PATH:", branch_path)
-                args["branch_path"] = branch_path
-
-        branch = args.get("branch")
-        if branch and "branch_path" not in args:
-            branch_path = extract_branch_path(str(branch))
-            if branch_path:
-                log("🧠 BACKEND RESOLVED branch -> branch_path:", branch_path)
-                args["branch_path"] = branch_path
-                args.pop("branch", None)
-                
-        if operation_id == "getSMDTBranch":
-            branch_value = args.get("branch") or args.get("keyName") or args.get("name")
-            branch_path = args.get("path") or args.get("branch_path")
-            if not branch_path and branch_value:
-                branch_path = extract_branch_path(str(branch_value))
-            if branch_path:
-                log("🧠 NORMALIZED getSMDTBranch TO PATH:", branch_path)
-                args["path"] = branch_path
-                args.pop("branch_path", None)
-                args.pop("branch", None)
-                args.pop("keyName", None)
-                args.pop("name", None)
 
         op = self.registry.operations.get(operation_id)
 
@@ -142,8 +192,6 @@ class APIExecutor:
 
         log("URL:", url)
         log("METHOD:", method)
-
-        args.pop("branch_path", None)
 
         # ============================================================
         # EXTRACT BRANCH NAME

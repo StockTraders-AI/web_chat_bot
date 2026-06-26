@@ -61,6 +61,14 @@ BRANCH_PLACEHOLDERS = ("[nganh]",)
 DATE_PLACEHOLDERS = ("[date]", "[ngay]", "[month]", "mm-yyyy", "yyyy")
 
 
+def _safe_console(value: Any) -> str:
+    return str(value).encode("ascii", errors="backslashreplace").decode("ascii")
+
+
+def debug_print(*args):
+    print(*(_safe_console(arg) for arg in args))
+
+
 def normalize_text(text: str) -> str:
     normalized = unicodedata.normalize("NFD", text or "")
     normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
@@ -389,7 +397,7 @@ class QuestionGuide:
         direct_case = self.catalog.direct_match(user_text)
         if direct_case:
             await self._clear_state(user_id)
-            print(
+            debug_print(
                 "QUESTION GUIDE DIRECT RULE MATCH:",
                 direct_case.document,
                 "|",
@@ -402,6 +410,7 @@ class QuestionGuide:
             resolved = await self._resolve_pending(user_id, user_text, pending)
             if resolved.action != "pass":
                 return resolved
+            return resolved
         return await self._route_new_question(user_id, user_text)
 
     async def _resolve_pending(self, user_id: str, user_text: str, pending: Dict[str, object]) -> GuideResult:
@@ -864,5 +873,5 @@ Không thay đổi dữ kiện cần hỏi, không thêm lựa chọn hoặc cas
             first_line = re.sub(r"^\s*(?:[-•]|\d+[.)])\s*", "", first_line)
             return first_line[:240] or fallback
         except Exception as exc:
-            print("QUESTION_GUIDE_NATURALIZER_ERROR:", exc)
+            debug_print("QUESTION_GUIDE_NATURALIZER_ERROR:", exc)
             return fallback
