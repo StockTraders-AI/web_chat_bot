@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 
 from settings import RULES_DIR, BOOKS_DIR
 from services.openai_client import OpenAIClient
+import sys
 import unicodedata
 # =============================
 # DEBUG SWITCH
@@ -13,12 +14,34 @@ import unicodedata
 DEBUG_RAG = True
 
 
+def _configure_console_encoding():
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+            except Exception:
+                pass
+
+
 def _safe_console(value: Any) -> str:
+    return str(value)
+
+
+def _escaped_console(value: Any) -> str:
     return str(value).encode("ascii", errors="backslashreplace").decode("ascii")
 
+
 def debug(*args):
-    if DEBUG_RAG:
+    if not DEBUG_RAG:
+        return
+    try:
         print(*(_safe_console(arg) for arg in args))
+    except UnicodeEncodeError:
+        print(*(_escaped_console(arg) for arg in args))
+
+
+_configure_console_encoding()
 
 
 SEARCH_STOPWORDS = {

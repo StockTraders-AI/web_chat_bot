@@ -1,5 +1,6 @@
 import requests
 import json
+import sys
 from typing import Any, Dict
 from core.tool_engine import ToolRegistry
 from services.branch_map import extract_branch_path
@@ -9,12 +10,34 @@ from services.ticker_policy import invalid_api_ticker, sanitize_api_result
 
 DEBUG_API = True
 
+def _configure_console_encoding():
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+            except Exception:
+                pass
+
+
 def _safe_console(value: Any) -> str:
+    return str(value)
+
+
+def _escaped_console(value: Any) -> str:
     return str(value).encode("ascii", errors="backslashreplace").decode("ascii")
 
+
 def log(*args):
-    if DEBUG_API:
+    if not DEBUG_API:
+        return
+    try:
         print(*(_safe_console(arg) for arg in args))
+    except UnicodeEncodeError:
+        print(*(_escaped_console(arg) for arg in args))
+
+
+_configure_console_encoding()
 
 
 def get_branch_path_by_ticker(ticker: str):
@@ -58,10 +81,16 @@ class APIExecutor:
         args["keyName"] = special_branch_map[value]
         return args
 
+    def _looks_like_branch_path(self, value: Any) -> bool:
+        text = str(value or "").strip()
+        return bool(text) and all(ch.isdigit() or ch == "-" for ch in text) and "-" in text
+
     def _resolve_branch_path(self, *values: Any) -> str | None:
         for value in values:
             if not value:
                 continue
+            if self._looks_like_branch_path(value):
+                return str(value).strip()
             branch_path = extract_branch_path(str(value))
             if branch_path:
                 return branch_path
@@ -80,9 +109,11 @@ class APIExecutor:
 
         if operation_id == "getSMDTBranch":
             branch_value = args.get("branch") or args.get("keyName") or args.get("name")
-            branch_path = args.get("path") or args.get("branch_path")
-            if not branch_path:
-                branch_path = self._resolve_branch_path(branch_value)
+            branch_path = self._resolve_branch_path(
+                args.get("path"),
+                args.get("branch_path"),
+                branch_value,
+            )
             if branch_path:
                 log("NORMALIZED getSMDTBranch TO PATH:", branch_path)
                 args["path"] = branch_path
@@ -95,11 +126,13 @@ class APIExecutor:
                 args["from_date"] = args.pop("date")
 
             branch_value = args.get("branch") or args.get("keyName") or args.get("name")
-            branch_path = args.get("path") or args.get("branch_path")
+            branch_path = self._resolve_branch_path(
+                args.get("path"),
+                args.get("branch_path"),
+                branch_value,
+            )
             if branch_value and "branch" not in args:
                 args["branch"] = branch_value
-            if not branch_path:
-                branch_path = self._resolve_branch_path(branch_value)
             if branch_path:
                 args["path"] = branch_path
             for key in ("branch_path", "keyName", "name"):
@@ -134,9 +167,11 @@ class APIExecutor:
         }
         if operation_id in branch_path_operations:
             branch_value = args.get("branch") or args.get("keyName") or args.get("name")
-            branch_path = args.get("path") or args.get("branch_path")
-            if not branch_path:
-                branch_path = self._resolve_branch_path(branch_value)
+            branch_path = self._resolve_branch_path(
+                args.get("path"),
+                args.get("branch_path"),
+                branch_value,
+            )
             if branch_path:
                 args["path"] = branch_path
             if args.get("branch") and not args.get("name") and operation_id == "getCashFlowBranch":

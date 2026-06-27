@@ -1,8 +1,9 @@
 import asyncio
 import re
+import sys
 import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set
 
 from settings import CLASSIFIER_MODEL
@@ -61,12 +62,32 @@ BRANCH_PLACEHOLDERS = ("[nganh]",)
 DATE_PLACEHOLDERS = ("[date]", "[ngay]", "[month]", "mm-yyyy", "yyyy")
 
 
+def _configure_console_encoding():
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        if hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+            except Exception:
+                pass
+
+
 def _safe_console(value: Any) -> str:
+    return str(value)
+
+
+def _escaped_console(value: Any) -> str:
     return str(value).encode("ascii", errors="backslashreplace").decode("ascii")
 
 
 def debug_print(*args):
-    print(*(_safe_console(arg) for arg in args))
+    try:
+        print(*(_safe_console(arg) for arg in args))
+    except UnicodeEncodeError:
+        print(*(_escaped_console(arg) for arg in args))
+
+
+_configure_console_encoding()
 
 
 def normalize_text(text: str) -> str:
@@ -141,6 +162,24 @@ def extract_year(text: str) -> int:
     return int(match.group(1)) if match else datetime.now().year
 
 
+def extract_relative_date_iso(text: str) -> Optional[str]:
+    normalized = normalize_text(text)
+    today = datetime.now().date()
+
+    if "hom qua" in normalized:
+        return (today - timedelta(days=1)).isoformat()
+
+    if "hom kia" in normalized or "hom truoc" in normalized:
+        return (today - timedelta(days=2)).isoformat()
+
+    return None
+
+
+def price_on_date_question(ticker: str, date_value: str) -> str:
+    template = r"Gi\u00e1 {ticker} ng\u00e0y {date} l\u00e0 bao nhi\u00eau?"
+    return template.format(ticker=ticker, date=date_value).encode("ascii").decode("unicode_escape")
+
+
 def extract_date_value(text: str) -> Optional[str]:
     normalized = normalize_text(text)
     iso = re.search(r"\b(20\d{2})-(1[0-2]|0[1-9])-(3[01]|[12]\d|0[1-9])\b", normalized)
@@ -151,16 +190,18 @@ def extract_date_value(text: str) -> Optional[str]:
         day, month = int(full.group(1)), int(full.group(2))
         year = int(full.group(3) or datetime.now().year)
         return f"{day:02d}/{month:02d}/{year}"
+    relative_date = extract_relative_date_iso(text)
+    if relative_date:
+        return relative_date
     month = extract_month(text)
     if month:
-        return f"tháng {month}/{extract_year(text)}"
+        return f"th?ng {month}/{extract_year(text)}"
     year_match = re.search(r"\b(20\d{2})\b", normalized)
     if year_match:
         return year_match.group(1)
     if any(value in normalized for value in ("hom nay", "hien tai", "bay gio", "gan nhat")):
-        return "hôm nay"
+        return "h?m nay"
     return None
-
 
 def is_affirmative(text: str) -> bool:
     normalized = normalize_text(text)
@@ -570,11 +611,15 @@ class QuestionGuide:
             return await self._offer_stock_cases(user_id, ticker, user_text)
 
         if subject_kind == "stock" and stock_intent:
-            canonical_question = (
-                user_text
-                if stock_intent == "strong" or extract_date_value(user_text)
-                else self._canonical_stock_question(stock_intent, ticker)
-            )
+            relative_date = extract_relative_date_iso(user_text)
+            if stock_intent == "price" and relative_date:
+                canonical_question = price_on_date_question(ticker, relative_date)
+            else:
+                canonical_question = (
+                    user_text
+                    if stock_intent == "strong" or extract_date_value(user_text)
+                    else self._canonical_stock_question(stock_intent, ticker)
+                )
             return GuideResult("run", canonical_question=canonical_question)
 
         if subject_kind == "branch" and "branch" in groups and branch_intent == "analysis":
