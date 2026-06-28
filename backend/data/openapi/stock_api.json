@@ -491,19 +491,19 @@
             "name": "keyName",
             "in": "query",
             "schema": { "type": "string" },
-            "description": "Filter by company name (exact match)"
+            "description": "Filter by company name (exact match). Do not use for list queries like ma nao/danh sach ma."
           },
           {
             "name": "keyValue",
             "in": "query",
             "schema": { "type": "string" },
-            "description": "Filter by ticker symbol (exact match)"
+            "description": "Filter by ticker symbol (exact match). Only pass when user asks one specific ticker; do not pass MANH/MA_MANH for list queries."
           },
           {
             "name": "date",
             "in": "query",
-            "schema": { "type": "string", "format": "date" },
-            "description": "YYYY-MM-DD (mutually exclusive with year)"
+            "schema": { "type": "string" },
+            "description": "Time filter for getSMDTTickerCross. Use YYYY-MM-DD for day, YYYY-MM for month, YYYY for year. For list queries like 'ma nao dat chuan ma manh', pass date only and do not pass keyValue/keyName."
           },
           {
             "name": "year",

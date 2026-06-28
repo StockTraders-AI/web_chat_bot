@@ -59,7 +59,7 @@ DIRECT_RULE_STOPWORDS = {
 }
 STOCK_PLACEHOLDERS = ("[ma]", "[ma co phieu]", "[ticker]", "[x]")
 BRANCH_PLACEHOLDERS = ("[nganh]",)
-DATE_PLACEHOLDERS = ("[date]", "[ngay]", "[month]", "mm-yyyy", "yyyy")
+DATE_PLACEHOLDERS = ("[date]", "[ngay]", "[month]", "mm-yyyy", "mm/yyyy", "yyyy")
 
 
 def _configure_console_encoding():
@@ -214,6 +214,19 @@ def option_number(text: str) -> Optional[int]:
     return int(match.group(1)) if match else None
 
 
+def is_stock_list_query(normalized: str) -> bool:
+    return any(
+        phrase in normalized
+        for phrase in (
+            "ma nao",
+            "danh sach ma",
+            "cac ma",
+            "co phieu nao",
+            "danh sach co phieu",
+        )
+    )
+
+
 def classify_groups(text: str) -> Set[str]:
     normalized = normalize_text(text)
     groups: Set[str] = set()
@@ -366,10 +379,11 @@ class RuleCaseCatalog:
             "[ma]": r"[a-z]{2,5}\d?",
             "[x]": r"[a-z]{2,5}\d?",
             "[nganh]": r".+?",
-            "[date]": r"(?:20\d{2}(?:-\d{2}(?:-\d{2})?)?|\d{1,2}/\d{1,2}(?:/20\d{2})?|hom nay|hien tai)",
-            "[ngay]": r"(?:20\d{2}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/20\d{2})?|hom nay)",
-            "[month]": r"(?:20\d{2}-\d{2}|\d{1,2}-20\d{2}|thang \d{1,2}(?:/20\d{2})?)",
-            "mm-yyyy": r"\d{1,2}-20\d{2}",
+            "[date]": r"(?:20\d{2}(?:-\d{2}(?:-\d{2})?)?|\d{1,2}/\d{1,2}(?:/20\d{2})?|hom nay|hom qua|hien tai)",
+            "[ngay]": r"(?:20\d{2}-\d{2}-\d{2}|\d{1,2}/\d{1,2}(?:/20\d{2})?|hom nay|hom qua)",
+            "[month]": r"(?:20\d{2}-\d{2}|\d{1,2}[/-]20\d{2}|thang \d{1,2}(?:/20\d{2})?)",
+            "mm-yyyy": r"\d{1,2}[/-]20\d{2}",
+            "mm/yyyy": r"\d{1,2}[/-]20\d{2}",
             "yyyy": r"20\d{2}",
         }
         for placeholder, placeholder_pattern in replacements.items():
@@ -596,6 +610,8 @@ class QuestionGuide:
             ))
 
         if subject_kind == "missing" and stock_intent:
+            if is_stock_list_query(normalized):
+                return GuideResult("run", canonical_question=user_text)
             await self._save_state(user_id, {"kind": "missing_ticker", "intent": stock_intent, "original": user_text})
             return GuideResult("ask", message=await self._naturalize_question(
                 user_text, "Anh/chị muốn kiểm tra mã cổ phiếu nào?"
