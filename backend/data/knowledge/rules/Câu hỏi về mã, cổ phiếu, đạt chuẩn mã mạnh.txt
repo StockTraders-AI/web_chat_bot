@@ -8,15 +8,12 @@ Guide Đối với các câu hỏi như:
 "Tháng mm/yyyy mã nào đạt chuẩn mã mạnh?", "Năm yyyy mã nào đạt chuẩn mã mạnh?"
 "Mã nào đạt chuẩn mã mạnh vào tháng mm-yyyy", "Mã nào đạt chuẩn mã mạnh vào năm yyyy"
 Gọi API getSMDTTickerCross với date tương ứng. Hỏi ngày → truyền yyyy-mm-dd. Hỏi tháng → truyền yyyy-mm. Hỏi năm → truyền yyyy
-Nếu 1 ngành/mã có nhiều mốc thời gian trong cùng tháng/năm, hiểu là:
-Mỗi mốc thời gian là ngày bắt đầu dẫn sóng / đạt chuẩn ngành mạnh / đạt chuẩn mã mạnh mới vì ngày hôm trước dưới 70%.
-Cần trình bày tất cả các mốc theo đúng thứ tự thời gian và ghi rõ:
+Nếu 1 ngành/mã có nhiều mốc thời gian. Cần trình bày tất cả các mốc theo đúng thứ tự thời gian và ghi rõ:
 Ví dụ:
-Mốc đầu tiên: dùng cụm từ "bắt đầu từ ngày..."
-Các mốc sau: dùng cụm từ "và tiếp tục lại từ ngày..."
+Mốc đầu tiên: dùng cụm từ "bắt đầu mạnh từ ngày..."
+Các mốc sau: dùng cụm từ "và tiếp tục đạt chuẩn mã mạnh lại từ ngày..."
 Ví dụ chuẩn:
-SSI - đạt 72.36% vào ngày 20/11 và bắt đầu tiếp tục đạt 71.02% vào 22/11
-Xây dựng - bắt đầu ngày 13/11 với 93.70% và tiếp tục đạt 76.68% vào 29/11
+SSI bắt đầu mạnh từ ngày 20/11 với 72.36% và bắt đầu tiếp tục đạt chuẩn mã mạnh vào ngày 22/11 với 71.02%
 
 Guide Mỗi lần người dùng hỏi đến chỉ số của mã nào đó trong khoảng phiên nào đó
 (ví dụ 10, 20 phiên gần nhất):
