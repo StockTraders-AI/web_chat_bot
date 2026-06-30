@@ -24,6 +24,25 @@ CREATE TABLE IF NOT EXISTS chat_history (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_user_id ON chat_history(user_id, id);
 
+CREATE TABLE IF NOT EXISTS ai_token_usage_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  user_key TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  route TEXT NOT NULL,
+  model TEXT,
+  prompt_tokens INTEGER NOT NULL DEFAULT 0,
+  completion_tokens INTEGER NOT NULL DEFAULT 0,
+  total_tokens INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_key_created
+ON ai_token_usage_events(user_key, created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_tenant_user_created
+ON ai_token_usage_events(tenant_id, user_id, created_at);
+
 CREATE TABLE IF NOT EXISTS semantic_guide_states (
   user_id TEXT PRIMARY KEY,
   state_json TEXT NOT NULL,
@@ -1459,6 +1478,118 @@ class MemoryStore:
                 (case_id,),
             )
             await db.commit()
+
+    async def record_ai_token_usage(
+        self,
+        tenant_id: str,
+        user_id: str,
+        user_key: str,
+        conversation_id: str,
+        request_id: str,
+        route: str,
+        model: str | None,
+        prompt_tokens: int,
+        completion_tokens: int,
+        total_tokens: int,
+        created_at: datetime | None = None,
+    ):
+        created_at_text = self._format_dt(created_at or datetime.utcnow())
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO ai_token_usage_events(
+                    tenant_id,
+                    user_id,
+                    user_key,
+                    conversation_id,
+                    request_id,
+                    route,
+                    model,
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens,
+                    created_at
+                )
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    tenant_id,
+                    user_id,
+                    user_key,
+                    conversation_id,
+                    request_id,
+                    route,
+                    model,
+                    int(prompt_tokens or 0),
+                    int(completion_tokens or 0),
+                    int(total_tokens or 0),
+                    created_at_text,
+                ),
+            )
+            await db.commit()
+
+    async def list_ai_token_usage_events(
+        self,
+        since: datetime,
+        tenant_id: str | None = None,
+        user_id: str | None = None,
+    ):
+        query = """
+            SELECT
+                tenant_id,
+                user_id,
+                user_key,
+                conversation_id,
+                request_id,
+                route,
+                model,
+                prompt_tokens,
+                completion_tokens,
+                total_tokens,
+                created_at
+            FROM ai_token_usage_events
+            WHERE created_at >= ?
+        """
+        params = [self._format_dt(since)]
+
+        if tenant_id is not None:
+            query += " AND tenant_id=?"
+            params.append(tenant_id)
+        if user_id is not None:
+            query += " AND user_id=?"
+            params.append(user_id)
+
+        query += " ORDER BY created_at ASC, id ASC"
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(query, params)
+            rows = await cur.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def list_ai_usage_subjects(self, since: datetime):
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT
+                    tenant_id,
+                    user_id,
+                    user_key,
+                    COUNT(*) AS request_count,
+                    COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                    MAX(created_at) AS last_used_at
+                FROM ai_token_usage_events
+                WHERE created_at >= ?
+                GROUP BY tenant_id, user_id, user_key
+                ORDER BY total_tokens DESC, last_used_at DESC
+                """,
+                (self._format_dt(since),),
+            )
+            rows = await cur.fetchall()
+
+        return [dict(row) for row in rows]
 
     async def delete_user_data(self, user_id: str):
         async with aiosqlite.connect(self.db_path) as db:

@@ -37,6 +37,7 @@ const accountTableEl = document.getElementById("accountTable");
 const accountMetricsEl = document.getElementById("accountMetrics");
 const accountDetailEl = document.getElementById("accountDetail");
 const auditTableEl = document.getElementById("auditTable");
+const aiUsageTableEl = document.getElementById("aiUsageTable");
 const auditPaginationEl = document.getElementById("auditPagination");
 const accountAdminErrorEl = document.getElementById("accountAdminError");
 const createAccountBtn = document.getElementById("createAccountBtn");
@@ -132,6 +133,7 @@ let guestMode = false;
 let appStarted = false;
 let accounts = [];
 let accountAuditLogs = [];
+let aiUsageUsers = [];
 let auditPage = 1;
 let selectedAccountId = null;
 let conditionTemplates = [];
@@ -1232,6 +1234,87 @@ async function renderAccountDetail(account) {
   });
 }
 
+function formatUsageNumber(value) {
+  return Number(value || 0).toLocaleString("vi-VN");
+}
+
+function formatUsageDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("vi-VN", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderAIUsageUsers() {
+  if (!aiUsageTableEl) return;
+  aiUsageTableEl.innerHTML = "";
+
+  const header = document.createElement("div");
+  header.className = "ai-usage-row head";
+  ["User", "5h con", "7 ngay con", "Reset", "Request"].forEach((text) => {
+    const cell = document.createElement("div");
+    cell.textContent = text;
+    header.appendChild(cell);
+  });
+  aiUsageTableEl.appendChild(header);
+
+  if (!aiUsageUsers.length) {
+    const empty = document.createElement("div");
+    empty.className = "account-empty";
+    empty.textContent = "Chua co du lieu token iPlatform.";
+    aiUsageTableEl.appendChild(empty);
+    return;
+  }
+
+  aiUsageUsers.forEach((item) => {
+    const usage = item.usage || {};
+    const row = document.createElement("div");
+    row.className = "ai-usage-row";
+
+    const userCell = document.createElement("div");
+    userCell.innerHTML = `<strong>${escapeHtml(item.user_id || "-")}</strong><small>${escapeHtml(item.tenant_id || "default")}</small>`;
+    row.appendChild(userCell);
+
+    const fiveHourCell = document.createElement("div");
+    fiveHourCell.innerHTML = `<strong>${usage.remaining_percent_5h ?? 0}%</strong><small>${formatUsageNumber(usage.used_5h)} / ${formatUsageNumber(usage.limit_5h)}</small>`;
+    row.appendChild(fiveHourCell);
+
+    const sevenDayCell = document.createElement("div");
+    sevenDayCell.innerHTML = `<strong>${usage.remaining_percent_7d ?? 0}%</strong><small>${formatUsageNumber(usage.used_7d)} / ${formatUsageNumber(usage.limit_7d)}</small>`;
+    row.appendChild(sevenDayCell);
+
+    const resetCell = document.createElement("div");
+    resetCell.innerHTML = `<span>5h: ${formatUsageDate(usage.resets_5h_at)}</span><small>7d: ${formatUsageDate(usage.resets_7d_at)}</small>`;
+    row.appendChild(resetCell);
+
+    const requestCell = document.createElement("div");
+    requestCell.innerHTML = `<strong>${formatUsageNumber(item.request_count_7d)}</strong><small>${formatUsageDate(item.last_used_at)}</small>`;
+    row.appendChild(requestCell);
+
+    aiUsageTableEl.appendChild(row);
+  });
+}
+
+async function loadAIUsageUsers() {
+  if (!aiUsageTableEl) return;
+  aiUsageTableEl.innerHTML = `<div class="account-empty">Dang tai token iPlatform...</div>`;
+  try {
+    const res = await fetch("/admin/ai-usage/users", { credentials: "same-origin" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.detail || "Khong tai duoc token iPlatform.");
+    aiUsageUsers = Array.isArray(data?.users) ? data.users : [];
+    renderAIUsageUsers();
+  } catch (err) {
+    aiUsageUsers = [];
+    aiUsageTableEl.innerHTML = `<div class="account-empty">${escapeHtml(err.message || "Khong tai duoc token iPlatform.")}</div>`;
+  }
+}
+
 function renderAuditLogs() {
   auditTableEl.innerHTML = "";
   auditPaginationEl.innerHTML = "";
@@ -1308,6 +1391,7 @@ async function loadAccounts() {
     if (!res.ok) throw new Error(data?.detail || "Không tải được danh sách tài khoản.");
     accounts = Array.isArray(data?.accounts) ? data.accounts : [];
     renderAccounts();
+    await loadAIUsageUsers();
     await loadAuditLogs();
   } catch (err) {
     accountTableEl.innerHTML = `<div class="account-empty">${err.message || "Không tải được tài khoản."}</div>`;

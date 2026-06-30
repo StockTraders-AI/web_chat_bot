@@ -32,6 +32,15 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "text-embedding-3-large").strip()
 
 MAX_TOOL_LOOPS = int(os.getenv("MAX_TOOL_LOOPS", "5"))
 
+IPLATFORM_JWT_SECRET = os.getenv("IPLATFORM_JWT_SECRET", "").strip()
+IPLATFORM_JWT_ISSUER = os.getenv("IPLATFORM_JWT_ISSUER", "").strip()
+IPLATFORM_JWT_AUDIENCE = os.getenv("IPLATFORM_JWT_AUDIENCE", "").strip()
+IPLATFORM_JWT_DEFAULT_TENANT = os.getenv("IPLATFORM_JWT_DEFAULT_TENANT", "stocktraders").strip() or "stocktraders"
+IPLATFORM_JWT_EXPIRES_MINUTES = int(os.getenv("IPLATFORM_JWT_EXPIRES_MINUTES", "60"))
+AI_QUOTA_5H_TOKENS = int(os.getenv("AI_QUOTA_5H_TOKENS", "120000"))
+AI_QUOTA_7D_TOKENS = int(os.getenv("AI_QUOTA_7D_TOKENS", "600000"))
+AI_QUOTA_ESTIMATED_REQUEST_TOKENS = int(os.getenv("AI_QUOTA_ESTIMATED_REQUEST_TOKENS", "3000"))
+
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 

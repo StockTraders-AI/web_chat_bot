@@ -470,6 +470,23 @@ button:hover { opacity: .9; }
   margin-top: 16px;
 }
 
+.ai-usage-panel { margin-bottom: 16px; }
+.ai-usage-table { display: flex; flex-direction: column; border: 1px solid #25253a; border-radius: 8px; overflow: hidden; }
+.ai-usage-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) 130px 150px minmax(220px, 1fr) 100px;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #25253a;
+  color: #c9c9d6;
+  font-size: 13px;
+  align-items: center;
+}
+.ai-usage-row.head { color: #fff; background: #171725; font-weight: 800; }
+.ai-usage-row strong { display: block; color: #fff; font-size: 14px; }
+.ai-usage-row small { display: block; color: #8d8da6; margin-top: 3px; }
+.ai-usage-row span { display: block; }
+
 .audit-table { display: flex; flex-direction: column; border: 1px solid #25253a; border-radius: 8px; overflow: hidden; }
 .audit-row {
   display: grid;
@@ -641,6 +658,8 @@ button:hover { opacity: .9; }
   .sales-target-grid,
   .case-idea-grid { grid-template-columns: 1fr; }
   .account-row { grid-template-columns: 1fr; align-items: start; }
+  .ai-usage-row { grid-template-columns: 1fr; align-items: start; }
+  .ai-usage-row.head { display: none; }
   .account-row.head { display: none; }
   .account-actions { justify-content: flex-start; }
 }

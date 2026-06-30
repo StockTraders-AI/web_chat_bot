@@ -14,7 +14,7 @@ from core.condition_engine import extract_rows, scan_vnindex_waitbuy_reversal
 from core.question_guide import QuestionGuide
 
 from services.api_executor import APIExecutor
-from services.openai_client import OpenAIClient
+from services.openai_client import OpenAIClient, current_token_usage, reset_token_usage
 from services.ticker_policy import (
     allowed_tickers_text,
     find_disallowed_tickers,
@@ -726,6 +726,11 @@ Yêu cầu:
         selected_model: Optional[str]
     ):
         model = pick_model(selected_model)
+        reset_token_usage()
+
+        def done_data(sources):
+            return {"sources": sources, "usage": current_token_usage()}
+
         await self.memory.add(user_id, "user", user_text)
 
         if find_disallowed_tickers(user_text):
@@ -735,7 +740,7 @@ Yêu cầu:
                 if chunk:
                     yield ("delta", {"text": chunk})
             await self.memory.add(user_id, "assistant", final_text)
-            yield ("done", {"sources": []})
+            yield ("done", done_data([]))
             return
 
         guide_result = await self.question_guide.handle(user_id, user_text)
@@ -748,7 +753,7 @@ Yêu cầu:
                     full += chunk
                     yield ("delta", {"text": chunk})
             await self.memory.add(user_id, "assistant", full)
-            yield ("done", {"sources": []})
+            yield ("done", done_data([]))
             return
 
         guided_question = False
@@ -766,7 +771,7 @@ Yêu cầu:
                     full += chunk
                     yield ("delta", {"text": chunk})
             await self.memory.add(user_id, "assistant", full)
-            yield ("done", {"sources": []})
+            yield ("done", done_data([]))
             return
 
         base_messages, sources, enable_tools, allowed_apis, current_doc = await self.build_base_messages(
@@ -793,4 +798,4 @@ Yêu cầu:
                 yield ("delta", {"text": chunk})
 
         await self.memory.add(user_id, "assistant", full)
-        yield ("done", {"sources": sources})
+        yield ("done", done_data(sources))

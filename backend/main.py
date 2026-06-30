@@ -30,6 +30,7 @@ from core.tool_engine import ToolRegistry
 from core.orchestrator import Orchestrator
 from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_target
 from core.model_router import pick_model
+from core.quota import QuotaService
 from routes.iplatform_api import configure_iplatform_api, router as iplatform_router
 from services.openai_client import OpenAIClient
 
@@ -461,6 +462,15 @@ async def list_account_audit_logs(
 ):
     await require_super_admin(authorization, session_cookie)
     return {"logs": await memory.list_account_audit_logs()}
+
+@app.get("/admin/ai-usage/users")
+async def list_admin_ai_usage_users(
+    authorization: Optional[str] = Header(default=None),
+    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
+):
+    await require_super_admin(authorization, session_cookie)
+    quota = QuotaService(memory)
+    return {"users": await quota.admin_usage_users()}
 
 @app.get("/accounts/{account_id}/permissions")
 async def get_account_permissions(
