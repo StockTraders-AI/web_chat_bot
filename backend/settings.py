@@ -1,4 +1,4 @@
-import os
+﻿import os
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -37,6 +37,8 @@ IPLATFORM_JWT_ISSUER = os.getenv("IPLATFORM_JWT_ISSUER", "").strip()
 IPLATFORM_JWT_AUDIENCE = os.getenv("IPLATFORM_JWT_AUDIENCE", "").strip()
 IPLATFORM_JWT_DEFAULT_TENANT = os.getenv("IPLATFORM_JWT_DEFAULT_TENANT", "stocktraders").strip() or "stocktraders"
 IPLATFORM_JWT_EXPIRES_MINUTES = int(os.getenv("IPLATFORM_JWT_EXPIRES_MINUTES", "60"))
+IPLATFORM_REQUIRE_JWT = os.getenv("IPLATFORM_REQUIRE_JWT", "false").strip().lower() in {"1", "true", "yes", "on"}
+IPLATFORM_TEMP_USER_ID = os.getenv("IPLATFORM_TEMP_USER_ID", "temporary-user").strip() or "temporary-user"
 AI_QUOTA_5H_TOKENS = int(os.getenv("AI_QUOTA_5H_TOKENS", "120000"))
 AI_QUOTA_7D_TOKENS = int(os.getenv("AI_QUOTA_7D_TOKENS", "600000"))
 AI_QUOTA_ESTIMATED_REQUEST_TOKENS = int(os.getenv("AI_QUOTA_ESTIMATED_REQUEST_TOKENS", "3000"))
@@ -44,7 +46,7 @@ AI_QUOTA_ESTIMATED_REQUEST_TOKENS = int(os.getenv("AI_QUOTA_ESTIMATED_REQUEST_TO
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
-# Model options (UI dropdown) - bạn có thể thêm/bớt
+# Model options (UI dropdown) - báº¡n cÃ³ thá»ƒ thÃªm/bá»›t
 ALLOWED_MODELS = [
     "gpt-4o",
     "gpt-5.2",
@@ -60,4 +62,5 @@ def ensure_dirs():
     OPENAPI_DIR.mkdir(parents=True, exist_ok=True)
     VECTOR_DIR.mkdir(parents=True, exist_ok=True)
     BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+
 

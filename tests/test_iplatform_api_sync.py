@@ -112,6 +112,8 @@ class IPlatformAPISyncTests(unittest.IsolatedAsyncioTestCase):
         iplatform_auth.IPLATFORM_JWT_SECRET = SECRET
         iplatform_auth.IPLATFORM_JWT_ISSUER = ""
         iplatform_auth.IPLATFORM_JWT_AUDIENCE = ""
+        iplatform_api.IPLATFORM_REQUIRE_JWT = False
+        iplatform_api.IPLATFORM_TEMP_USER_ID = "temporary-user"
         self.orchestrator = FakeOrchestrator()
         iplatform_api.configure_iplatform_api(lambda: self.orchestrator)
 
@@ -202,14 +204,33 @@ class IPlatformAPISyncTests(unittest.IsolatedAsyncioTestCase):
             self.orchestrator.calls[1]["user_id"],
         )
 
+    async def test_missing_jwt_uses_temporary_identity_when_disabled(self):
+        result = await iplatform_api.iplatform_ai_chat(
+            iplatform_api.IPlatformChatIn(content="Gia SSI hom nay?"),
+            authorization=None,
+            x_api_key=None,
+        )
+
+        self.assertEqual(result["tenant_id"], "stocktraders")
+        self.assertEqual(result["user_id"], "temporary-user")
+        self.assertEqual(result["conversation_id"], "default")
+        self.assertEqual(
+            self.orchestrator.calls[0]["user_id"],
+            "iplatform:stocktraders:temporary-user:default",
+        )
+
     async def test_missing_jwt_is_rejected(self):
-        with self.assertRaises(HTTPException) as ctx:
-            await iplatform_api.iplatform_ai_chat(
-                iplatform_api.IPlatformChatIn(content="c?u h?i", conversation_id="thread"),
-                authorization=None,
-                x_api_key=None,
-            )
-        self.assertEqual(ctx.exception.status_code, 401)
+        iplatform_api.IPLATFORM_REQUIRE_JWT = True
+        try:
+            with self.assertRaises(HTTPException) as ctx:
+                await iplatform_api.iplatform_ai_chat(
+                    iplatform_api.IPlatformChatIn(content="c?u h?i", conversation_id="thread"),
+                    authorization=None,
+                    x_api_key=None,
+                )
+            self.assertEqual(ctx.exception.status_code, 401)
+        finally:
+            iplatform_api.IPLATFORM_REQUIRE_JWT = False
 
     async def test_quota_5h_exceeded_returns_retry_metadata(self):
         self.orchestrator.memory.events.append({
@@ -241,4 +262,7 @@ class IPlatformAPISyncTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
 

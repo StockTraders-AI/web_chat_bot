@@ -7,8 +7,9 @@ from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from core.iplatform_auth import create_account_access_token, verify_iplatform_jwt
+from core.iplatform_auth import IPlatformIdentity, create_account_access_token, verify_iplatform_jwt
 from core.quota import QuotaExceeded, QuotaService
+from settings import IPLATFORM_JWT_DEFAULT_TENANT, IPLATFORM_REQUIRE_JWT, IPLATFORM_TEMP_USER_ID
 
 
 class IPlatformChatIn(BaseModel):
@@ -54,6 +55,21 @@ def require_bearer_token(authorization: Optional[str]) -> str:
     if scheme.lower() != "bearer" or not token.strip():
         raise HTTPException(status_code=401, detail="Missing Bearer JWT")
     return token.strip()
+
+def temporary_iplatform_identity() -> IPlatformIdentity:
+    return IPlatformIdentity(
+        tenant_id=IPLATFORM_JWT_DEFAULT_TENANT,
+        user_id=IPLATFORM_TEMP_USER_ID,
+        claims={"auth_mode": "temporary_no_jwt"},
+    )
+
+
+def resolve_iplatform_identity(authorization: Optional[str]) -> IPlatformIdentity:
+    if (authorization or "").strip():
+        return verify_iplatform_jwt(require_bearer_token(authorization))
+    if IPLATFORM_REQUIRE_JWT:
+        require_bearer_token(authorization)
+    return temporary_iplatform_identity()
 
 
 def normalize_conversation_id(value: Optional[str]) -> str:
@@ -114,7 +130,7 @@ async def iplatform_ai_chat(
     require_iplatform_api_key(x_api_key)
 
     try:
-        identity = verify_iplatform_jwt(require_bearer_token(authorization))
+        identity = resolve_iplatform_identity(authorization)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
@@ -184,5 +200,7 @@ async def iplatform_ai_chat(
         "sources": done_data.get("sources") or [],
         "usage": usage_summary,
     }
+
+
 
 
