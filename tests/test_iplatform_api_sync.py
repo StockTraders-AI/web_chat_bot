@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import hashlib
 import hmac
 import json
@@ -172,6 +172,18 @@ class IPlatformAPISyncTests(unittest.IsolatedAsyncioTestCase):
             }],
         )
 
+    async def test_packaged_api_defaults_missing_conversation_id(self):
+        result = await iplatform_api.iplatform_ai_chat(
+            iplatform_api.IPlatformChatIn(content="Gia SSI hom nay?"),
+            authorization=f"Bearer {await self.login_token()}",
+            x_api_key=None,
+        )
+
+        self.assertEqual(result["conversation_id"], "default")
+        self.assertEqual(
+            self.orchestrator.calls[0]["user_id"],
+            "iplatform:stocktraders:account:12:default",
+        )
     async def test_jwt_users_are_isolated(self):
         first = await iplatform_api.iplatform_ai_chat(
             iplatform_api.IPlatformChatIn(content="c?u m?t", conversation_id="same-thread"),
@@ -229,3 +241,4 @@ class IPlatformAPISyncTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

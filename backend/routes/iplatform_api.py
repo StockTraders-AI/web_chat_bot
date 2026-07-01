@@ -1,4 +1,4 @@
-import os
+﻿import os
 import re
 import uuid
 from typing import Any, Callable, Optional
@@ -59,7 +59,7 @@ def require_bearer_token(authorization: Optional[str]) -> str:
 def normalize_conversation_id(value: Optional[str]) -> str:
     raw = (value or "").strip()
     if not raw:
-        return uuid.uuid4().hex
+        return "default"
     cleaned = re.sub(r"[^A-Za-z0-9_.:-]+", "-", raw).strip("-.")
     if not cleaned:
         raise HTTPException(status_code=400, detail="conversation_id is invalid")
@@ -184,4 +184,5 @@ async def iplatform_ai_chat(
         "sources": done_data.get("sources") or [],
         "usage": usage_summary,
     }
+
 
