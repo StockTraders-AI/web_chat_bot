@@ -28,6 +28,7 @@ from core.memory import MemoryStore
 from core.rag import RAGStore
 from core.tool_engine import ToolRegistry
 from core.orchestrator import Orchestrator
+from core.chat_runtime import stream_standard_chat
 from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_target
 from core.model_router import pick_model
 from core.quota import QuotaService
@@ -1426,7 +1427,8 @@ async def _agen(payload: ChatIn):
         )
         if route == "normal":
             done_data = {}
-            async for event, data in orch.chat_stream(
+            async for event, data in stream_standard_chat(
+                orch,
                 user_id=payload.user_id,
                 user_text=payload.message,
                 language=payload.language,
@@ -1472,7 +1474,8 @@ async def _agen(payload: ChatIn):
         }
         return
 
-    async for event, data in orch.chat_stream(
+    async for event, data in stream_standard_chat(
+        orch,
         user_id=payload.user_id,
         user_text=payload.message,
         language=payload.language,

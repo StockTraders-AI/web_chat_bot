@@ -7,6 +7,7 @@ from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from core.chat_runtime import collect_standard_chat
 from core.iplatform_auth import IPlatformIdentity, create_account_access_token, verify_iplatform_jwt
 from core.quota import QuotaExceeded, QuotaService
 from settings import IPLATFORM_JWT_DEFAULT_TENANT, IPLATFORM_REQUIRE_JWT, IPLATFORM_TEMP_USER_ID
@@ -161,22 +162,15 @@ async def iplatform_ai_chat(
             },
         )
 
-    answer_parts = []
-    done_data = {}
     chat_user_id = f"{identity.user_key}:{conversation_id}"
-
-    async for event, data in orchestrator.chat_stream(
+    answer, done_data = await collect_standard_chat(
+        orchestrator,
         user_id=chat_user_id,
         user_text=content,
-        language=(payload.language or "vi").strip() or "vi",
+        language=payload.language,
         selected_model=payload.model,
-    ):
-        if event == "delta":
-            answer_parts.append(str(data.get("text") or ""))
-        elif event == "done":
-            done_data = data or {}
+    )
 
-    answer = "".join(answer_parts).strip()
     usage_summary = await quota.record_usage(
         tenant_id=identity.tenant_id,
         user_id=identity.user_id,

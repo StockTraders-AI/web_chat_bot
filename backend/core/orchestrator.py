@@ -158,6 +158,204 @@ def clean_chat_output(text: str) -> str:
     return fixed.strip()
 
 
+
+def _find_stock_4key_payload(value: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(value, dict):
+        if value.get("ok") and (
+            value.get("group_4key")
+            or (
+                value.get("composite")
+                and (
+                    "ticker_momentum" in value
+                    or "branch_momentum" in value
+                    or "smdt_ticker" in value
+                    or "smdt_branch" in value
+                )
+            )
+        ):
+            return value
+        for key in ("result", "data", "results"):
+            found = _find_stock_4key_payload(value.get(key))
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _find_stock_4key_payload(item)
+            if found:
+                return found
+    return None
+
+
+def latest_stock_4key_payload(messages: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    for message in reversed(messages):
+        if message.get("role") != "tool":
+            continue
+        try:
+            payload = json.loads(message.get("content") or "{}")
+        except Exception:
+            continue
+        found = _find_stock_4key_payload(payload)
+        if found:
+            return found
+    return None
+
+
+def ensure_stock_4key_section(final_text: str, messages: List[Dict[str, Any]]) -> str:
+    payload = latest_stock_4key_payload(messages)
+    if not payload:
+        return final_text or ""
+
+    normalized = normalize_search_text(final_text or "")
+    if "nhom 4 key" in normalized:
+        return final_text or ""
+
+    group = str(payload.get("group_4key") or "").strip()
+    if not group:
+        return final_text or ""
+    recommendation = str(payload.get("recommendation") or "").strip()
+
+    section = f'2. Nhóm 4 Key: Thuộc nhóm "{group}"'
+    if recommendation:
+        section += f', khuyến nghị "{recommendation}".'
+    else:
+        section += "."
+
+    text = final_text or ""
+
+    def bump_number(match: re.Match) -> str:
+        number = int(match.group(2))
+        if number < 2:
+            return match.group(0)
+        return f"{match.group(1)}{number + 1}{match.group(3)}"
+
+    bumped = re.sub(r"(?m)^(\s*)(\d+)(\.\s+)", bump_number, text)
+    insert_at = re.search(r"(?m)^\s*3\.\s+", bumped)
+    if insert_at:
+        return bumped[:insert_at.start()].rstrip() + "\n\n" + section + "\n\n" + bumped[insert_at.start():].lstrip()
+    return bumped.rstrip() + "\n\n" + section
+
+
+
+def _derive_4key_group(payload: Dict[str, Any]) -> tuple[str, str]:
+    group = str(payload.get("group_4key") or "").strip()
+    recommendation = str(payload.get("recommendation") or "").strip()
+    if group:
+        return group, recommendation
+
+    ticker_momentum = payload.get("ticker_momentum")
+    branch_momentum = payload.get("branch_momentum")
+    try:
+        right_wave = float(ticker_momentum) > 0
+        right_branch = float(branch_momentum) > 0
+    except (TypeError, ValueError):
+        return "Chưa xác định", recommendation or "Chưa đủ dữ liệu xác định nhóm 4 Key"
+
+    if right_wave and right_branch:
+        return "Dung song - Dung nganh", "MUA - tin hieu thuan ca ma va nganh"
+    if right_wave and not right_branch:
+        return "Dung song - Sai nganh", "CAN NHAC - ma manh rieng, nguoc dong nganh"
+    if not right_wave and right_branch:
+        return "Dung nganh - Sai song", "THEO DOI - nganh thuan nhung ma chua xac nhan"
+    return "Sai song - Sai nganh", "TRANH - ca ma va nganh deu bat loi"
+
+def _display_4key_label(value: Any) -> str:
+    text = str(value or "").strip()
+    mapping = {
+        "Dung song - Dung nganh": "Đúng sóng - Đúng ngành",
+        "Dung song - Sai nganh": "Đúng sóng - Sai ngành",
+        "Dung nganh - Sai song": "Đúng ngành - Sai sóng",
+        "Sai song - Sai nganh": "Sai sóng - Sai ngành",
+        "Mua manh": "Mua mạnh",
+        "Trung lap": "Trung lập",
+        "Ban manh": "Bán mạnh",
+    }
+    return mapping.get(text, text)
+
+
+def _fmt_metric(value: Any, suffix: str = "") -> str:
+    if value is None or value == "":
+        return "chưa có dữ liệu"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if number.is_integer():
+        return f"{number:.1f}{suffix}"
+    return f"{number:.2f}".rstrip("0").rstrip(".") + suffix
+
+
+def _fmt_vn_date(value: Any) -> str:
+    raw = str(value or "").strip()[:10]
+    try:
+        dt = datetime.strptime(raw, "%Y-%m-%d")
+        return f"{dt.day}/{dt.month}/{dt.year}"
+    except ValueError:
+        return raw or "hôm nay"
+
+
+def _change_word(now: Any, prev: Any) -> str:
+    try:
+        return "tăng" if float(now) >= float(prev) else "giảm"
+    except (TypeError, ValueError):
+        return "so với"
+
+
+def format_stock_4key_answer(payload: Dict[str, Any]) -> str:
+    ticker = str(payload.get("ticker") or "mã").strip().upper()
+    branch = str(payload.get("branch") or "ngành").strip()
+    date_text = _fmt_vn_date(payload.get("date") or payload.get("requested_date"))
+    composite = payload.get("composite") or {}
+    breakdown = composite.get("breakdown") or {}
+    notes = composite.get("notes") or []
+
+    score = _fmt_metric(composite.get("score"))
+    rating = _display_4key_label(composite.get("rating"))
+    raw_group, raw_recommendation = _derive_4key_group(payload)
+    group = _display_4key_label(raw_group)
+    recommendation = _display_4key_label(raw_recommendation)
+
+    lines = [f"Phân tích cổ phiếu {ticker} tính đến ngày {date_text} như sau:", ""]
+    lines.append(f"1. Điểm Composite: Cổ phiếu {ticker} có điểm tổng hợp là {score}, xếp hạng \"{rating}\".")
+    lines.append("")
+    lines.append(f"2. Nhóm 4 Key: \"{group}\", khuyến nghị \"{recommendation}\".")
+    lines.append("")
+    lines.append("3. SMDT và Động lực:")
+    lines.append(
+        f" - SMDT của {ticker}: {_fmt_metric(payload.get('smdt_ticker'), '%')}, "
+        f"{_change_word(payload.get('smdt_ticker'), payload.get('smdt_ticker_prev'))} từ {_fmt_metric(payload.get('smdt_ticker_prev'), '%')}."
+    )
+    lines.append(f" - Động lượng của mã: {_fmt_metric(payload.get('ticker_momentum'))}.")
+    lines.append(
+        f" - SMDT ngành {branch}: {_fmt_metric(payload.get('smdt_branch'), '%')}, "
+        f"{_change_word(payload.get('smdt_branch'), payload.get('smdt_branch_prev'))} từ {_fmt_metric(payload.get('smdt_branch_prev'), '%')}; "
+        f"động lượng ngành {_fmt_metric(payload.get('branch_momentum'))}."
+    )
+    lines.append("")
+
+    if composite.get("co_phan_ky"):
+        phan_ky = "Có phân kỳ SMDT tăng nhưng giá chưa tăng tương ứng."
+    else:
+        phan_ky = "Không có phân kỳ."
+    lines.append(f"4. Phân kỳ: {phan_ky}")
+    lines.append("")
+
+    lines.append("5. Bonus/Ghi chú:")
+    lines.append(f" - Bonus phân kỳ: {_fmt_metric(composite.get('bonus_phan_ky', 0))} điểm.")
+    if breakdown:
+        labels = {
+            "smdt_vs_nganh": "SMDT so với ngành",
+            "smdt_delta": "Động lượng SMDT",
+            "gia_dong_luong": "Động lượng giá",
+            "gia_return_1d_pct": "Lợi nhuận 1 ngày (%)",
+            "dong_tien": "Dòng tiền",
+        }
+        parts = [f"{labels.get(key, key)} {_fmt_metric(value)}" for key, value in breakdown.items()]
+        lines.append(" - Breakdown: " + "; ".join(parts) + ".")
+    for note in notes:
+        lines.append(f" - {note}.")
+
+    return "\n".join(lines).strip()
+
 def has_real_ticker(text: str) -> bool:
     return any(match.group(0) not in NON_TICKER_SYMBOLS for match in TICKER_RE.finditer(text or ""))
 
@@ -569,7 +767,7 @@ class Orchestrator:
             # Nếu không có tool call → kết thúc
             if not getattr(msg, "tool_calls", None):
 
-                final_text = msg.content or ""
+                final_text = ensure_stock_4key_section(msg.content or "", messages)
                 return messages, final_text
 
             # Chạy tool
@@ -601,6 +799,13 @@ class Orchestrator:
                     "tool_call_id": tc.id,
                     "content": json.dumps(result, ensure_ascii=False)
                 })
+
+                if op_name == "getStock4KeyEvaluation":
+                    stock_4key_payload = _find_stock_4key_payload(result)
+                    if stock_4key_payload:
+                        final_text = format_stock_4key_answer(stock_4key_payload)
+                        log("4KEY FORMATTER APPLIED")
+                        return messages, final_text
 
         final_text = "Tool loop vượt quá giới hạn."
 
@@ -779,13 +984,14 @@ Yêu cầu:
             user_text,
             language,
         )
-        _, final_text = self._run_tool_loop(
+        loop_messages, final_text = self._run_tool_loop(
             model,
             base_messages,
             enable_tools=enable_tools,
             allowed_apis=allowed_apis,
             current_doc=current_doc,
         )
+        final_text = ensure_stock_4key_section(final_text, loop_messages)
         final_text = enforce_main_branch_terms(final_text)
         final_text = ensure_smdt_percent(final_text)
         final_text = clean_chat_output(sanitize_response_text(final_text))

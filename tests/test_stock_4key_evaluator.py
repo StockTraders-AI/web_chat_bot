@@ -47,6 +47,8 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         )
 
         self.assertEqual(result["group_4key"], "Dung song - Dung nganh")
+        self.assertIn("2. Nhom 4 Key", result["answer_contract"]["must_include"])
+        self.assertEqual(result["answer_contract"]["nhom_4_key_source"]["group"], result["group_4key"])
         self.assertEqual(result["ticker_momentum"], 20)
         self.assertEqual(result["branch_momentum"], 7)
         self.assertIn("composite", result)

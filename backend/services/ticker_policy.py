@@ -27,6 +27,7 @@ NON_TICKER_TERMS = frozenset(
         "SMDT", "RSI", "MACD", "NAV", "ETF", "IPO", "ROA", "ROE",
         "EPS", "PBR", "PER", "PE", "PB", "EBITDA", "USD", "CAGR",
         "YOY", "MOM", "TTM", "ALL", "NULL", "TRUE", "FALSE",
+        "MUA", "BAN", "CAN", "NHAC", "THEO", "DOI", "TRANH",
     }
 )
 

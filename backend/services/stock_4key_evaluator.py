@@ -309,7 +309,7 @@ def evaluate_four_key_from_records(
             cashflow_points=cashflow_points,
             lookback_sessions=lookback_sessions,
         )
-    return result
+    return _attach_answer_contract(result)
 
 
 def _composite_score(
@@ -346,7 +346,6 @@ def _composite_score(
 
     active_weights = dict(WEIGHTS_V2)
     active_weights.pop("smdt_rank", None)
-    notes.append("Chua co du lieu peer ranking trong adapter, bo factor smdt_rank")
 
     breakdown = {
         "smdt_vs_nganh": round(float(row["score_smdt_vs_nganh"]), 1),
@@ -415,6 +414,25 @@ def _rating(score: float) -> str:
         return "Ban"
     return "Ban manh"
 
+def _attach_answer_contract(result: dict[str, Any]) -> dict[str, Any]:
+    if not result.get("ok"):
+        return result
+
+    result["answer_contract"] = {
+        "must_include": [
+            "1. Diem Composite",
+            "2. Nhom 4 Key",
+            "3. SMDT va Dong luc",
+            "4. Phan ky",
+            "5. Bonus/Ghi chu",
+        ],
+        "nhom_4_key_source": {
+            "group": result.get("group_4key"),
+            "recommendation": result.get("recommendation"),
+        },
+        "rule": "Khong duoc bo qua muc Nhom 4 Key khi tra loi phan tich co phieu.",
+    }
+    return result
 
 def _merge_records(first: list[Any], second: list[Any]) -> list[Any]:
     by_date = {getattr(item, "date"): item for item in first + second if getattr(item, "date", None)}
