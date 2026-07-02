@@ -68,13 +68,13 @@ NON_TICKER_SYMBOLS = frozenset({"RSI", "NAV", "SMDT", "GPT", "AI", "API", "MACD"
 NORMALIZED_STOCK_KEYWORDS = (
     "gia", "co phieu", "smdt", "nganh", "ma", "tin hieu", "suy yeu",
     "lo trinh", "thong ke", "chung khoan", "dong tien", "sentiment",
-    "chan song", "song", "cho mua", "cho ban", "mua", "ban", "do tin cay",
+    "chan song", "song", "cho mua", "cho ban", "mua", "ban", "do tin cay", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 FORCE_RULES_PHRASES = (
     "phan tich nganh", "phan tich co phieu", "phan tich ma", "smdt co phieu",
     "smdt nganh", "dong tien", "cho mua", "cho ban", "tin hieu",
     "nganh nao", "ma nao", "gia co phieu", "gia hom nay", "vuot", "cross",
-    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song",
+    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 SMDT_DATA_INTENT_WORDS = (
     "hom nay", "ngay", "co phieu", "ma", "nganh", "bao nhieu", "tang",
@@ -195,7 +195,7 @@ def should_force_rules(user_text: str) -> bool:
         return True
     if has_real_ticker(user_text) and any(k in normalized for k in (
         "phan tich", "smdt", "gia", "tin hieu", "dong tien", "mua", "ban",
-        "dat chuan", "ma manh", "bat dau manh", "hieu suat",
+        "dat chuan", "ma manh", "bat dau manh", "hieu suat", "4 key", "four key", "dung song", "dung nganh", "composite",
     )):
         return True
     return False

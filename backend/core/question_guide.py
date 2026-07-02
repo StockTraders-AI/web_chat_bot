@@ -195,12 +195,12 @@ def extract_date_value(text: str) -> Optional[str]:
         return relative_date
     month = extract_month(text)
     if month:
-        return f"th?ng {month}/{extract_year(text)}"
+        return f"tháng {month}/{extract_year(text)}"
     year_match = re.search(r"\b(20\d{2})\b", normalized)
     if year_match:
         return year_match.group(1)
     if any(value in normalized for value in ("hom nay", "hien tai", "bay gio", "gan nhat")):
-        return "h?m nay"
+        return "hôm nay"
     return None
 
 def is_affirmative(text: str) -> bool:
@@ -226,6 +226,20 @@ def is_stock_list_query(normalized: str) -> bool:
         )
     )
 
+
+
+def is_explicit_stock_analysis(normalized: str) -> bool:
+    return any(
+        phrase in normalized
+        for phrase in (
+            "phan tich",
+            "danh gia",
+            "score",
+            "diem tong",
+            "rating",
+            "composite",
+        )
+    )
 
 def classify_groups(text: str) -> Set[str]:
     normalized = normalize_text(text)
@@ -624,6 +638,8 @@ class QuestionGuide:
             ))
 
         if subject_kind == "stock" and stock_intent == "analysis":
+            if is_explicit_stock_analysis(normalized):
+                return GuideResult("run", canonical_question=user_text)
             return await self._offer_stock_cases(user_id, ticker, user_text)
 
         if subject_kind == "stock" and stock_intent:
@@ -693,6 +709,8 @@ class QuestionGuide:
         original: str,
     ) -> GuideResult:
         if intent == "analysis":
+            if is_explicit_stock_analysis(normalize_text(original)):
+                return GuideResult("run", canonical_question=f"Phân tích cổ phiếu {ticker}")
             return await self._offer_stock_cases(user_id, ticker, original)
         if self._time_is_explicitly_missing(normalize_text(original)):
             template = self._time_template(original, ticker, None)

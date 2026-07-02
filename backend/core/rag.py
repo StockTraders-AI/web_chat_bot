@@ -139,6 +139,36 @@ class RAGStore:
                     return title
             return None
 
+        has_ticker = bool(re.search(r"\b[A-Z]{2,5}\d?\b", query or ""))
+        composite_or_analysis_intent = has_ticker and any(
+            phrase in normalized
+            for phrase in (
+                "phan tich",
+                "danh gia",
+                "tong hop",
+                "score",
+                "diem tong",
+                "rating",
+                "mua manh",
+                "co nen mua",
+                "nen mua",
+            )
+        ) and "nganh" not in normalized
+        four_key_intent = any(
+            phrase in normalized
+            for phrase in (
+                "4 key",
+                "four key",
+                "dung song",
+                "dung nganh",
+                "sai song",
+                "sai nganh",
+                "composite score",
+                "phan ky smdt",
+            )
+        )
+        if four_key_intent or composite_or_analysis_intent:
+            return title_containing("4 key")
         strong_stock_intent = any(
             phrase in normalized
             for phrase in (

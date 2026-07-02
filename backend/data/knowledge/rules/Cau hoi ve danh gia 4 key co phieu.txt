@@ -1,0 +1,30 @@
+Guide "Phan tich co phieu [ticker]"
+Intent: phan tich/danh gia/score/diem tong/rating/composite/co nen mua cua 1 ma co phieu.
+Call: getStock4KeyEvaluation.
+Args: mode=single, ticker, date=YYYY-MM-DD, include_composite=true. Neu user hoi hom nay/hien nay/khong noi ngay thi dung ngay hien tai trong system prompt; khong de trong date.
+Answer: tieng Viet ngan gon, chi dung so lieu tool. Neu ok=false, noi ly do.
+Format bat buoc neu ok=true:
+1. Diem Composite: score va rating.
+2. Nhom 4 Key: neu tool co group/khuyen_nghi 4-key thi bat buoc neu ten nhom va khuyen nghi ngan gon.
+3. SMDT va Dong luc: SMDT ma/nganh va delta neu co.
+4. Phan ky: co/khong co, ly do ngan.
+5. Bonus/Ghi chu: bonus phan ky, breakdown diem, thieu du lieu neu co.
+Khong bia so lieu ngoai ket qua tool.
+
+Guide "4 key don thuan [ticker]"
+Intent: user hoi ro 4 key/bon key/dung song dung nganh/sai song sai nganh/nhom 4-key.
+Call: getStock4KeyEvaluation.
+Args: mode=single, ticker, date=YYYY-MM-DD, include_composite=false.
+Answer: ma, ngay, nganh, nhom 4-key, khuyen nghi, SMDT ma/nganh va dong luong neu co.
+
+Guide "Lich su 4 key [ticker] tu [date]"
+Intent: user hoi lich su 4-key cua 1 ma tu ngay nao do.
+Call: getStock4KeyEvaluation.
+Args: mode=history, ticker, from_date=YYYY-MM-DD, include_composite=false.
+Answer: tom tat cac moc/ngay theo ket qua tool.
+
+Guide "Danh gia 4 key nhieu ma [date]"
+Intent: user hoi 4-key cho nhieu ma cu the.
+Call: getStock4KeyEvaluation.
+Args: mode=batch, tickers, date=YYYY-MM-DD, include_composite=false.
+Answer: bang ngan gon tung ma, nhom 4-key va khuyen nghi.

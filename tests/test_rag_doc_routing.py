@@ -1,4 +1,9 @@
 import unittest
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
 
 from core.rag import RAGStore
 
@@ -58,6 +63,29 @@ class RAGDocumentRoutingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("keyValue=[mã]", context["refs"])
         self.assertIn("không truyền date", context["refs"])
         self.assertNotIn("getTotalTradeWithSMDT", context["refs"])
+    async def test_stock_analysis_question_selects_composite_rule(self):
+        rag = RAGStore.__new__(RAGStore)
+        rag.rule_docs = {
+            "Cau hoi ve danh gia 4 key co phieu.txt": {},
+            "Câu hỏi về giá của mã.txt": {},
+            "Câu hỏi về mã, cổ phiếu, đạt chuẩn mã mạnh.txt": {},
+        }
+
+        selected = await rag.pick_doc("Phân tích cổ phiếu VCB hôm nay")
+
+        self.assertEqual(selected, "Cau hoi ve danh gia 4 key co phieu.txt")
+
+    async def test_score_question_selects_composite_rule(self):
+        rag = RAGStore.__new__(RAGStore)
+        rag.rule_docs = {
+            "Cau hoi ve danh gia 4 key co phieu.txt": {},
+            "Câu hỏi về giá của mã.txt": {},
+            "Câu hỏi về sức mạnh dòng tiền, smdt ngành, mã.txt": {},
+        }
+
+        selected = await rag.pick_doc("Score của SSI hôm nay là bao nhiêu?")
+
+        self.assertEqual(selected, "Cau hoi ve danh gia 4 key co phieu.txt")
     async def test_strong_stock_question_selects_strong_stock_rule(self):
         rag = RAGStore.__new__(RAGStore)
         rag.rule_docs = {

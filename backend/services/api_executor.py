@@ -6,6 +6,7 @@ from core.tool_engine import ToolRegistry
 from services.branch_map import extract_branch_path
 from services.branch_tickers import BRANCH_DATA
 from services.chan_song_client import get_chan_song
+from services.stock_4key_evaluator import Stock4KeyError, evaluate_stock_4key
 from services.ticker_policy import invalid_api_ticker, sanitize_api_result
 
 DEBUG_API = True
@@ -205,6 +206,19 @@ class APIExecutor:
             except Exception as e:
                 log("CHAN SONG API EXCEPTION:", str(e))
                 return {"error": str(e)}
+
+        if operation_id == "getStock4KeyEvaluation":
+            try:
+                return evaluate_stock_4key(
+                    lambda child_operation, child_args: self.call(child_operation, child_args, doc_name=doc_name),
+                    args,
+                )
+            except Stock4KeyError as e:
+                log("4KEY EVALUATION ERROR:", str(e))
+                return {"ok": False, "error": str(e)}
+            except Exception as e:
+                log("4KEY EVALUATION EXCEPTION:", str(e))
+                return {"ok": False, "error": str(e)}
 
         month_only_docs = {
             r"C\u00e2u h\u1ecfi v\u1ec1 x\u00e1c nh\u1eadn ch\u00e2n s\u00f3ng, [th\u00e1ng, n\u0103m] l\u00e0 s\u00f3ng l\u1edbn hay s\u00f3ng h\u1ed3i.txt".encode("ascii").decode("unicode_escape"),

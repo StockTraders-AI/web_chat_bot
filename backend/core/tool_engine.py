@@ -53,6 +53,37 @@ class ToolRegistry:
             },
         })
 
+        self.operations["getStock4KeyEvaluation"] = {
+            "path": "",
+            "method": "CUSTOM",
+            "summary": "Danh gia 4-key/composite score co phieu.",
+            "parameters": [],
+        }
+        self.tools.append({
+            "type": "function",
+            "function": {
+                "name": "getStock4KeyEvaluation",
+                "description": (
+                    "Phan tich/score/rating/4-key co phieu. "
+                    "Phan tich/score/rating: mode=single, include_composite=true; neu co 4-key thi neu Nhom 4 Key. "
+                    "Hoi rieng 4-key: include_composite=false."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "mode": {"type": "string", "enum": ["single", "batch", "history"]},
+                        "ticker": {"type": "string"},
+                        "tickers": {"type": "array", "items": {"type": "string"}},
+                        "date": {"type": "string", "description": "YYYY-MM-DD cho single/batch."},
+                        "from_date": {"type": "string", "description": "YYYY-MM-DD cho history."},
+                        "include_composite": {"type": "boolean"},
+                        "lookback_sessions": {"type": "integer"}
+                    },
+                    "required": [],
+                    "additionalProperties": False,
+                },
+            },
+        })
     def _parse_operations(self) -> Dict[str, Dict[str, Any]]:
         ops: Dict[str, Dict[str, Any]] = {}
         paths = self.schema.get("paths", {})

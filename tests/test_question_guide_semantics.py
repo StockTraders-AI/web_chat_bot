@@ -1,7 +1,11 @@
+import sys
 import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
 
 from core.memory import MemoryStore
 from core.question_guide import QuestionGuide
@@ -71,6 +75,10 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mình có thể đi theo", result.message)
         self.assertNotIn("Case bịa thêm", result.message)
         self.assertEqual(result.message.count("\n"), 5)
+    async def test_explicit_stock_analysis_runs_directly(self):
+        result = await self.guide.handle("analysis-direct", "Phân tích cổ phiếu ACB")
+        self.assertEqual(result.action, "run")
+        self.assertEqual(result.canonical_question, "Phân tích cổ phiếu ACB")
     async def test_ticker_with_digit_is_not_replaced_by_business_word(self):
         question = "PC1 đạt chuẩn mã mạnh khi nào"
         result = await self.guide.handle("pc1-strong", question)
@@ -81,16 +89,16 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.action, "run")
         self.assertEqual(result.canonical_question, "ACB có đạt chuẩn mã mạnh không?")
     async def test_new_question_does_not_select_price_from_tham_gia(self):
-        await self.guide.handle("route1", "co nen mua DAN ko")
+        await self.guide.handle("route1", "co nen mua ACB ko")
         result = await self.guide.handle("route1", "lộ trình các dòng tham gia dẫn sóng 3/2026")
         self.assertEqual(result.action, "pass")
         self.assertEqual(result.canonical_question, "")
 
     async def test_price_alias_still_selects_price_suggestion(self):
-        await self.guide.handle("route2", "co nen mua DAN ko")
+        await self.guide.handle("route2", "co nen mua ACB ko")
         result = await self.guide.handle("route2", "giá")
         self.assertEqual(result.action, "run")
-        self.assertEqual(result.canonical_question, "Giá DAN hiện nay là bao nhiêu?")
+        self.assertEqual(result.canonical_question, "Giá ACB hiện nay là bao nhiêu?")
     async def test_selected_case_survives_question_guide_restart(self):
         await self.guide.handle("u2", "co nen mua ACB ko")
         restarted = QuestionGuide(FakeRAG(), memory=self.memory)
@@ -121,8 +129,8 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         second = await self.guide.handle("u6", "ACB")
         self.assertEqual(first.action, "ask")
         self.assertIn("mã cổ phiếu", first.message)
-        self.assertEqual(second.action, "ask")
-        self.assertIn("ACB", second.message)
+        self.assertEqual(second.action, "run")
+        self.assertEqual(second.canonical_question, "Phân tích cổ phiếu ACB")
 
     async def test_missing_branch_is_collected_then_routed(self):
         first = await self.guide.handle("u7", "phan tich nganh")
