@@ -32,6 +32,7 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
 
     def sample_portfolio(self):
         return {
+            "asOfDate": "2026-07-04",
             "score": 75,
             "counts": {"dd": 3, "ds": 1, "sd": 0, "ss": 1},
             "positions": [
@@ -53,6 +54,8 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("4 key", text)
         self.assertIn('"ticker":"BVS"', text)
         self.assertIn("web chat StockTraders AI", text)
+        self.assertIn("Ngay danh gia bat buoc la 2026-07-04", text)
+        self.assertIn("khong duoc tu doi sang ngay hien tai", text)
         self.assertEqual(find_disallowed_tickers(text), [])
 
     def test_regular_data_questions_ignore_portfolio_context(self):
