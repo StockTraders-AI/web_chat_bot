@@ -69,7 +69,7 @@ def build_portfolio_chat_text(question: str, portfolio: dict[str, Any]) -> str:
         "Hay tra loi cung phong cach va quy tac nhu web chat StockTraders AI. "
         "Day la request co kem du lieu portfolio, phai tra loi truc tiep, khong hoi lai va khong goi y danh sach cau hoi. "
         "Portfolio la ngu canh uu tien khi cau hoi noi ve cac ma trong danh muc. "
-        "Neu cau hoi noi ve ma khong co trong portfolio, hoac portfolio thieu du lieu de tra loi, van dung flow web chat binh thuong: RAG/rule/tool/API hien co de tra loi, khong duoc tu choi chi vi portfolio thieu ma do. "
+        "Neu cau hoi noi ve ma khong co trong portfolio, hoac portfolio thieu du lieu de tra loi, van dung flow web chat binh thuong: rag/rule/tool/API hien co de tra loi, khong duoc tu choi chi vi portfolio thieu ma do. "
         "Khong bia them gia, SMDT, ty trong, hay ma ngoai du lieu neu ca portfolio va tool/API deu khong co. "
         "Neu position co cat thi dung cat de doc nhom 4 key: dd=Dung song-Dung nganh, ds=Dung song-Sai nganh, sd=Sai song-Dung nganh, ss=Sai song-Sai nganh. "
         "Neu khong co cat nhung co smdt/smdtPrev/branchSmdt/branchSmdtPrev thi tu suy ra: smdt tang la ma dung song, branchSmdt tang la nganh dung song.\n\n"

@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from routes import portfolio_chat as route
+from services.ticker_policy import find_disallowed_tickers
 
 
 class FakeOrchestrator:
@@ -53,6 +54,7 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Ma nao dung song?", text)
         self.assertIn('"ticker":"BVS"', text)
         self.assertIn("web chat StockTraders AI", text)
+        self.assertEqual(find_disallowed_tickers(text), [])
 
     async def test_portfolio_chat_route_uses_shared_chat_runtime(self):
         payload = route.PortfolioChatIn(
