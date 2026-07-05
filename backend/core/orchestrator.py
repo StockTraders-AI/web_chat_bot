@@ -911,8 +911,10 @@ Yêu cầu:
         user_id: str,
         user_text: str,
         language: str,
-        selected_model: Optional[str]
+        selected_model: Optional[str],
+        skip_question_guide: bool = False
     ):
+
         lock = self._user_chat_locks.setdefault(user_id, asyncio.Lock())
         async with lock:
             async for event, data in self._chat_stream_unlocked(
@@ -920,7 +922,9 @@ Yêu cầu:
                 user_text=user_text,
                 language=language,
                 selected_model=selected_model,
+                skip_question_guide=skip_question_guide,
             ):
+
                 yield event, data
 
     async def _chat_stream_unlocked(
@@ -928,8 +932,10 @@ Yêu cầu:
         user_id: str,
         user_text: str,
         language: str,
-        selected_model: Optional[str]
+        selected_model: Optional[str],
+        skip_question_guide: bool = False
     ):
+
         model = pick_model(selected_model)
         reset_token_usage()
 
@@ -948,8 +954,9 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        guide_result = await self.question_guide.handle(user_id, user_text)
-        if guide_result.action == "ask":
+        guide_result = None if skip_question_guide else await self.question_guide.handle(user_id, user_text)
+        if guide_result and guide_result.action == "ask":
+
             final_text = clean_chat_output(sanitize_response_text(guide_result.message))
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
@@ -962,7 +969,7 @@ Yêu cầu:
             return
 
         guided_question = False
-        if guide_result.action == "run" and guide_result.canonical_question:
+        if guide_result and guide_result.action == "run" and guide_result.canonical_question:
             user_text = guide_result.canonical_question
             guided_question = True
 

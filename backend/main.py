@@ -33,6 +33,7 @@ from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_t
 from core.model_router import pick_model
 from core.quota import QuotaService
 from routes.iplatform_api import configure_iplatform_api, router as iplatform_router
+from routes.portfolio_chat import configure_portfolio_chat_api, router as portfolio_chat_router
 from services.openai_client import OpenAIClient
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,6 +41,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 app = FastAPI(title="StockTraders AI Chat")
 app.include_router(iplatform_router)
+app.include_router(portfolio_chat_router)
 
 DEFAULT_BLOCKED_IPS = {"185.177.72.205"}
 BLOCKED_IPS = {
@@ -406,6 +408,7 @@ async def startup():
     rag.load()
     orch = Orchestrator(memory=memory, rag=rag, registry=registry)
     configure_iplatform_api(lambda: orch)
+    configure_portfolio_chat_api(lambda: orch)
     sales = SalesDiscovery(memory=memory)
 
 @app.get("/meta/models")
