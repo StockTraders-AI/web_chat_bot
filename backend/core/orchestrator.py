@@ -68,13 +68,13 @@ NON_TICKER_SYMBOLS = frozenset({"RSI", "NAV", "SMDT", "GPT", "AI", "API", "MACD"
 NORMALIZED_STOCK_KEYWORDS = (
     "gia", "co phieu", "smdt", "nganh", "ma", "tin hieu", "suy yeu",
     "lo trinh", "thong ke", "chung khoan", "dong tien", "sentiment",
-    "chan song", "song", "cho mua", "cho ban", "mua", "ban", "do tin cay", "key nao", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
+    "chan song", "song", "cho mua", "cho ban", "mua", "ban", "do tin cay", "key nao", "key gi", "co key gi", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 FORCE_RULES_PHRASES = (
     "phan tich nganh", "phan tich co phieu", "phan tich ma", "smdt co phieu",
     "smdt nganh", "dong tien", "cho mua", "cho ban", "tin hieu",
     "nganh nao", "ma nao", "gia co phieu", "gia hom nay", "vuot", "cross",
-    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "key nao", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
+    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "key nao", "key gi", "co key gi", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 SMDT_DATA_INTENT_WORDS = (
     "hom nay", "ngay", "co phieu", "ma", "nganh", "bao nhieu", "tang",
@@ -209,10 +209,10 @@ def ensure_stock_4key_section(final_text: str, messages: List[Dict[str, Any]]) -
     if "nhom 4 key" in normalized:
         return final_text or ""
 
-    group = str(payload.get("group_4key") or "").strip()
+    group = _display_4key_label(payload.get("group_4key"))
     if not group:
         return final_text or ""
-    recommendation = str(payload.get("recommendation") or "").strip()
+    recommendation = _display_4key_label(payload.get("recommendation"))
 
     section = f'2. Nhóm 4 Key: Thuộc nhóm "{group}"'
     if recommendation:
@@ -258,18 +258,33 @@ def _derive_4key_group(payload: Dict[str, Any]) -> tuple[str, str]:
         return "Dung nganh - Sai song", "THEO DOI - nganh thuan nhung ma chua xac nhan"
     return "Sai song - Sai nganh", "TRANH - ca ma va nganh deu bat loi"
 
+def _display_lookup_key(value: Any) -> str:
+    normalized = normalize_search_text(str(value or "").strip())
+    return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
+
+
 def _display_4key_label(value: Any) -> str:
     text = str(value or "").strip()
+    if not text:
+        return ""
     mapping = {
-        "Dung song - Dung nganh": "Đúng sóng - Đúng ngành",
-        "Dung song - Sai nganh": "Đúng sóng - Sai ngành",
-        "Dung nganh - Sai song": "Đúng ngành - Sai sóng",
-        "Sai song - Sai nganh": "Sai sóng - Sai ngành",
-        "Mua manh": "Mua mạnh",
-        "Trung lap": "Trung lập",
-        "Ban manh": "Bán mạnh",
+        "dung song dung nganh": "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh",
+        "dung song sai nganh": "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh",
+        "dung nganh sai song": "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng",
+        "sai song dung nganh": "Sai s\u00f3ng - \u0110\u00fang ng\u00e0nh",
+        "sai song sai nganh": "Sai s\u00f3ng - Sai ng\u00e0nh",
+        "mua manh": "Mua m\u1ea1nh",
+        "mua": "Mua",
+        "trung lap": "Trung l\u1eadp",
+        "ban": "B\u00e1n",
+        "ban manh": "B\u00e1n m\u1ea1nh",
+        "mua tin hieu thuan ca ma va nganh": "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 m\u00e3 v\u00e0 ng\u00e0nh",
+        "can nhac ma manh rieng nguoc dong nganh": "C\u00c2N NH\u1eaeC - m\u00e3 m\u1ea1nh ri\u00eang, ng\u01b0\u1ee3c d\u00f2ng ng\u00e0nh",
+        "theo doi nganh thuan nhung ma chua xac nhan": "THEO D\u00d5I - ng\u00e0nh thu\u1eadn nh\u01b0ng m\u00e3 ch\u01b0a x\u00e1c nh\u1eadn",
+        "tranh ca ma va nganh deu bat loi": "TR\u00c1NH - c\u1ea3 m\u00e3 v\u00e0 ng\u00e0nh \u0111\u1ec1u b\u1ea5t l\u1ee3i",
+        "chua du du lieu xac dinh nhom 4 key": "Ch\u01b0a \u0111\u1ee7 d\u1eef li\u1ec7u x\u00e1c \u0111\u1ecbnh nh\u00f3m 4 Key",
     }
-    return mapping.get(text, text)
+    return mapping.get(_display_lookup_key(text), text)
 
 
 def _fmt_metric(value: Any, suffix: str = "") -> str:
@@ -295,6 +310,8 @@ def _fmt_vn_date(value: Any) -> str:
 
 FOUR_KEY_ONLY_PHRASES = (
     "key nao",
+    "key gi",
+    "co key gi",
     "4 key nao",
     "4key nao",
     "nhom nao",
@@ -463,7 +480,7 @@ def should_force_rules(user_text: str) -> bool:
         return True
     if has_real_ticker(user_text) and any(k in normalized for k in (
         "phan tich", "smdt", "gia", "tin hieu", "dong tien", "mua", "ban",
-        "dat chuan", "ma manh", "bat dau manh", "hieu suat", "key nao", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite",
+        "dat chuan", "ma manh", "bat dau manh", "hieu suat", "key nao", "key gi", "co key gi", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite",
     )):
         return True
     return False

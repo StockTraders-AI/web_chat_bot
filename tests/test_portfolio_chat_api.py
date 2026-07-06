@@ -18,7 +18,7 @@ class FakeOrchestrator:
 
     async def chat_stream(self, **kwargs):
         self.calls.append(kwargs)
-        yield "delta", {"text": "BVS dang dung song dung nganh."}
+        yield "delta", {"text": "BVS \u0111ang \u0111\u00fang s\u00f3ng \u0111\u00fang ng\u00e0nh."}
         yield "done", {
             "sources": [],
             "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
@@ -56,8 +56,8 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("4 key", text)
         self.assertIn('"ticker":"BVS"', text)
         self.assertIn("web chat StockTraders AI", text)
-        self.assertIn("Ngay danh gia bat buoc la 2026-07-04", text)
-        self.assertIn("khong duoc tu doi sang ngay hien tai", text)
+        self.assertIn("Ng\u00e0y \u0111\u00e1nh gi\u00e1 b\u1eaft bu\u1ed9c l\u00e0 2026-07-04", text)
+        self.assertIn("kh\u00f4ng \u0111\u01b0\u1ee3c t\u1ef1 \u0111\u1ed5i sang ng\u00e0y hi\u1ec7n t\u1ea1i", text)
         self.assertEqual(find_disallowed_tickers(text), [])
 
     def test_regular_data_questions_ignore_portfolio_context(self):
@@ -143,7 +143,7 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
 
         result = await route.portfolio_chat(payload, x_api_key=None)
 
-        self.assertEqual(result["answer"], "BVS dang dung song dung nganh.")
+        self.assertEqual(result["answer"], "BVS \u0111ang \u0111\u00fang s\u00f3ng \u0111\u00fang ng\u00e0nh.")
         self.assertEqual(result["usage"]["total_tokens"], 120)
         call = self.orchestrator.calls[0]
         self.assertEqual(call["user_id"], "portfolio:u1:p1")

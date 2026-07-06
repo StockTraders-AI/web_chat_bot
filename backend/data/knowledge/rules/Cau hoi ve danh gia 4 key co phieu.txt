@@ -12,7 +12,7 @@ Format bat buoc neu ok=true:
 Khong bia so lieu ngoai ket qua tool.
 
 Guide "4 key don thuan [ticker]"
-Intent: user hoi ro phan tich/danh gia/trang thai/key nao/thuoc key nao/nhom nao/4 key/bon key/dung song dung nganh/sai song sai nganh/nhom 4-key.
+Intent: user hoi ro phan tich/danh gia/trang thai/key nao/key gi/thuoc key nao/nhom nao/4 key/bon key/dung song dung nganh/sai song sai nganh/nhom 4-key.
 Call: getStock4KeyEvaluation.
 Args: mode=single, ticker, date=YYYY-MM-DD, include_composite=false.
 Answer: chi tra loi ngan gon nhom 4-key. Neu user hoi "co dung song dung nganh khong" thi tra loi Co/Khong + nhom hien tai. Khong tra loi composite/SMDT/phan ky tru khi user hoi tai sao/vi sao/ly do/giai thich/chi tiet.

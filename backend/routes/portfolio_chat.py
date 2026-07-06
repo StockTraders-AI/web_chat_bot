@@ -273,25 +273,26 @@ def build_portfolio_chat_text(question: str, portfolio: dict[str, Any]) -> str:
     portfolio_json = json.dumps(portfolio, ensure_ascii=False, separators=(",", ":"))
     as_of_date = str(portfolio.get("asOfDate") or portfolio.get("date") or "").strip()
     date_rule = (
-        f"Ngay danh gia bat buoc la {as_of_date}; khong duoc tu doi sang ngay hien tai. "
+        f"Ng\u00e0y \u0111\u00e1nh gi\u00e1 b\u1eaft bu\u1ed9c l\u00e0 {as_of_date}; kh\u00f4ng \u0111\u01b0\u1ee3c t\u1ef1 \u0111\u1ed5i sang ng\u00e0y hi\u1ec7n t\u1ea1i. "
         if as_of_date else ""
     )
     return (
-        "Ngu canh danh muc hien tai do frontend/backend web cung cap. "
-        "Hay tra loi cung phong cach va quy tac nhu web chat StockTraders AI. "
-        "Day la request co kem du lieu portfolio, phai tra loi truc tiep, khong hoi lai va khong goi y danh sach cau hoi. "
+        "Ng\u1eef c\u1ea3nh danh m\u1ee5c hi\u1ec7n t\u1ea1i do frontend/backend web cung c\u1ea5p. "
+        "H\u00e3y tr\u1ea3 l\u1eddi c\u00f9ng phong c\u00e1ch v\u00e0 quy t\u1eafc nh\u01b0 web chat StockTraders AI. "
+        "B\u1eaft bu\u1ed9c tr\u1ea3 l\u1eddi b\u1eb1ng ti\u1ebfng Vi\u1ec7t \u0111\u1ea7y \u0111\u1ee7 d\u1ea5u, kh\u00f4ng d\u00f9ng nh\u00e3n kh\u00f4ng d\u1ea5u nh\u01b0 Dung song/Dung nganh/tin hieu. "
+        "\u0110\u00e2y l\u00e0 request c\u00f3 k\u00e8m d\u1eef li\u1ec7u portfolio, ph\u1ea3i tr\u1ea3 l\u1eddi tr\u1ef1c ti\u1ebfp, kh\u00f4ng h\u1ecfi l\u1ea1i v\u00e0 kh\u00f4ng g\u1ee3i \u00fd danh s\u00e1ch c\u00e2u h\u1ecfi. "
         f"{date_rule}"
-        "Neu user chi hoi ma thuoc nhom 4 key nao va khong hoi vi sao/ly do/chi tiet/phan tich/score, chi tra loi dung mot dong: Nhom 4 Key: \"<ten nhom>\". "
-        "Chi giai thich them khi user hoi vi sao, ly do, chi tiet, phan tich, score hoac composite. "
-        "Portfolio la ngu canh uu tien khi cau hoi noi ve phan tich 4 key/composite/score cua cac ma trong danh muc. "
-        "Cac case du lieu thong thuong nhu dat chuan ma manh, smdt, gia, tin hieu, mua ban khong phu thuoc portfolio. "
-        "Khong bia them gia, SMDT, ty trong, hay ma ngoai du lieu neu ca portfolio va tool/API deu khong co. "
-        "Neu position co cat thi dung cat de doc nhom 4 key: dd=Dung song-Dung nganh, ds=Dung song-Sai nganh, sd=Sai song-Dung nganh, ss=Sai song-Sai nganh. "
-        "Neu khong co cat nhung co smdt/smdtPrev/branchSmdt/branchSmdtPrev thi phai danh gia truc tiep tu portfolio: smdt tang la ma dung song, branchSmdt tang la nganh dung song. "
-        "Neu portfolio da du du lieu smdt/smdtPrev/branchSmdt/branchSmdtPrev cho ma duoc hoi thi khong can lay du lieu ngoai de doi ngay danh gia.\n\n"
+        "N\u1ebfu user ch\u1ec9 h\u1ecfi m\u00e3 thu\u1ed9c nh\u00f3m 4 key n\u00e0o v\u00e0 kh\u00f4ng h\u1ecfi v\u00ec sao/l\u00fd do/chi ti\u1ebft/ph\u00e2n t\u00edch/score, ch\u1ec9 tr\u1ea3 l\u1eddi \u0111\u00fang m\u1ed9t d\u00f2ng: Nh\u00f3m 4 Key: \"<t\u00ean nh\u00f3m>\". "
+        "Ch\u1ec9 gi\u1ea3i th\u00edch th\u00eam khi user h\u1ecfi v\u00ec sao, l\u00fd do, chi ti\u1ebft, ph\u00e2n t\u00edch, score ho\u1eb7c composite. "
+        "Portfolio l\u00e0 ng\u1eef c\u1ea3nh \u01b0u ti\u00ean khi c\u00e2u h\u1ecfi n\u00f3i v\u1ec1 ph\u00e2n t\u00edch 4 key/composite/score c\u1ee7a c\u00e1c m\u00e3 trong danh m\u1ee5c. "
+        "C\u00e1c case d\u1eef li\u1ec7u th\u00f4ng th\u01b0\u1eddng nh\u01b0 \u0111\u1ea1t chu\u1ea9n m\u00e3 m\u1ea1nh, SMDT, gi\u00e1, t\u00edn hi\u1ec7u, mua b\u00e1n kh\u00f4ng ph\u1ee5 thu\u1ed9c portfolio. "
+        "Kh\u00f4ng b\u1ecba th\u00eam gi\u00e1, SMDT, t\u1ef7 tr\u1ecdng, hay m\u00e3 ngo\u00e0i d\u1eef li\u1ec7u n\u1ebfu c\u1ea3 portfolio v\u00e0 tool/API \u0111\u1ec1u kh\u00f4ng c\u00f3. "
+        "N\u1ebfu position c\u00f3 cat th\u00ec d\u00f9ng cat \u0111\u1ec3 \u0111\u1ecdc nh\u00f3m 4 key: dd=\u0110\u00fang s\u00f3ng-\u0110\u00fang ng\u00e0nh, ds=\u0110\u00fang s\u00f3ng-Sai ng\u00e0nh, sd=Sai s\u00f3ng-\u0110\u00fang ng\u00e0nh, ss=Sai s\u00f3ng-Sai ng\u00e0nh. "
+        "N\u1ebfu kh\u00f4ng c\u00f3 cat nh\u01b0ng c\u00f3 smdt/smdtPrev/branchSmdt/branchSmdtPrev th\u00ec ph\u1ea3i \u0111\u00e1nh gi\u00e1 tr\u1ef1c ti\u1ebfp t\u1eeb portfolio: SMDT m\u00e3 t\u0103ng l\u00e0 m\u00e3 \u0111\u00fang s\u00f3ng, SMDT ng\u00e0nh t\u0103ng l\u00e0 ng\u00e0nh \u0111\u00fang s\u00f3ng. "
+        "N\u1ebfu portfolio \u0111\u00e3 \u0111\u1ee7 d\u1eef li\u1ec7u smdt/smdtPrev/branchSmdt/branchSmdtPrev cho m\u00e3 \u0111\u01b0\u1ee3c h\u1ecfi th\u00ec kh\u00f4ng c\u1ea7n l\u1ea5y d\u1eef li\u1ec7u ngo\u00e0i \u0111\u1ec3 \u0111\u1ed5i ng\u00e0y \u0111\u00e1nh gi\u00e1.\n\n"
         "Portfolio JSON:\n"
         f"{portfolio_json}\n\n"
-        "Cau hoi cua user:\n"
+        "C\u00e2u h\u1ecfi c\u1ee7a user:\n"
         f"{question.strip()}"
     )
 

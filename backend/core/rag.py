@@ -156,6 +156,8 @@ class RAGStore:
             phrase in normalized
             for phrase in (
                 "key nao",
+                "key gi",
+                "co key gi",
                 "thuoc key",
                 "thuoc nhom",
                 "nhom nao",

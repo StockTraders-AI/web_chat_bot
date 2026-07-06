@@ -17,9 +17,10 @@ class RAG4KeyRoutingTests(unittest.TestCase):
             "Cau hoi ve suc manh dong tien, smdt nganh, ma.txt",
         ]
 
-        doc = RAGStore._pick_explicit_rule_doc(rag, "GEX dang thuoc key nao?", titles)
-
-        self.assertEqual(doc, "Cau hoi ve danh gia 4 key co phieu.txt")
+        for question in ("GEX dang thuoc key nao?", "GEX nay co key gi"):
+            with self.subTest(question=question):
+                doc = RAGStore._pick_explicit_rule_doc(rag, question, titles)
+                self.assertEqual(doc, "Cau hoi ve danh gia 4 key co phieu.txt")
 
     def test_danh_gia_and_trang_thai_questions_select_4key_rule_doc(self):
         rag = object.__new__(RAGStore)
