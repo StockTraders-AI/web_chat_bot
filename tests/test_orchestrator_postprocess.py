@@ -44,6 +44,49 @@ class OrchestratorPostprocessTests(unittest.TestCase):
 
         self.assertEqual(ensure_stock_4key_section(final_text, messages), final_text)
 
+    def sample_4key_payload(self):
+        return {
+            "ok": True,
+            "ticker": "GEX",
+            "date": "2026-07-06",
+            "branch": "Ha tang dien",
+            "group_4key": "Dung song - Dung nganh",
+            "recommendation": "MUA - tin hieu thuan ca ma va nganh",
+            "smdt_ticker": 91.9,
+            "smdt_ticker_prev": 99.2,
+            "ticker_momentum": 45.68,
+            "smdt_branch": 50.0,
+            "smdt_branch_prev": 40.0,
+            "branch_momentum": 10.0,
+            "composite": {
+                "score": 75,
+                "rating": "Mua",
+                "co_phan_ky": False,
+                "bonus_phan_ky": 0,
+            },
+        }
+
+    def test_formats_stock_4key_only_question_as_short_answer(self):
+        answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="GEX dang thuoc key nao?")
+
+        self.assertEqual(answer, "GEX \u0111ang thu\u1ed9c Nh\u00f3m 4 Key: \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\".")
+        self.assertNotIn("Composite", answer)
+        self.assertNotIn("SMDT", answer)
+
+    def test_formats_stock_4key_yes_no_question_as_natural_short_answer(self):
+        answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="GEX co dung song dung nganh khong?")
+
+        self.assertEqual(answer, "C\u00f3, GEX \u0111ang thu\u1ed9c Nh\u00f3m 4 Key \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\".")
+        self.assertNotIn("Composite", answer)
+        self.assertNotIn("SMDT", answer)
+
+    def test_formats_stock_4key_analysis_question_as_full_answer(self):
+        answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="phan tich co phieu GEX")
+
+        self.assertIn("Composite", answer)
+        self.assertIn("SMDT", answer)
+        self.assertIn("Bonus", answer)
+
     def test_formats_stock_4key_answer_with_required_group_section(self):
         payload = {
             "ok": True,

@@ -293,6 +293,69 @@ def _fmt_vn_date(value: Any) -> str:
         return raw or "hôm nay"
 
 
+FOUR_KEY_ONLY_PHRASES = (
+    "key nao",
+    "4 key nao",
+    "4key nao",
+    "nhom nao",
+    "nhom 4 key nao",
+    "thuoc key",
+    "thuoc nhom",
+    "dang thuoc key",
+    "dang thuoc nhom",
+    "co dung song dung nganh",
+    "co dung song sai nganh",
+    "co sai song dung nganh",
+    "co sai song sai nganh",
+)
+
+FOUR_KEY_DETAIL_PHRASES = (
+    "phan tich",
+    "danh gia",
+    "score",
+    "composite",
+    "diem",
+    "rating",
+    "xep hang",
+    "vi sao",
+    "tai sao",
+    "ly do",
+    "giai thich",
+    "chi tiet",
+    "smdt",
+    "suc manh dong tien",
+    "dong luc",
+    "phan ky",
+    "bonus",
+    "khuyen nghi",
+)
+
+REQUESTED_4KEY_GROUPS = (
+    ("dung song dung nganh", ("\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh",)),
+    ("dung song sai nganh", ("\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh",)),
+    ("sai song dung nganh", ("Sai s\u00f3ng - \u0110\u00fang ng\u00e0nh", "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng")),
+    ("dung nganh sai song", ("Sai s\u00f3ng - \u0110\u00fang ng\u00e0nh", "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng")),
+    ("sai song sai nganh", ("Sai s\u00f3ng - Sai ng\u00e0nh",)),
+)
+
+
+def is_stock_4key_only_query(user_text: str) -> bool:
+    normalized = normalize_search_text(user_text)
+    if not normalized:
+        return False
+    if any(phrase in normalized for phrase in FOUR_KEY_DETAIL_PHRASES):
+        return False
+    return any(phrase in normalized for phrase in FOUR_KEY_ONLY_PHRASES)
+
+
+def requested_4key_groups(user_text: str) -> tuple[str, ...]:
+    normalized = normalize_search_text(user_text)
+    for phrase, groups in REQUESTED_4KEY_GROUPS:
+        if phrase in normalized:
+            return groups
+    return ()
+
+
 def _change_word(now: Any, prev: Any) -> str:
     try:
         return "tăng" if float(now) >= float(prev) else "giảm"
@@ -300,7 +363,7 @@ def _change_word(now: Any, prev: Any) -> str:
         return "so với"
 
 
-def format_stock_4key_answer(payload: Dict[str, Any]) -> str:
+def format_stock_4key_answer(payload: Dict[str, Any], user_text: str = "") -> str:
     ticker = str(payload.get("ticker") or "mã").strip().upper()
     branch = str(payload.get("branch") or "ngành").strip()
     date_text = _fmt_vn_date(payload.get("date") or payload.get("requested_date"))
@@ -313,6 +376,14 @@ def format_stock_4key_answer(payload: Dict[str, Any]) -> str:
     raw_group, raw_recommendation = _derive_4key_group(payload)
     group = _display_4key_label(raw_group)
     recommendation = _display_4key_label(raw_recommendation)
+
+    if is_stock_4key_only_query(user_text):
+        requested_groups = requested_4key_groups(user_text)
+        if requested_groups:
+            if group in requested_groups:
+                return f"C\u00f3, {ticker} \u0111ang thu\u1ed9c Nh\u00f3m 4 Key \"{group}\"."
+            return f"Kh\u00f4ng, {ticker} \u0111ang thu\u1ed9c Nh\u00f3m 4 Key \"{group}\"."
+        return f"{ticker} \u0111ang thu\u1ed9c Nh\u00f3m 4 Key: \"{group}\"."
 
     lines = [f"Phân tích cổ phiếu {ticker} tính đến ngày {date_text} như sau:", ""]
     lines.append(f"1. Điểm Composite: Cổ phiếu {ticker} có điểm tổng hợp là {score}, xếp hạng \"{rating}\".")
@@ -697,6 +768,7 @@ class Orchestrator:
             enable_tools: bool,
             allowed_apis: Optional[List[str]] = None,
             current_doc: Optional[str] = None,
+            user_text: str = "",
         ) -> Tuple[List[Dict[str, Any]], str]:
 
         if not enable_tools:
@@ -803,7 +875,7 @@ class Orchestrator:
                 if op_name == "getStock4KeyEvaluation":
                     stock_4key_payload = _find_stock_4key_payload(result)
                     if stock_4key_payload:
-                        final_text = format_stock_4key_answer(stock_4key_payload)
+                        final_text = format_stock_4key_answer(stock_4key_payload, user_text=user_text)
                         log("4KEY FORMATTER APPLIED")
                         return messages, final_text
 
@@ -997,6 +1069,7 @@ Yêu cầu:
             enable_tools=enable_tools,
             allowed_apis=allowed_apis,
             current_doc=current_doc,
+            user_text=user_text,
         )
         final_text = ensure_stock_4key_section(final_text, loop_messages)
         final_text = enforce_main_branch_terms(final_text)

@@ -122,6 +122,14 @@ FOUR_KEY_DETAIL_PHRASES = (
 )
 
 
+REQUESTED_FOUR_KEY_GROUPS = (
+    ("dung song dung nganh", FOUR_KEY_GROUP_BY_CAT["dd"]),
+    ("dung song sai nganh", FOUR_KEY_GROUP_BY_CAT["ds"]),
+    ("sai song dung nganh", FOUR_KEY_GROUP_BY_CAT["sd"]),
+    ("sai song sai nganh", FOUR_KEY_GROUP_BY_CAT["ss"]),
+)
+
+
 def configure_portfolio_chat_api(orchestrator_getter: Callable[[], Any]):
     global _orchestrator_getter
     _orchestrator_getter = orchestrator_getter
@@ -187,6 +195,14 @@ def is_simple_four_key_question(question: str) -> bool:
     return any(phrase in normalized for phrase in SIMPLE_FOUR_KEY_PHRASES)
 
 
+def requested_four_key_group(question: str) -> str | None:
+    normalized = normalize_text(question)
+    for phrase, group in REQUESTED_FOUR_KEY_GROUPS:
+        if phrase in normalized:
+            return group
+    return None
+
+
 def as_float(value: Any) -> float | None:
     if value is None or value == "":
         return None
@@ -243,6 +259,13 @@ def build_simple_four_key_answer(question: str, portfolio: dict[str, Any]) -> st
     group = derive_four_key_group(position)
     if not group:
         return None
+
+    requested_group = requested_four_key_group(question)
+    if requested_group:
+        if group == requested_group:
+            return f"C\u00f3, m\u00e3 n\u00e0y \u0111ang thu\u1ed9c nh\u00f3m \"{group}\"."
+        return f"Kh\u00f4ng, m\u00e3 n\u00e0y \u0111ang thu\u1ed9c nh\u00f3m \"{group}\"."
+
     return f"Nh\u00f3m 4 Key: \"{group}\""
 
 

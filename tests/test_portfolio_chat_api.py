@@ -86,6 +86,36 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(answer, "Nh\u00f3m 4 Key: \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\"")
 
+    async def test_portfolio_chat_route_answers_yes_no_group_question_naturally(self):
+        payload = route.PortfolioChatIn(
+            question="Ma nay co dung song dung nganh khong?",
+            portfolio=self.sample_portfolio(),
+            user_id="u1",
+            conversation_id="p1",
+            model="gpt-4o",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        self.assertEqual(result["answer"], "C\u00f3, m\u00e3 n\u00e0y \u0111ang thu\u1ed9c nh\u00f3m \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\".")
+        self.assertEqual(result["usage"]["total_tokens"], 0)
+        self.assertEqual(self.orchestrator.calls, [])
+
+    async def test_portfolio_chat_route_answers_no_when_group_does_not_match(self):
+        payload = route.PortfolioChatIn(
+            question="Ma nay co sai song sai nganh khong?",
+            portfolio=self.sample_portfolio(),
+            user_id="u1",
+            conversation_id="p1",
+            model="gpt-4o",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        self.assertEqual(result["answer"], "Kh\u00f4ng, m\u00e3 n\u00e0y \u0111ang thu\u1ed9c nh\u00f3m \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\".")
+        self.assertEqual(result["usage"]["total_tokens"], 0)
+        self.assertEqual(self.orchestrator.calls, [])
+
     async def test_portfolio_chat_route_returns_only_group_for_simple_4key_question(self):
         payload = route.PortfolioChatIn(
             question="BVS thuoc nhom 4 key nao?",
