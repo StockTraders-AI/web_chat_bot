@@ -157,6 +157,10 @@ class RAGStore:
         four_key_intent = any(
             phrase in normalized
             for phrase in (
+                "key nao",
+                "thuoc key",
+                "thuoc nhom",
+                "nhom nao",
                 "4 key",
                 "four key",
                 "dung song",

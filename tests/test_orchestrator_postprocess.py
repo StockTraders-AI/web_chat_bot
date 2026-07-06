@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from core.orchestrator import ensure_stock_4key_section, format_stock_4key_answer, latest_stock_4key_payload
+from core.orchestrator import ensure_stock_4key_section, format_stock_4key_answer, latest_stock_4key_payload, should_force_rules, is_stock_related
 
 
 class OrchestratorPostprocessTests(unittest.TestCase):
@@ -65,6 +65,12 @@ class OrchestratorPostprocessTests(unittest.TestCase):
                 "bonus_phan_ky": 0,
             },
         }
+
+    def test_key_nao_question_is_stock_related_and_forces_rules(self):
+        question = "GEX dang thuoc key nao?"
+
+        self.assertTrue(is_stock_related(question))
+        self.assertTrue(should_force_rules(question))
 
     def test_formats_stock_4key_only_question_as_short_answer(self):
         answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="GEX dang thuoc key nao?")
