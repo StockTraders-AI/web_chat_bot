@@ -80,6 +80,48 @@ STRONG_PORTFOLIO_PHRASES = (
 )
 
 
+FOUR_KEY_GROUP_BY_CAT = {
+    "dd": "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh",
+    "ds": "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh",
+    "sd": "Sai s\u00f3ng - \u0110\u00fang ng\u00e0nh",
+    "ss": "Sai s\u00f3ng - Sai ng\u00e0nh",
+}
+
+SIMPLE_FOUR_KEY_PHRASES = (
+    "4 key",
+    "four key",
+    "nhom 4 key",
+    "thuoc nhom",
+    "danh gia ma",
+    "danh gia co phieu",
+    "ma nao dung song",
+    "ma nao sai song",
+    "dung song dung nganh",
+    "dung song sai nganh",
+    "sai song dung nganh",
+    "sai song sai nganh",
+)
+
+FOUR_KEY_DETAIL_PHRASES = (
+    "vi sao",
+    "tai sao",
+    "ly do",
+    "giai thich",
+    "chi tiet",
+    "phan tich",
+    "composite",
+    "score",
+    "diem",
+    "breakdown",
+    "smdt",
+    "suc manh dong tien",
+    "dong luc",
+    "gia",
+    "bonus",
+    "khuyen nghi",
+)
+
+
 def configure_portfolio_chat_api(orchestrator_getter: Callable[[], Any]):
     global _orchestrator_getter
     _orchestrator_getter = orchestrator_getter
@@ -136,6 +178,74 @@ def should_use_portfolio_context(question: str) -> bool:
     return has_strong_portfolio_signal or not has_regular_data_signal
 
 
+def is_simple_four_key_question(question: str) -> bool:
+    normalized = normalize_text(question)
+    if not should_use_portfolio_context(question):
+        return False
+    if any(phrase in normalized for phrase in FOUR_KEY_DETAIL_PHRASES):
+        return False
+    return any(phrase in normalized for phrase in SIMPLE_FOUR_KEY_PHRASES)
+
+
+def as_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def iter_positions(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
+    positions = portfolio.get("positions")
+    if not isinstance(positions, list):
+        return []
+    return [item for item in positions if isinstance(item, dict)]
+
+
+def find_requested_position(question: str, portfolio: dict[str, Any]) -> dict[str, Any] | None:
+    positions = iter_positions(portfolio)
+    if len(positions) == 1:
+        return positions[0]
+
+    for position in positions:
+        ticker = str(position.get("ticker") or "").strip()
+        if ticker and re.search(rf"\b{re.escape(ticker)}\b", question, flags=re.IGNORECASE):
+            return position
+    return None
+
+
+def derive_four_key_group(position: dict[str, Any]) -> str | None:
+    cat = str(position.get("cat") or position.get("group") or "").strip().lower()
+    if cat in FOUR_KEY_GROUP_BY_CAT:
+        return FOUR_KEY_GROUP_BY_CAT[cat]
+
+    smdt = as_float(position.get("smdt"))
+    smdt_prev = as_float(position.get("smdtPrev"))
+    branch_smdt = as_float(position.get("branchSmdt"))
+    branch_smdt_prev = as_float(position.get("branchSmdtPrev"))
+    if None in (smdt, smdt_prev, branch_smdt, branch_smdt_prev):
+        return None
+
+    ticker_key = "d" if smdt > smdt_prev else "s"
+    branch_key = "d" if branch_smdt > branch_smdt_prev else "s"
+    return FOUR_KEY_GROUP_BY_CAT.get(f"{ticker_key}{branch_key}")
+
+
+def build_simple_four_key_answer(question: str, portfolio: dict[str, Any]) -> str | None:
+    if not is_simple_four_key_question(question):
+        return None
+
+    position = find_requested_position(question, portfolio)
+    if not position:
+        return None
+
+    group = derive_four_key_group(position)
+    if not group:
+        return None
+    return f"Nh\u00f3m 4 Key: \"{group}\""
+
+
 def build_portfolio_chat_text(question: str, portfolio: dict[str, Any]) -> str:
     portfolio_json = json.dumps(portfolio, ensure_ascii=False, separators=(",", ":"))
     as_of_date = str(portfolio.get("asOfDate") or portfolio.get("date") or "").strip()
@@ -148,6 +258,8 @@ def build_portfolio_chat_text(question: str, portfolio: dict[str, Any]) -> str:
         "Hay tra loi cung phong cach va quy tac nhu web chat StockTraders AI. "
         "Day la request co kem du lieu portfolio, phai tra loi truc tiep, khong hoi lai va khong goi y danh sach cau hoi. "
         f"{date_rule}"
+        "Neu user chi hoi ma thuoc nhom 4 key nao va khong hoi vi sao/ly do/chi tiet/phan tich/score, chi tra loi dung mot dong: Nhom 4 Key: \"<ten nhom>\". "
+        "Chi giai thich them khi user hoi vi sao, ly do, chi tiet, phan tich, score hoac composite. "
         "Portfolio la ngu canh uu tien khi cau hoi noi ve phan tich 4 key/composite/score cua cac ma trong danh muc. "
         "Cac case du lieu thong thuong nhu dat chuan ma manh, smdt, gia, tin hieu, mua ban khong phu thuoc portfolio. "
         "Khong bia them gia, SMDT, ty trong, hay ma ngoai du lieu neu ca portfolio va tool/API deu khong co. "
@@ -182,6 +294,15 @@ async def portfolio_chat(
     conversation_id = normalize_conversation_id(payload.conversation_id)
     user_id = normalize_user_id(payload.user_id)
     chat_user_id = f"portfolio:{user_id}:{conversation_id}"
+    simple_answer = build_simple_four_key_answer(question, payload.portfolio)
+    if simple_answer:
+        return {
+            "answer": simple_answer,
+            "sources": [],
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+            "conversation_id": conversation_id,
+        }
+
     user_text, uses_portfolio_context = build_chat_input(question, payload.portfolio)
 
     answer, done_data = await collect_standard_chat(

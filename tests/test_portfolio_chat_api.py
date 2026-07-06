@@ -40,7 +40,9 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
                     "ticker": "BVS",
                     "industry": "Chung khoan",
                     "smdt": 128.3,
+                    "smdtPrev": 68.4,
                     "branchSmdt": 96.2,
+                    "branchSmdtPrev": 40.1,
                     "cat": "dd",
                     "tickerSig": "si",
                     "branchSig": "sn",
@@ -76,9 +78,33 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Portfolio JSON", user_text)
         self.assertIn('"ticker":"BVS"', user_text)
 
-    async def test_portfolio_chat_route_uses_shared_chat_runtime_for_4key_context(self):
+    def test_simple_4key_answer_can_be_derived_from_smdt_deltas(self):
+        portfolio = self.sample_portfolio()
+        portfolio["positions"][0].pop("cat")
+
+        answer = route.build_simple_four_key_answer("BVS thuoc nhom 4 key nao?", portfolio)
+
+        self.assertEqual(answer, "Nh\u00f3m 4 Key: \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\"")
+
+    async def test_portfolio_chat_route_returns_only_group_for_simple_4key_question(self):
         payload = route.PortfolioChatIn(
-            question="BVS thuộc nhóm 4 key nào?",
+            question="BVS thuoc nhom 4 key nao?",
+            portfolio=self.sample_portfolio(),
+            user_id="u1",
+            conversation_id="p1",
+            model="gpt-4o",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        self.assertEqual(result["answer"], "Nh\u00f3m 4 Key: \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\"")
+        self.assertEqual(result["usage"]["total_tokens"], 0)
+        self.assertEqual(result["conversation_id"], "p1")
+        self.assertEqual(self.orchestrator.calls, [])
+
+    async def test_portfolio_chat_route_uses_shared_chat_runtime_when_asking_why(self):
+        payload = route.PortfolioChatIn(
+            question="Vi sao BVS thuoc nhom 4 key nay?",
             portfolio=self.sample_portfolio(),
             user_id="u1",
             conversation_id="p1",
@@ -89,7 +115,6 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["answer"], "BVS dang dung song dung nganh.")
         self.assertEqual(result["usage"]["total_tokens"], 120)
-        self.assertEqual(result["conversation_id"], "p1")
         call = self.orchestrator.calls[0]
         self.assertEqual(call["user_id"], "portfolio:u1:p1")
         self.assertEqual(call["selected_model"], "gpt-4o")
