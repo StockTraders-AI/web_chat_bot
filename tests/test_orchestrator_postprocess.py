@@ -67,10 +67,10 @@ class OrchestratorPostprocessTests(unittest.TestCase):
         }
 
     def test_key_nao_question_is_stock_related_and_forces_rules(self):
-        question = "GEX dang thuoc key nao?"
-
-        self.assertTrue(is_stock_related(question))
-        self.assertTrue(should_force_rules(question))
+        for question in ("GEX dang thuoc key nao?", "danh gia GEX", "trang thai GEX", "phan tich co phieu GEX"):
+            with self.subTest(question=question):
+                self.assertTrue(is_stock_related(question))
+                self.assertTrue(should_force_rules(question))
 
     def test_formats_stock_4key_only_question_as_short_answer(self):
         answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="GEX dang thuoc key nao?")
@@ -86,8 +86,29 @@ class OrchestratorPostprocessTests(unittest.TestCase):
         self.assertNotIn("Composite", answer)
         self.assertNotIn("SMDT", answer)
 
-    def test_formats_stock_4key_analysis_question_as_full_answer(self):
+    def test_formats_stock_4key_danh_gia_question_as_short_answer(self):
+        answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="danh gia GEX")
+
+        self.assertEqual(answer, "GEX \u0111ang thu\u1ed9c Nh\u00f3m 4 Key: \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\".")
+        self.assertNotIn("Composite", answer)
+        self.assertNotIn("SMDT", answer)
+
+    def test_formats_stock_4key_trang_thai_question_as_short_answer(self):
+        answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="trang thai GEX")
+
+        self.assertEqual(answer, "GEX \u0111ang thu\u1ed9c Nh\u00f3m 4 Key: \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\".")
+        self.assertNotIn("Composite", answer)
+        self.assertNotIn("SMDT", answer)
+
+    def test_formats_stock_4key_analysis_question_as_short_answer(self):
         answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="phan tich co phieu GEX")
+
+        self.assertEqual(answer, "GEX \u0111ang thu\u1ed9c Nh\u00f3m 4 Key: \"\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh\".")
+        self.assertNotIn("Composite", answer)
+        self.assertNotIn("SMDT", answer)
+
+    def test_formats_stock_4key_reason_question_as_full_answer(self):
+        answer = format_stock_4key_answer(self.sample_4key_payload(), user_text="tai sao GEX thuoc nhom nay")
 
         self.assertIn("Composite", answer)
         self.assertIn("SMDT", answer)

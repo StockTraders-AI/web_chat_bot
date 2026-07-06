@@ -1,5 +1,5 @@
 Guide "Phan tich co phieu [ticker]"
-Intent: phan tich/danh gia/score/diem tong/rating/composite/co nen mua cua 1 ma co phieu.
+Intent: tai sao/vi sao/ly do/giai thich/chi tiet ve 4-key/composite cua 1 ma co phieu.
 Call: getStock4KeyEvaluation.
 Args: mode=single, ticker, date=YYYY-MM-DD, include_composite=true. Neu user hoi hom nay/hien nay/khong noi ngay thi dung ngay hien tai trong system prompt; khong de trong date.
 Answer: tieng Viet ngan gon, chi dung so lieu tool. Neu ok=false, noi ly do.
@@ -12,10 +12,10 @@ Format bat buoc neu ok=true:
 Khong bia so lieu ngoai ket qua tool.
 
 Guide "4 key don thuan [ticker]"
-Intent: user hoi ro key nao/thuoc key nao/nhom nao/4 key/bon key/dung song dung nganh/sai song sai nganh/nhom 4-key.
+Intent: user hoi ro phan tich/danh gia/trang thai/key nao/thuoc key nao/nhom nao/4 key/bon key/dung song dung nganh/sai song sai nganh/nhom 4-key.
 Call: getStock4KeyEvaluation.
 Args: mode=single, ticker, date=YYYY-MM-DD, include_composite=false.
-Answer: chi tra loi ngan gon nhom 4-key. Neu user hoi "co dung song dung nganh khong" thi tra loi Co/Khong + nhom hien tai. Khong tra loi composite/SMDT/phan ky tru khi user hoi phan tich/danh gia/score/vi sao.
+Answer: chi tra loi ngan gon nhom 4-key. Neu user hoi "co dung song dung nganh khong" thi tra loi Co/Khong + nhom hien tai. Khong tra loi composite/SMDT/phan ky tru khi user hoi tai sao/vi sao/ly do/giai thich/chi tiet.
 
 Guide "Lich su 4 key [ticker] tu [date]"
 Intent: user hoi lich su 4-key cua 1 ma tu ngay nao do.

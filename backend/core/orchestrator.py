@@ -68,13 +68,13 @@ NON_TICKER_SYMBOLS = frozenset({"RSI", "NAV", "SMDT", "GPT", "AI", "API", "MACD"
 NORMALIZED_STOCK_KEYWORDS = (
     "gia", "co phieu", "smdt", "nganh", "ma", "tin hieu", "suy yeu",
     "lo trinh", "thong ke", "chung khoan", "dong tien", "sentiment",
-    "chan song", "song", "cho mua", "cho ban", "mua", "ban", "do tin cay", "key nao", "thuoc key", "nhom nao", "4 key", "four key", "dung song", "dung nganh", "composite score",
+    "chan song", "song", "cho mua", "cho ban", "mua", "ban", "do tin cay", "key nao", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 FORCE_RULES_PHRASES = (
     "phan tich nganh", "phan tich co phieu", "phan tich ma", "smdt co phieu",
     "smdt nganh", "dong tien", "cho mua", "cho ban", "tin hieu",
     "nganh nao", "ma nao", "gia co phieu", "gia hom nay", "vuot", "cross",
-    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "key nao", "thuoc key", "nhom nao", "4 key", "four key", "dung song", "dung nganh", "composite score",
+    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "key nao", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 SMDT_DATA_INTENT_WORDS = (
     "hom nay", "ngay", "co phieu", "ma", "nganh", "bao nhieu", "tang",
@@ -307,11 +307,12 @@ FOUR_KEY_ONLY_PHRASES = (
     "co dung song sai nganh",
     "co sai song dung nganh",
     "co sai song sai nganh",
+    "danh gia",
+    "trang thai",
+    "phan tich",
 )
 
 FOUR_KEY_DETAIL_PHRASES = (
-    "phan tich",
-    "danh gia",
     "score",
     "composite",
     "diem",
@@ -458,13 +459,11 @@ def should_force_rules(user_text: str) -> bool:
         return False
     if any(phrase in normalized for phrase in FORCE_RULES_PHRASES):
         return True
-    if "phan tich" in normalized and any(k in normalized for k in ("nganh", "co phieu", "ma", "dong", "thi truong")):
-        return True
     if "smdt" in normalized and any(k in normalized for k in SMDT_DATA_INTENT_WORDS):
         return True
     if has_real_ticker(user_text) and any(k in normalized for k in (
         "phan tich", "smdt", "gia", "tin hieu", "dong tien", "mua", "ban",
-        "dat chuan", "ma manh", "bat dau manh", "hieu suat", "key nao", "thuoc key", "nhom nao", "4 key", "four key", "dung song", "dung nganh", "composite",
+        "dat chuan", "ma manh", "bat dau manh", "hieu suat", "key nao", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite",
     )):
         return True
     return False

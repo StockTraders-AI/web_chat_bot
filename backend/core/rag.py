@@ -143,8 +143,6 @@ class RAGStore:
         composite_or_analysis_intent = has_ticker and any(
             phrase in normalized
             for phrase in (
-                "phan tich",
-                "danh gia",
                 "tong hop",
                 "score",
                 "diem tong",
@@ -161,6 +159,9 @@ class RAGStore:
                 "thuoc key",
                 "thuoc nhom",
                 "nhom nao",
+                "danh gia",
+                "trang thai",
+                "phan tich",
                 "4 key",
                 "four key",
                 "dung song",
