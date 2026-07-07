@@ -19,7 +19,7 @@ class TickerPolicySanitizeTests(unittest.TestCase):
         cleaned = sanitize_response_text(text)
 
         self.assertIn('2. Nhom 4 Key', cleaned)
-        self.assertIn('MUA - tin hieu', cleaned)
+        self.assertIn('MUA - t\u00edn hi\u1ec7u', cleaned)
         self.assertIn('3. SMDT va Dong luc', cleaned)
 
     def test_keeps_4key_recommendation_line_with_other_recommendation_keywords(self):
@@ -27,6 +27,23 @@ class TickerPolicySanitizeTests(unittest.TestCase):
             with self.subTest(keyword=keyword):
                 text = f'1. Nhom 4 Key: "X", khuyen nghi "{keyword} - noi dung".'
                 self.assertIn(keyword, sanitize_response_text(text))
+
+    def test_normalizes_four_key_labels_to_vietnamese_accents(self):
+        text = 'BVS thu\u1ed9c nh\u00f3m 4-key "D\u00f9ng s\u00f3ng-D\u00f9ng ng\u00e0nh" (dd).'
+
+        cleaned = sanitize_response_text(text)
+
+        self.assertEqual(cleaned, 'BVS thu\u1ed9c nh\u00f3m 4 Key "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh" (dd).')
+        self.assertNotIn('D\u00f9ng s\u00f3ng', cleaned)
+        self.assertNotIn('4-key', cleaned)
+
+    def test_normalizes_4key_notes_to_vietnamese_accents(self):
+        text = '- Thieu du lieu dong tien, tinh trung lap 50 diem.'
+
+        cleaned = sanitize_response_text(text)
+
+        self.assertEqual(cleaned, 'Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m).')
+        self.assertNotIn('Thieu du lieu', cleaned)
 
 
 if __name__ == "__main__":

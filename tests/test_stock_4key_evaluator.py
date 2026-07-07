@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from services.stock_4key_evaluator import (
+    Stock4KeyError,
     CashFlowPoint,
     PricePoint,
     SmdtPoint,
@@ -46,13 +47,14 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
             cashflow_points=[CashFlowPoint("2026-07-01", 1)],
         )
 
-        self.assertEqual(result["group_4key"], "Dung song - Dung nganh")
-        self.assertIn("2. Nhom 4 Key", result["answer_contract"]["must_include"])
-        self.assertEqual(result["answer_contract"]["nhom_4_key_source"]["group"], result["group_4key"])
+        self.assertEqual(result["group_4key"], "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh")
+        self.assertEqual(result["recommendation"], "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u")
+        self.assertNotIn("answer_contract", result)
         self.assertEqual(result["ticker_momentum"], 20)
         self.assertEqual(result["branch_momentum"], 7)
         self.assertIn("composite", result)
         self.assertTrue(result["composite"]["co_phan_ky"])
+        self.assertIn("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay", result["composite"]["notes"])
 
     def test_api_adapter_single(self):
         seen = []
@@ -96,7 +98,6 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         price_calls = [(operation, args) for operation, args in seen if operation == "getTotalTrade"]
         self.assertEqual(price_calls, [("getTotalTrade", {"ticker": "SSI", "lastDates": 45})])
 
-
     def test_today_adapter_uses_realtime_price_and_cashflow_content(self):
         target = date.today()
         dates = [(target - timedelta(days=offset)).isoformat() for offset in (4, 3, 2, 0)]
@@ -127,7 +128,7 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
             if operation == "getTotalTradeReal":
                 return [{"date": dates[3], "close": 102, "ticker": "SSI"}]
             if operation == "getCashFlowTicker":
-                return {"cashFlowTickers": [{"cashFlows": [{"date": dates[3], "content": "Tiếp tục thoát ra"}]}]}
+                return {"cashFlowTickers": [{"cashFlows": [{"date": dates[3], "content": "Ti\u1ebfp t\u1ee5c tho\u00e1t ra"}]}]}
             return {}
 
         result = evaluate_stock_4key(api_call, {"ticker": "SSI", "date": dates[3]})
@@ -136,7 +137,7 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         self.assertIn("gia_dong_luong", result["composite"]["breakdown"])
         self.assertEqual(result["composite"]["breakdown"]["dong_tien"], 0.0)
 
-    def test_four_key_uses_latest_common_smdt_date_before_requested_date(self):
+    def test_four_key_requires_exact_requested_smdt_date_like_source_module(self):
         ticker_points = [
             SmdtPoint("2026-07-01", 50),
             SmdtPoint("2026-07-02", 55),
@@ -150,17 +151,16 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
             SmdtPoint("2026-07-06", 52),
         ]
 
-        result = evaluate_four_key_from_records(
-            ticker="SSI",
-            branch_name="Moi gioi chung khoan",
-            ticker_smdt=ticker_points,
-            branch_smdt=branch_points,
-            requested_date="2026-07-07",
-            include_composite=False,
-        )
+        with self.assertRaises(Stock4KeyError):
+            evaluate_four_key_from_records(
+                ticker="SSI",
+                branch_name="Moi gioi chung khoan",
+                ticker_smdt=ticker_points,
+                branch_smdt=branch_points,
+                requested_date="2026-07-07",
+                include_composite=False,
+            )
 
-        self.assertEqual(result["requested_date"], "2026-07-07")
-        self.assertEqual(result["date"], "2026-07-06")
-        self.assertEqual(result["group_4key"], "Dung song - Dung nganh")
+
 if __name__ == "__main__":
     unittest.main()

@@ -251,12 +251,12 @@ def _derive_4key_group(payload: Dict[str, Any]) -> tuple[str, str]:
         return "Chưa xác định", recommendation or "Chưa đủ dữ liệu xác định nhóm 4 Key"
 
     if right_wave and right_branch:
-        return "Dung song - Dung nganh", "MUA - tin hieu thuan ca ma va nganh"
+        return "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh", "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u"
     if right_wave and not right_branch:
-        return "Dung song - Sai nganh", "CAN NHAC - ma manh rieng, nguoc dong nganh"
+        return "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh", "C\u00c2N NH\u1eaeC - m\u00e3 m\u1ea1nh ri\u00eang l\u1ebb, ng\u01b0\u1ee3c d\u00f2ng ng\u00e0nh"
     if not right_wave and right_branch:
-        return "Dung nganh - Sai song", "THEO DOI - nganh thuan nhung ma chua xac nhan"
-    return "Sai song - Sai nganh", "TRANH - ca ma va nganh deu bat loi"
+        return "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng", "THEO D\u00d5I - ng\u00e0nh thu\u1eadn nh\u01b0ng m\u00e3 ch\u01b0a x\u00e1c nh\u1eadn"
+    return "Sai s\u00f3ng - Sai ng\u00e0nh", "TR\u00c1NH - c\u1ea3 2 chi\u1ec1u b\u1ea5t l\u1ee3i"
 
 def _display_lookup_key(value: Any) -> str:
     normalized = normalize_search_text(str(value or "").strip())
@@ -271,17 +271,20 @@ def _display_4key_label(value: Any) -> str:
         "dung song dung nganh": "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh",
         "dung song sai nganh": "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh",
         "dung nganh sai song": "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng",
-        "sai song dung nganh": "Sai s\u00f3ng - \u0110\u00fang ng\u00e0nh",
+        "sai song dung nganh": "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng",
         "sai song sai nganh": "Sai s\u00f3ng - Sai ng\u00e0nh",
-        "mua manh": "Mua m\u1ea1nh",
-        "mua": "Mua",
-        "trung lap": "Trung l\u1eadp",
-        "ban": "B\u00e1n",
-        "ban manh": "B\u00e1n m\u1ea1nh",
-        "mua tin hieu thuan ca ma va nganh": "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 m\u00e3 v\u00e0 ng\u00e0nh",
-        "can nhac ma manh rieng nguoc dong nganh": "C\u00c2N NH\u1eaeC - m\u00e3 m\u1ea1nh ri\u00eang, ng\u01b0\u1ee3c d\u00f2ng ng\u00e0nh",
+        "mua manh": "MUA M\u1ea0NH",
+        "mua": "MUA",
+        "trung lap": "TRUNG L\u1eacP",
+        "ban": "B\u00c1N",
+        "ban manh": "B\u00c1N M\u1ea0NH",
+        "mua tin hieu thuan ca ma va nganh": "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u",
+        "mua tin hieu thuan ca 2 chieu": "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u",
+        "can nhac ma manh rieng nguoc dong nganh": "C\u00c2N NH\u1eaeC - m\u00e3 m\u1ea1nh ri\u00eang l\u1ebb, ng\u01b0\u1ee3c d\u00f2ng ng\u00e0nh",
+        "can nhac ma manh rieng le nguoc dong nganh": "C\u00c2N NH\u1eaeC - m\u00e3 m\u1ea1nh ri\u00eang l\u1ebb, ng\u01b0\u1ee3c d\u00f2ng ng\u00e0nh",
         "theo doi nganh thuan nhung ma chua xac nhan": "THEO D\u00d5I - ng\u00e0nh thu\u1eadn nh\u01b0ng m\u00e3 ch\u01b0a x\u00e1c nh\u1eadn",
-        "tranh ca ma va nganh deu bat loi": "TR\u00c1NH - c\u1ea3 m\u00e3 v\u00e0 ng\u00e0nh \u0111\u1ec1u b\u1ea5t l\u1ee3i",
+        "tranh ca ma va nganh deu bat loi": "TR\u00c1NH - c\u1ea3 2 chi\u1ec1u b\u1ea5t l\u1ee3i",
+        "tranh ca 2 chieu bat loi": "TR\u00c1NH - c\u1ea3 2 chi\u1ec1u b\u1ea5t l\u1ee3i",
         "chua du du lieu xac dinh nhom 4 key": "Ch\u01b0a \u0111\u1ee7 d\u1eef li\u1ec7u x\u00e1c \u0111\u1ecbnh nh\u00f3m 4 Key",
     }
     return mapping.get(_display_lookup_key(text), text)
@@ -351,8 +354,8 @@ FOUR_KEY_DETAIL_PHRASES = (
 REQUESTED_4KEY_GROUPS = (
     ("dung song dung nganh", ("\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh",)),
     ("dung song sai nganh", ("\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh",)),
-    ("sai song dung nganh", ("Sai s\u00f3ng - \u0110\u00fang ng\u00e0nh", "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng")),
-    ("dung nganh sai song", ("Sai s\u00f3ng - \u0110\u00fang ng\u00e0nh", "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng")),
+    ("sai song dung nganh", ("\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng",)),
+    ("dung nganh sai song", ("\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng",)),
     ("sai song sai nganh", ("Sai s\u00f3ng - Sai ng\u00e0nh",)),
 )
 

@@ -45,12 +45,12 @@ PRICE_FLAT_THRESHOLD = 0.005
 FOUR_KEY_HISTORY_BUFFER_DAYS = 30
 COMPOSITE_HISTORY_BUFFER_DAYS = 45
 CASHFLOW_SCORE_MAP = {
-    "Tiếp tục đổ vào": 1.0,
-    "Đang đổ vào": 1.0,
-    "Nhen nhóm đổ vào": 0.5,
-    "Tiếp tục thoát ra": -1.0,
-    "Đang thoát ra": -1.0,
-    "Bắt đầu thoát ra": -0.5,
+    "Ti\u1ebfp t\u1ee5c \u0111\u1ed5 v\u00e0o": 1.0,
+    "\u0110ang \u0111\u1ed5 v\u00e0o": 1.0,
+    "Nhen nh\u00f3m \u0111\u1ed5 v\u00e0o": 0.5,
+    "Ti\u1ebfp t\u1ee5c tho\u00e1t ra": -1.0,
+    "\u0110ang tho\u00e1t ra": -1.0,
+    "B\u1eaft \u0111\u1ea7u tho\u00e1t ra": -0.5,
 }
 
 
@@ -176,20 +176,15 @@ def _pick_target_date(
     branch_points: list[SmdtPoint],
     requested_date: Optional[str],
 ) -> str:
-    ticker_dates = {point.date for point in ticker_points}
-    branch_dates = {point.date for point in branch_points}
-    common = sorted(ticker_dates & branch_dates)
-    if not common:
-        raise Stock4KeyError("Khong co ngay SMDT chung giua ma va nganh")
-
     if not requested_date:
         raise Stock4KeyError("Thieu ngay danh gia")
     target = requested_date[:10]
-    if target not in common:
-        earlier_dates = [value for value in common if value <= target]
-        if earlier_dates:
-            return earlier_dates[-1]
-        raise Stock4KeyError(f"Khong co du lieu SMDT chung cua ma va nganh ngay {target}")
+    ticker_dates = {point.date for point in ticker_points}
+    branch_dates = {point.date for point in branch_points}
+    if target not in ticker_dates:
+        raise Stock4KeyError(f"Khong co du lieu SMDT cua ma ngay {target}")
+    if target not in branch_dates:
+        raise Stock4KeyError(f"Khong co du lieu SMDT nganh ngay {target}")
     return target
 
 
@@ -208,20 +203,22 @@ def _price_index(points: list[PricePoint], target: str) -> Optional[int]:
 
 
 def _cashflow_for_date(points: list[CashFlowPoint], target: str) -> Optional[CashFlowPoint]:
-    eligible = [point for point in points if point.date <= target]
-    return eligible[-1] if eligible else None
+    for point in points:
+        if point.date == target:
+            return point
+    return None
 
 
 def _group(delta_ticker: float, delta_branch: float) -> tuple[str, str]:
     right_wave = delta_ticker > 0
     right_branch = delta_branch > 0
     if right_wave and right_branch:
-        return "Dung song - Dung nganh", "MUA - tin hieu thuan ca ma va nganh"
+        return "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh", "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u"
     if right_wave and not right_branch:
-        return "Dung song - Sai nganh", "CAN NHAC - ma manh rieng, nguoc dong nganh"
+        return "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh", "C\u00c2N NH\u1eaeC - m\u00e3 m\u1ea1nh ri\u00eang l\u1ebb, ng\u01b0\u1ee3c d\u00f2ng ng\u00e0nh"
     if not right_wave and right_branch:
-        return "Dung nganh - Sai song", "THEO DOI - nganh thuan nhung ma chua xac nhan"
-    return "Sai song - Sai nganh", "TRANH - ca ma va nganh deu bat loi"
+        return "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng", "THEO D\u00d5I - ng\u00e0nh thu\u1eadn nh\u01b0ng m\u00e3 ch\u01b0a x\u00e1c nh\u1eadn"
+    return "Sai s\u00f3ng - Sai ng\u00e0nh", "TR\u00c1NH - c\u1ea3 2 chi\u1ec1u b\u1ea5t l\u1ee3i"
 
 
 def _normalize_series(values: list[float]) -> list[float]:
@@ -236,17 +233,17 @@ def _normalize_series(values: list[float]) -> list[float]:
 
 def _cashflow_score(point: Optional[CashFlowPoint], notes: list[str]) -> float:
     if point is None:
-        notes.append("Thieu du lieu dong tien, tinh trung lap 50 diem")
+        notes.append("Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m)")
         return 50.0
     if point.content:
         mapped = CASHFLOW_SCORE_MAP.get(point.content)
         if mapped is not None:
             return (mapped + 1.0) / 2.0 * 100.0
-        notes.append(f"Tin hieu dong tien '{point.content}' chua co trong bang diem, tinh trung lap 50 diem")
+        notes.append(f"T\u00edn hi\u1ec7u d\u00f2ng ti\u1ec1n '{point.content}' ch\u01b0a c\u00f3 trong b\u1ea3ng \u0111i\u1ec3m -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m)")
         return 50.0
     value = point.value
     if value is None:
-        notes.append("Thieu du lieu dong tien, tinh trung lap 50 diem")
+        notes.append("Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m)")
         return 50.0
     if -1.0 <= value <= 1.0:
         return (value + 1.0) / 2.0 * 100.0
@@ -342,14 +339,12 @@ def _composite_score(
 
     vs_scores = _normalize_series([float(row["smdt_vs_nganh"]) for row in rows])
     delta_scores = _normalize_series([float(row["smdt_delta"]) for row in rows])
-    for idx, row in enumerate(rows):
-        row["score_smdt_vs_nganh"] = vs_scores[idx]
-        row["score_smdt_delta"] = delta_scores[idx]
+    for idx, row_item in enumerate(rows):
+        row_item["score_smdt_vs_nganh"] = vs_scores[idx]
+        row_item["score_smdt_delta"] = delta_scores[idx]
     row = next(item for item in rows if item["date"] == target)
 
     active_weights = dict(WEIGHTS_V2)
-    active_weights.pop("smdt_rank", None)
-
     breakdown = {
         "smdt_vs_nganh": round(float(row["score_smdt_vs_nganh"]), 1),
         "smdt_delta": round(float(row["score_smdt_delta"]), 1),
@@ -362,17 +357,24 @@ def _composite_score(
     price_idx = _price_index(price_points, target)
     bonus = 0.0
     has_divergence = False
-    if price_idx is None or price_idx == 0:
+    if not price_points:
         active_weights.pop("gia_dong_luong", None)
-        notes.append("Thieu du lieu gia dung ngay muc tieu, bo factor gia va bonus phan ky")
+        notes.append("Khong co PriceDataSource -> bo factor gia, don trong so sang cac factor con lai")
+    elif price_idx is None:
+        active_weights.pop("gia_dong_luong", None)
+        notes.append("Co PriceDataSource nhung thieu du lieu gia (Thieu gia dung ngay muc tieu) -> bo factor gia")
     else:
-        one_day_return = (price_points[price_idx].close / price_points[price_idx - 1].close) - 1.0
         returns = []
         for idx in range(1, len(price_points)):
             prev = price_points[idx - 1].close
             returns.append((price_points[idx].close / prev) - 1.0 if prev else 0.0)
         price_scores = _normalize_series(returns)
-        price_score = price_scores[max(0, price_idx - 1)] if price_scores else 50.0
+        if price_idx == 0 or not price_scores:
+            one_day_return = 0.0
+            price_score = 50.0
+        else:
+            one_day_return = (price_points[price_idx].close / price_points[price_idx - 1].close) - 1.0
+            price_score = price_scores[max(0, price_idx - 1)]
         weighted_sum += active_weights["gia_dong_luong"] * price_score
         breakdown["gia_dong_luong"] = round(price_score, 1)
 
@@ -385,7 +387,8 @@ def _composite_score(
                 max_delta = max([abs(float(item["smdt_delta"])) for item in rows] or [1.0]) or 1.0
                 bonus = round(min(smdt_delta / max_delta, 1.0) * MAX_DIVERGENCE_BONUS, 1)
                 notes.append(
-                    f"Phat hien phan ky: SMDT tang {smdt_delta:.2f} nhung gia {lookback_sessions} phien la {price_lookback_return * 100:.2f}%"
+                    f"PHAT HIEN PHAN KY: SMDT +{smdt_delta:.1f} nhung gia {price_lookback_return * 100:+.1f}% "
+                    f"trong {lookback_sessions} phien qua -> cong bonus +{bonus} diem"
                 )
         breakdown["gia_return_1d_pct"] = round(one_day_return * 100.0, 2)
 
@@ -393,6 +396,10 @@ def _composite_score(
     cash_score = _cashflow_score(cashflow, notes)
     weighted_sum += active_weights["dong_tien"] * cash_score
     breakdown["dong_tien"] = round(cash_score, 1)
+
+    if "smdt_rank" in active_weights:
+        notes.append("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay")
+        active_weights.pop("smdt_rank", None)
 
     total_weight = sum(active_weights.values())
     score = max(0.0, min(100.0, weighted_sum / total_weight + bonus)) if total_weight else 0.0
@@ -405,36 +412,18 @@ def _composite_score(
         "notes": notes,
     }
 
-
 def _rating(score: float) -> str:
     if score >= 70:
-        return "Mua manh"
+        return "MUA M\u1ea0NH"
     if score >= 55:
-        return "Mua"
+        return "MUA"
     if score >= 45:
-        return "Trung lap"
+        return "TRUNG L\u1eacP"
     if score >= 30:
-        return "Ban"
-    return "Ban manh"
+        return "B\u00c1N"
+    return "B\u00c1N M\u1ea0NH"
 
 def _attach_answer_contract(result: dict[str, Any]) -> dict[str, Any]:
-    if not result.get("ok"):
-        return result
-
-    result["answer_contract"] = {
-        "must_include": [
-            "1. Diem Composite",
-            "2. Nhom 4 Key",
-            "3. SMDT va Dong luc",
-            "4. Phan ky",
-            "5. Bonus/Ghi chu",
-        ],
-        "nhom_4_key_source": {
-            "group": result.get("group_4key"),
-            "recommendation": result.get("recommendation"),
-        },
-        "rule": "Khong duoc bo qua muc Nhom 4 Key khi tra loi phan tich co phieu.",
-    }
     return result
 
 def _merge_records(first: list[Any], second: list[Any]) -> list[Any]:

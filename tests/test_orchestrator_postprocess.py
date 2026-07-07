@@ -34,7 +34,7 @@ class OrchestratorPostprocessTests(unittest.TestCase):
         self.assertIn('\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh', fixed)
         self.assertIn('3. SMDT va Dong luc:', fixed)
         self.assertIn('4. Phan ky:', fixed)
-        self.assertIn('MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 m\u00e3 v\u00e0 ng\u00e0nh', fixed)
+        self.assertIn('MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u', fixed)
         self.assertNotIn('tin hieu thuan ca ma va nganh', fixed)
 
     def test_keeps_existing_4key_section(self):
@@ -122,7 +122,7 @@ class OrchestratorPostprocessTests(unittest.TestCase):
         self.assertIn("Composite", answer)
         self.assertIn("SMDT", answer)
         self.assertIn("Bonus", answer)
-        self.assertIn("MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 m\u00e3 v\u00e0 ng\u00e0nh", answer)
+        self.assertIn("MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u", answer)
         self.assertNotIn("tin hieu thuan ca ma va nganh", answer)
 
     def test_formats_stock_4key_answer_with_required_group_section(self):
@@ -195,8 +195,8 @@ class OrchestratorPostprocessTests(unittest.TestCase):
 
         self.assertIn('2. Nh', answer)
         self.assertIn('4 Key', answer)
-        self.assertIn('Đúng sóng - Đúng ngành', answer)
-        self.assertIn('MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 m\u00e3 v\u00e0 ng\u00e0nh', answer)
+        self.assertIn('\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh', answer)
+        self.assertIn('MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u', answer)
         self.assertNotIn('tin hieu thuan ca ma va nganh', answer)
 
 if __name__ == "__main__":

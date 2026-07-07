@@ -146,6 +146,44 @@ def sanitize_api_result(operation_id: str, data: Any) -> Any:
     return sanitized
 
 
+
+FOUR_KEY_TEXT_REPLACEMENTS = (
+    (re.compile("\\bD[u\\u00f9\\u00fa]ng\\s+s[o\\u00f3]ng\\s*-\\s*D[u\\u00f9\\u00fa]ng\\s+ng[a\\u00e0\\u00e1]nh\\b", re.IGNORECASE), "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh"),
+    (re.compile("\\bDung\\s+song\\s*-\\s*Dung\\s+nganh\\b", re.IGNORECASE), "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh"),
+    (re.compile("\\bD[u\\u00f9\\u00fa]ng\\s+s[o\\u00f3]ng\\s*-\\s*Sai\\s+ng[a\\u00e0\\u00e1]nh\\b", re.IGNORECASE), "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh"),
+    (re.compile("\\bDung\\s+song\\s*-\\s*Sai\\s+nganh\\b", re.IGNORECASE), "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh"),
+    (re.compile("\\bSai\\s+s[o\\u00f3]ng\\s*-\\s*D[u\\u00f9\\u00fa]ng\\s+ng[a\\u00e0\\u00e1]nh\\b", re.IGNORECASE), "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng"),
+    (re.compile("\\bSai\\s+song\\s*-\\s*Dung\\s+nganh\\b", re.IGNORECASE), "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng"),
+    (re.compile("\\bD[u\\u00f9\\u00fa]ng\\s+ng[a\\u00e0\\u00e1]nh\\s*-\\s*Sai\\s+s[o\\u00f3]ng\\b", re.IGNORECASE), "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng"),
+    (re.compile("\\bDung\\s+nganh\\s*-\\s*Sai\\s+song\\b", re.IGNORECASE), "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng"),
+    (re.compile("\\bSai\\s+s[o\\u00f3]ng\\s*-\\s*Sai\\s+ng[a\\u00e0\\u00e1]nh\\b", re.IGNORECASE), "Sai s\u00f3ng - Sai ng\u00e0nh"),
+    (re.compile("\\bSai\\s+song\\s*-\\s*Sai\\s+nganh\\b", re.IGNORECASE), "Sai s\u00f3ng - Sai ng\u00e0nh"),
+    (re.compile("\\bMUA\\s*-\\s*tin\\s+hieu\\s+thuan\\s+ca\\s+ma\\s+va\\s+nganh\\b", re.IGNORECASE), "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u"),
+    (re.compile("\\bMUA\\s*-\\s*tin\\s+hieu\\s+thuan\\s+ca\\s+2\\s+chieu\\b", re.IGNORECASE), "MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u"),
+    (re.compile("\\bCAN\\s+NHAC\\s*-\\s*ma\\s+manh\\s+rieng(?:\\s+le)?,?\\s+nguoc\\s+dong\\s+nganh\\b", re.IGNORECASE), "C\u00c2N NH\u1eaeC - m\u00e3 m\u1ea1nh ri\u00eang l\u1ebb, ng\u01b0\u1ee3c d\u00f2ng ng\u00e0nh"),
+    (re.compile("\\bTHEO\\s+DOI\\s*-\\s*nganh\\s+thuan\\s+nhung\\s+ma\\s+chua\\s+xac\\s+nhan\\b", re.IGNORECASE), "THEO D\u00d5I - ng\u00e0nh thu\u1eadn nh\u01b0ng m\u00e3 ch\u01b0a x\u00e1c nh\u1eadn"),
+    (re.compile("\\bTRANH\\s*-\\s*ca\\s+ma\\s+va\\s+nganh\\s+deu\\s+bat\\s+loi\\b", re.IGNORECASE), "TR\u00c1NH - c\u1ea3 2 chi\u1ec1u b\u1ea5t l\u1ee3i"),
+    (re.compile("\\bTRANH\\s*-\\s*ca\\s+2\\s+chieu\\s+bat\\s+loi\\b", re.IGNORECASE), "TR\u00c1NH - c\u1ea3 2 chi\u1ec1u b\u1ea5t l\u1ee3i"),
+)
+
+NOTE_TEXT_REPLACEMENTS = (
+    (re.compile("Thieu du lieu dong tien(?: cho ngay nay)?(?: ->)? tinh nhu trung lap \\(50 diem\\)", re.IGNORECASE), "Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m)"),
+    (re.compile("Thieu du lieu dong tien, tinh trung lap 50 diem", re.IGNORECASE), "Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m)"),
+    (re.compile("Khong co PriceDataSource -> bo factor gia, don trong so sang cac factor con lai", re.IGNORECASE), "Kh\u00f4ng c\u00f3 PriceDataSource -> b\u1ecf factor gi\u00e1, d\u1ed3n tr\u1ecdng s\u1ed1 sang c\u00e1c factor c\u00f2n l\u1ea1i"),
+    (re.compile("Co PriceDataSource nhung thieu du lieu gia \\(([^)]*)\\) -> bo factor gia", re.IGNORECASE), "C\u00f3 PriceDataSource nh\u01b0ng thi\u1ebfu d\u1eef li\u1ec7u gi\u00e1 (\\1) -> b\u1ecf factor gi\u00e1"),
+    (re.compile("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay", re.IGNORECASE), "Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u peer \u0111\u1ec3 t\u00ednh x\u1ebfp h\u1ea1ng ng\u00e0nh -> b\u1ecf factor n\u00e0y"),
+    (re.compile("PHAT HIEN PHAN KY: SMDT \\+([0-9.,-]+) nhung gia ([+-]?[0-9.,]+%) trong ([0-9]+) phien qua -> cong bonus \\+([0-9.,]+) diem", re.IGNORECASE), "PH\u00c1T HI\u1ec6N PH\u00c2N K\u1ef2: SMDT +\\1 nhưng gi\u00e1 \\2 trong \\3 phi\u00ean qua -> c\u1ed9ng bonus +\\4 \u0111i\u1ec3m"),
+    (re.compile("Tin hieu dong tien '([^']+)' chua co trong bang diem -> tinh nhu trung lap \\(50 diem\\)", re.IGNORECASE), "T\u00edn hi\u1ec7u d\u00f2ng ti\u1ec1n '\\1' ch\u01b0a c\u00f3 trong b\u1ea3ng \u0111i\u1ec3m -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m)"),
+    (re.compile("Tin hieu dong tien '([^']+)' chua co trong bang diem, tinh trung lap 50 diem", re.IGNORECASE), "T\u00edn hi\u1ec7u d\u00f2ng ti\u1ec1n '\\1' ch\u01b0a c\u00f3 trong b\u1ea3ng \u0111i\u1ec3m, t\u00ednh trung l\u1eadp 50 \u0111i\u1ec3m"),
+)
+def normalize_four_key_text(text: str) -> str:
+    fixed = text or ""
+    fixed = re.sub(r"\b4-key\b", "4 Key", fixed, flags=re.IGNORECASE)
+    for pattern, replacement in FOUR_KEY_TEXT_REPLACEMENTS:
+        fixed = pattern.sub(replacement, fixed)
+    for pattern, replacement in NOTE_TEXT_REPLACEMENTS:
+        fixed = pattern.sub(replacement, fixed)
+    return fixed
 def sanitize_response_text(text: str) -> str:
     """Remove unsupported ticker mentions and renumber ordered ticker lists."""
     cleaned_lines = []
@@ -177,4 +215,5 @@ def sanitize_response_text(text: str) -> str:
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
     cleaned = re.sub(r"([,;:])(?:\s*[,;:])+", r"\1", cleaned)
+    cleaned = normalize_four_key_text(cleaned)
     return cleaned.strip(" ,;:-")
