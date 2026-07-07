@@ -173,6 +173,7 @@ NOTE_TEXT_REPLACEMENTS = (
     (re.compile("Co PriceDataSource nhung thieu du lieu gia \\(([^)]*)\\) -> bo factor gia", re.IGNORECASE), "C\u00f3 PriceDataSource nh\u01b0ng thi\u1ebfu d\u1eef li\u1ec7u gi\u00e1 (\\1) -> b\u1ecf factor gi\u00e1"),
     (re.compile("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay", re.IGNORECASE), "Ch\u01b0a c\u00f3 d\u1eef li\u1ec7u peer \u0111\u1ec3 t\u00ednh x\u1ebfp h\u1ea1ng ng\u00e0nh -> b\u1ecf factor n\u00e0y"),
     (re.compile("PHAT HIEN PHAN KY: SMDT \\+([0-9.,-]+) nhung gia ([+-]?[0-9.,]+%) trong ([0-9]+) phien qua -> cong bonus \\+([0-9.,]+) diem", re.IGNORECASE), "PH\u00c1T HI\u1ec6N PH\u00c2N K\u1ef2: SMDT +\\1 nhưng gi\u00e1 \\2 trong \\3 phi\u00ean qua -> c\u1ed9ng bonus +\\4 \u0111i\u1ec3m"),
+    (re.compile("Phat hien phan ky: SMDT tang ([0-9.,]+)%? nhung gia ([0-9]+) phien la ([+-]?[0-9.,]+)%?\\.?", re.IGNORECASE), "Ph\u00e1t hi\u1ec7n ph\u00e2n k\u1ef3: SMDT t\u0103ng \\1% nh\u01b0ng gi\u00e1 \\2 phi\u00ean l\u00e0 \\3%."),
     (re.compile("Tin hieu dong tien '([^']+)' chua co trong bang diem -> tinh nhu trung lap \\(50 diem\\)", re.IGNORECASE), "T\u00edn hi\u1ec7u d\u00f2ng ti\u1ec1n '\\1' ch\u01b0a c\u00f3 trong b\u1ea3ng \u0111i\u1ec3m -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m)"),
     (re.compile("Tin hieu dong tien '([^']+)' chua co trong bang diem, tinh trung lap 50 diem", re.IGNORECASE), "T\u00edn hi\u1ec7u d\u00f2ng ti\u1ec1n '\\1' ch\u01b0a c\u00f3 trong b\u1ea3ng \u0111i\u1ec3m, t\u00ednh trung l\u1eadp 50 \u0111i\u1ec3m"),
 )

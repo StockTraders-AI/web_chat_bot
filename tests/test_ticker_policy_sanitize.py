@@ -44,6 +44,15 @@ class TickerPolicySanitizeTests(unittest.TestCase):
 
         self.assertEqual(cleaned, 'Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m).')
         self.assertNotIn('Thieu du lieu', cleaned)
+    def test_normalizes_llm_paraphrased_4key_notes_to_vietnamese_accents(self):
+        text = '- Phat hien phan ky: SMDT tang 42.1% nhung gia 3 phien la -5.2%.\n- Thieu du lieu dong tien, tinh trung lap 50 diem.'
+
+        cleaned = sanitize_response_text(text)
+
+        self.assertIn('Ph\u00e1t hi\u1ec7n ph\u00e2n k\u1ef3: SMDT t\u0103ng 42.1% nh\u01b0ng gi\u00e1 3 phi\u00ean l\u00e0 -5.2%.', cleaned)
+        self.assertIn('Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m).', cleaned)
+        self.assertNotIn('Phat hien', cleaned)
+        self.assertNotIn('Thieu du lieu', cleaned)
 
 
 if __name__ == "__main__":
