@@ -186,6 +186,9 @@ def _pick_target_date(
         raise Stock4KeyError("Thieu ngay danh gia")
     target = requested_date[:10]
     if target not in common:
+        earlier_dates = [value for value in common if value <= target]
+        if earlier_dates:
+            return earlier_dates[-1]
         raise Stock4KeyError(f"Khong co du lieu SMDT chung cua ma va nganh ngay {target}")
     return target
 

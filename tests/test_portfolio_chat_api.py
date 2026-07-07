@@ -58,6 +58,8 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("web chat StockTraders AI", text)
         self.assertIn("Ng\u00e0y \u0111\u00e1nh gi\u00e1 b\u1eaft bu\u1ed9c l\u00e0 2026-07-04", text)
         self.assertIn("kh\u00f4ng \u0111\u01b0\u1ee3c t\u1ef1 \u0111\u1ed5i sang ng\u00e0y hi\u1ec7n t\u1ea1i", text)
+        self.assertIn("Kh\u00f4ng \u0111\u01b0\u1ee3c tr\u00ecnh b\u00e0y ph\u00e9p suy lu\u1eadn fallback", text)
+        self.assertNotIn("SMDT m\u00e3 t\u0103ng l\u00e0 m\u00e3 \u0111\u00fang s\u00f3ng", text)
         self.assertEqual(find_disallowed_tickers(text), [])
 
     def test_regular_data_questions_ignore_portfolio_context(self):

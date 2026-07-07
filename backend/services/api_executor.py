@@ -1,6 +1,9 @@
 import requests
 import json
 import sys
+import re
+import unicodedata
+from datetime import date as date_cls, datetime, timedelta
 from typing import Any, Dict
 from core.tool_engine import ToolRegistry
 from services.branch_map import extract_branch_path
@@ -61,6 +64,80 @@ class APIExecutor:
 
     def __init__(self, registry: ToolRegistry):
         self.registry = registry
+
+    def _normalize_text(self, value: str | None) -> str:
+        text = unicodedata.normalize("NFD", value or "")
+        text = "".join(char for char in text if unicodedata.category(char) != "Mn")
+        text = text.replace("\u0111", "d").replace("\u0110", "D")
+        return re.sub(r"\s+", " ", text.lower()).strip()
+
+    def _has_explicit_calendar_date(self, user_text: str | None) -> bool:
+        normalized = self._normalize_text(user_text)
+        if not normalized:
+            return False
+        if re.search(r"\b20\d{2}[-/]\d{1,2}([-/]\d{1,2})?\b", normalized):
+            return True
+        if re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", normalized):
+            return True
+        if re.search(r"\bngay\s+\d{1,2}\b", normalized):
+            return True
+        return False
+
+    def _is_effectively_empty(self, value: Any) -> bool:
+        if value is None:
+            return True
+        if isinstance(value, list):
+            return len(value) == 0
+        if isinstance(value, dict):
+            if value.get("error") or value.get("unsupported_ticker"):
+                return False
+            domain_keys = (
+                "data", "items", "records", "results", "result", "smdts", "cashFlows",
+                "cashFlowTickers", "totalTradeDatas", "tradeDatas", "stockWaveDatas",
+                "ket_qua", "lich_su",
+            )
+            present = [value[key] for key in domain_keys if key in value]
+            if present:
+                return all(self._is_effectively_empty(item) for item in present)
+            if any(key in value for key in ("date", "smdt", "close", "price", "content", "ticker")):
+                return False
+            return all(self._is_effectively_empty(item) for item in value.values()) if value else True
+        return False
+
+    def _should_retry_previous_dates(self, operation_id: str, args: Dict[str, Any], data: Any, user_text: str | None) -> bool:
+        date_value = str(args.get("date") or "").strip()
+        if not re.match(r"^20\d{2}-\d{2}-\d{2}$", date_value):
+            return False
+        if not self._is_effectively_empty(data):
+            return False
+        # Only auto-roll current-day style queries. Historical exact-date questions must stay exact.
+        if date_value != date_cls.today().isoformat():
+            return False
+        if self._has_explicit_calendar_date(user_text):
+            return False
+        return True
+
+    def _execute_previous_date_fallback(self, url: str, method: str, args: Dict[str, Any], original_data: Any) -> tuple[Any, Any]:
+        original_date = str(args.get("date"))[:10]
+        try:
+            current = datetime.strptime(original_date, "%Y-%m-%d").date()
+        except ValueError:
+            return None, original_data
+
+        # Calendar-day bound prevents accidental long loops against the source API.
+        for offset in range(1, 15):
+            fallback_date = (current - timedelta(days=offset)).isoformat()
+            retry_args = dict(args)
+            retry_args["date"] = fallback_date
+            log("DATE EMPTY -> RETRY PREVIOUS DATE:", fallback_date)
+            response = self._execute_with_retry(url, method, retry_args)
+            data = self._safe_parse_json(response)
+            if response.ok and not self._is_effectively_empty(data):
+                if isinstance(data, dict):
+                    data.setdefault("_requested_date", original_date)
+                    data.setdefault("_resolved_date", fallback_date)
+                return response, data
+        return None, original_data
 
     def _apply_special_branch_alias(self, args: Dict[str, Any]) -> Dict[str, Any]:
         real_estate_branch = "B\\u1ea5t \\u0111\\u1ed9ng s\\u1ea3n d\\u00e2n c\\u01b0".encode("ascii").decode("unicode_escape")
@@ -186,7 +263,7 @@ class APIExecutor:
     # MAIN TOOL CALL
     # ============================================================
 
-    def call(self, operation_id: str, args: Dict[str, Any], doc_name: str = None) -> Any:
+    def call(self, operation_id: str, args: Dict[str, Any], doc_name: str = None, user_text: str | None = None) -> Any:
 
         log("\n================ API CALL ================")
         log("OPERATION:", operation_id)
@@ -315,7 +392,13 @@ class APIExecutor:
                     "text": response.text[:500]
                 }
 
-            data = self._safe_parse_json(response)            
+            data = self._safe_parse_json(response)
+
+            if self._should_retry_previous_dates(operation_id, args, data, user_text):
+                fallback_response, fallback_data = self._execute_previous_date_fallback(url, method, args, data)
+                if fallback_response is not None:
+                    response = fallback_response
+                    data = fallback_data
 
             if isinstance(data, list):
                 log("RESULT SIZE:", len(data))

@@ -871,7 +871,7 @@ class Orchestrator:
                 except Exception:
                     args = {}
 
-                result = self.executor.call(op_name, args, doc_name=current_doc)
+                result = self.executor.call(op_name, args, doc_name=current_doc, user_text=user_text)
 
                 log("API RESULT TYPE:", type(result))
 

@@ -135,5 +135,32 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         self.assertIn(("getTotalTradeReal", {"ticker": "SSI"}), seen)
         self.assertIn("gia_dong_luong", result["composite"]["breakdown"])
         self.assertEqual(result["composite"]["breakdown"]["dong_tien"], 0.0)
+
+    def test_four_key_uses_latest_common_smdt_date_before_requested_date(self):
+        ticker_points = [
+            SmdtPoint("2026-07-01", 50),
+            SmdtPoint("2026-07-02", 55),
+            SmdtPoint("2026-07-03", 61),
+            SmdtPoint("2026-07-06", 70),
+        ]
+        branch_points = [
+            SmdtPoint("2026-07-01", 45),
+            SmdtPoint("2026-07-02", 47),
+            SmdtPoint("2026-07-03", 48),
+            SmdtPoint("2026-07-06", 52),
+        ]
+
+        result = evaluate_four_key_from_records(
+            ticker="SSI",
+            branch_name="Moi gioi chung khoan",
+            ticker_smdt=ticker_points,
+            branch_smdt=branch_points,
+            requested_date="2026-07-07",
+            include_composite=False,
+        )
+
+        self.assertEqual(result["requested_date"], "2026-07-07")
+        self.assertEqual(result["date"], "2026-07-06")
+        self.assertEqual(result["group_4key"], "Dung song - Dung nganh")
 if __name__ == "__main__":
     unittest.main()
