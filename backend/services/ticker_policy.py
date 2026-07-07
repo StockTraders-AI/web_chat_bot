@@ -191,6 +191,7 @@ def sanitize_response_text(text: str) -> str:
     ordered_item = re.compile(r"^(\s*)\d+(?:\.0%)?\.\s*(.+)$")
 
     for line in (text or "").splitlines():
+        line = normalize_four_key_text(line)
         disallowed = find_disallowed_tickers(line)
         if disallowed and ordered_item.match(line):
             continue

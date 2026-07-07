@@ -53,6 +53,15 @@ class TickerPolicySanitizeTests(unittest.TestCase):
         self.assertIn('Thi\u1ebfu d\u1eef li\u1ec7u d\u00f2ng ti\u1ec1n cho ng\u00e0y n\u00e0y -> t\u00ednh nh\u01b0 trung l\u1eadp (50 \u0111i\u1ec3m).', cleaned)
         self.assertNotIn('Phat hien', cleaned)
         self.assertNotIn('Thieu du lieu', cleaned)
+    def test_normalizes_raw_uppercase_divergence_note_before_ticker_filter(self):
+        text = '- PHAT HIEN PHAN KY: SMDT +42.1 nhung gia -5.2% trong 3 phien qua -> cong bonus +4.2 diem.'
+
+        cleaned = sanitize_response_text(text)
+
+        self.assertEqual(cleaned, 'PH\u00c1T HI\u1ec6N PH\u00c2N K\u1ef2: SMDT +42.1 nh\u01b0ng gi\u00e1 -5.2% trong 3 phi\u00ean qua -> c\u1ed9ng bonus +4.2 \u0111i\u1ec3m.')
+        self.assertNotIn('-:', cleaned)
+        self.assertNotIn('nhung gia', cleaned)
+        self.assertNotIn('cong bonus', cleaned)
 
 
 if __name__ == "__main__":
