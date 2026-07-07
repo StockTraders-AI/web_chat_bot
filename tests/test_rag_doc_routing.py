@@ -114,3 +114,33 @@ class RAGDocumentRoutingTests(unittest.IsolatedAsyncioTestCase):
             selected,
             "Câu hỏi về ngành, dẫn sóng, đạt chuẩn ngành mạnh.txt",
         )
+
+    async def test_current_ticker_smdt_question_selects_smdt_rule_not_price(self):
+        rag = RAGStore.__new__(RAGStore)
+        rag.rule_docs = {
+            "Cau hoi ve gia cua ma.txt": {},
+            "Cau hoi ve suc manh dong tien, smdt nganh, ma.txt": {},
+        }
+
+        selected = await rag.pick_doc("SMDT GEX hien nay la bao nhieu?")
+
+        self.assertEqual(selected, "Cau hoi ve suc manh dong tien, smdt nganh, ma.txt")
+
+    def test_current_ticker_smdt_question_selects_single_ticker_chunk(self):
+        rag = RAGStore.__new__(RAGStore)
+        chunks = [
+            'Guide SMDT nganh ngan hang tu [date] den nay. Goi getSMDTBranch theo tung thang.',
+            'Guide SMDT suc manh dong tien co phieu [X] tu thang [month] den nay. Goi getSMDTTicker voi ma duoc hoi va date la tung thang.',
+            'Guide Khi hoi: "SMDT [ma] la bao nhieu?". Goi getSMDTTicker voi ma va date duoc hoi kem %.',
+        ]
+
+        context = rag.build_context(
+            "Cau hoi ve suc manh dong tien, smdt nganh, ma.txt",
+            chunks,
+            "SMDT GEX hien nay la bao nhieu?",
+            max_chunks=1,
+        )
+
+        self.assertIn("SMDT [ma]", context["refs"])
+        self.assertIn("getSMDTTicker", context["refs"])
+        self.assertNotIn("tu thang", context["refs"])

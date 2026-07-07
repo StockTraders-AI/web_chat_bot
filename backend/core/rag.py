@@ -176,6 +176,11 @@ class RAGStore:
         )
         if four_key_intent or composite_or_analysis_intent:
             return title_containing("4 key")
+
+        smdt_intent = ("smdt" in normalized or "suc manh dong tien" in normalized)
+        if smdt_intent:
+            return title_containing("suc manh dong tien") or title_containing("smdt")
+
         strong_stock_intent = any(
             phrase in normalized
             for phrase in (
@@ -594,6 +599,11 @@ class RAGStore:
         q_token_list = search_tokens(query)
         asks_single_day = (
             "hom nay" in query_l
+            or "hien nay" in query_l
+            or "hien tai" in query_l
+            or "bay gio" in query_l
+            or "latest" in query_l
+            or "current" in query_l
             or "ngay" in query_l
             or bool(re.search(r"\b20\d{2}-\d{2}-\d{2}\b", query_l))
         )
@@ -618,9 +628,16 @@ class RAGStore:
                 "cac ma trong nganh",
             )
         )
+        asks_smdt_metric = "smdt" in query_l or "suc manh dong tien" in query_l
         asks_branch_metric = (
-            ("smdt" in query_l or "suc manh dong tien" in query_l)
+            asks_smdt_metric
             and ("nganh" in query_l or "dong" in query_l)
+            and not asks_branch_tickers
+        )
+        asks_ticker_smdt_metric = (
+            asks_smdt_metric
+            and bool(re.search(r"\b[A-Z]{2,5}\d?\b", query or ""))
+            and not asks_branch_metric
             and not asks_branch_tickers
         )
         asks_specific_strong_ticker = (
@@ -720,6 +737,27 @@ class RAGStore:
                     score -= 220
                 if is_unrelated_trade_chunk:
                     score -= 240
+            if asks_ticker_smdt_metric:
+                is_single_ticker_smdt_chunk = (
+                    "getsmdtticker" in text
+                    and ("[ma]" in text or "[x]" in text or "[ticker]" in text)
+                    and "bao nhieu" in text
+                    and "tu thang" not in text
+                    and "den nay" not in text
+                    and "cac ma" not in text
+                    and "ma dong" not in text
+                    and "ma nganh" not in text
+                )
+                is_ticker_month_range_chunk = (
+                    "getsmdtticker" in text
+                    and ("tu thang" in text or "den nay" in text or "tung thang" in text)
+                )
+                if is_single_ticker_smdt_chunk:
+                    score += 240
+                    heading_score += 70
+                if asks_single_day and not asks_month_range and is_ticker_month_range_chunk:
+                    score -= 180
+
             if asks_branch_metric:
                 is_ticker_collection_chunk = (
                     "cac ma dong" in text
