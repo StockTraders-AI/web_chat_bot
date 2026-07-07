@@ -113,6 +113,48 @@ class APIExecutorBranchPathTests(unittest.TestCase):
         self.assertEqual(result, [])
         self.assertEqual(len(calls), 1)
 
+    def test_implicit_current_question_coerces_hallucinated_month_to_today(self):
+        executor = APIExecutor(FakeRegistry())
+        today = date.today()
+        yesterday = today - timedelta(days=1)
+        calls = []
+
+        def fake_execute(url, method, args):
+            calls.append(dict(args))
+            if args.get("date") == yesterday.isoformat():
+                return FakeResponse([{"date": yesterday.isoformat(), "smdt": 88.0, "ticker": "GEX"}])
+            return FakeResponse([])
+
+        executor._execute_with_retry = fake_execute
+        result = executor.call(
+            "getSMDTTicker",
+            {"keyValue": "GEX", "date": "2023-10"},
+            user_text="SMDT GEX hien nay la bao nhieu?",
+        )
+
+        self.assertEqual(calls[0]["date"], today.isoformat())
+        self.assertEqual(calls[1]["date"], yesterday.isoformat())
+        self.assertEqual(result[0]["date"], yesterday.isoformat())
+
+    def test_explicit_month_question_keeps_requested_month(self):
+        executor = APIExecutor(FakeRegistry())
+        calls = []
+
+        def fake_execute(url, method, args):
+            calls.append(dict(args))
+            return FakeResponse([])
+
+        executor._execute_with_retry = fake_execute
+        result = executor.call(
+            "getSMDTTicker",
+            {"keyValue": "GEX", "date": "2023-10"},
+            user_text="SMDT GEX thang 10 nam 2023",
+        )
+
+        self.assertEqual(result, [])
+        self.assertEqual(calls[0]["date"], "2023-10")
+        self.assertEqual(len(calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

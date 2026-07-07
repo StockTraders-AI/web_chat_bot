@@ -81,7 +81,33 @@ class APIExecutor:
             return True
         if re.search(r"\bngay\s+\d{1,2}\b", normalized):
             return True
+        if re.search(r"\bthang\s+\d{1,2}\b", normalized):
+            return True
+        if re.search(r"\bnam\s+20\d{2}\b", normalized):
+            return True
+        if re.search(r"\b20\d{2}\b", normalized):
+            return True
+        if "dau nam" in normalized or "cuoi nam" in normalized:
+            return True
         return False
+
+    def _coerce_implicit_current_date(self, operation_id: str, args: Dict[str, Any], user_text: str | None) -> Dict[str, Any]:
+        if user_text is None:
+            return args
+        date_value = str(args.get("date") or "").strip()
+        if not date_value:
+            return args
+        if not re.match(r"^20\d{2}(-\d{2}){0,2}$", date_value):
+            return args
+        if self._has_explicit_calendar_date(user_text):
+            return args
+        today = date_cls.today().isoformat()
+        if date_value == today:
+            return args
+        coerced = dict(args)
+        coerced["date"] = today
+        log("IMPLICIT CURRENT QUERY -> COERCE DATE:", date_value, "->", today)
+        return coerced
 
     def _is_effectively_empty(self, value: Any) -> bool:
         if value is None:
@@ -269,6 +295,7 @@ class APIExecutor:
         log("OPERATION:", operation_id)
         log("ARGS FROM GPT:", args)
         args = self._normalize_args(operation_id, args)
+        args = self._coerce_implicit_current_date(operation_id, args, user_text)
 
         if invalid_api_ticker(operation_id, args):
             log("BLOCKED TICKER OUTSIDE PROJECT ALLOWLIST")
