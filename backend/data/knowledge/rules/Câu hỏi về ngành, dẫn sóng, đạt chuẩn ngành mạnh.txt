@@ -5,6 +5,10 @@ Guide Ngành chủ lực nào dẫn sóng vào [date]
 Goi api getSMDTBranchCross truyền date = thời gian được hỏi
 Lọc ra ngành chủ lực trả lời kèm smdt tương ứng
 
+Guide "[Ngành] mất vai trò dẫn sóng khi nào"
+Gọi api getBrandPath truyền ticker để lấy path ngành
+Gọi api getSMDTBranchDrop truyền path ngành và lấy lastDate trả lời
+
 Guide Điều kiện ngành mạnh
 Khi Sức mạnh dòng tiền của một ngành trước đó dưới 60%, sau đó vượt lên 60% nhưng vẫn nhỏ hơn 70% thì được xem là có tiềm năng dẫn sóng hoặc sắp tham gia dẫn sóng đối với 6 ngành chủ lực.
 Guide Sóng ngành chủ lực (gồm 6 ngành chủ lực)

@@ -32,6 +32,10 @@ class FakeRegistry:
             "path": "/service/data/getSMDTTicker",
             "method": "POST",
         },
+        "getCashFlowTicker": {
+            "path": "/service/data/getCashFlowTicker",
+            "method": "POST",
+        },
     }
 
 
@@ -154,6 +158,28 @@ class APIExecutorBranchPathTests(unittest.TestCase):
         self.assertEqual(result, [])
         self.assertEqual(calls[0]["date"], "2023-10")
         self.assertEqual(len(calls), 1)
+    def test_cashflow_today_empty_retries_without_date_once(self):
+        executor = APIExecutor(FakeRegistry())
+        today = date.today().isoformat()
+        calls = []
+
+        def fake_execute(url, method, args):
+            calls.append(dict(args))
+            if "date" not in args:
+                return FakeResponse({"cashFlowTickers": [{"date": today, "ticker": "NVL", "content": "Đang đổ vào"}]})
+            return FakeResponse({"cashFlowTickers": []})
+
+        executor._execute_with_retry = fake_execute
+        result = executor.call(
+            "getCashFlowTicker",
+            {"ticker": "NVL", "date": today},
+            user_text="Dòng tiền NVL hiện nay thế nào?",
+        )
+
+        self.assertEqual(calls[0], {"ticker": "NVL", "date": today})
+        self.assertEqual(calls[1], {"ticker": "NVL"})
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(result["cashFlowTickers"][0]["ticker"], "NVL")
 
 
 if __name__ == "__main__":

@@ -143,6 +143,31 @@ class APIExecutor:
             return False
         return True
 
+    def _should_retry_cashflow_without_date(self, operation_id: str, args: Dict[str, Any], data: Any, user_text: str | None) -> bool:
+        if operation_id not in {"getCashFlowTicker", "getCashFlowBranch"}:
+            return False
+        date_value = str(args.get("date") or "").strip()
+        if date_value != date_cls.today().isoformat():
+            return False
+        if not self._is_effectively_empty(data):
+            return False
+        if self._has_explicit_calendar_date(user_text):
+            return False
+        return True
+
+    def _execute_cashflow_without_date_fallback(self, url: str, method: str, args: Dict[str, Any], original_data: Any) -> tuple[Any, Any]:
+        retry_args = dict(args)
+        requested_date = str(retry_args.pop("date", "") or "")
+        log("CASHFLOW TODAY EMPTY -> RETRY WITHOUT DATE")
+        response = self._execute_with_retry(url, method, retry_args)
+        data = self._safe_parse_json(response)
+        if response.ok and not self._is_effectively_empty(data):
+            if isinstance(data, dict):
+                data.setdefault("_requested_date", requested_date)
+                data.setdefault("_resolved_date", "latest")
+            return response, data
+        return None, original_data
+
     def _execute_previous_date_fallback(self, url: str, method: str, args: Dict[str, Any], original_data: Any) -> tuple[Any, Any]:
         original_date = str(args.get("date"))[:10]
         try:
@@ -421,7 +446,12 @@ class APIExecutor:
 
             data = self._safe_parse_json(response)
 
-            if self._should_retry_previous_dates(operation_id, args, data, user_text):
+            if self._should_retry_cashflow_without_date(operation_id, args, data, user_text):
+                fallback_response, fallback_data = self._execute_cashflow_without_date_fallback(url, method, args, data)
+                if fallback_response is not None:
+                    response = fallback_response
+                    data = fallback_data
+            elif self._should_retry_previous_dates(operation_id, args, data, user_text):
                 fallback_response, fallback_data = self._execute_previous_date_fallback(url, method, args, data)
                 if fallback_response is not None:
                     response = fallback_response

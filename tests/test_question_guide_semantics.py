@@ -163,6 +163,12 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("mã cổ phiếu", first.message)
         self.assertEqual(second.canonical_question, "SMDT ACB hiện nay là bao nhiêu?")
 
+    async def test_lowercase_ticker_cashflow_defaults_to_current_question(self):
+        result = await self.guide.handle("cashflow-lower", "tin hieu dong tien ma nvl")
+
+        self.assertEqual(result.action, "run")
+        self.assertIn("NVL", result.canonical_question)
+        self.assertNotIn("khoảng thời gian", result.message)
     async def test_subject_then_time_are_collected_in_sequence(self):
         first = await self.guide.handle("u10", "smdt tháng")
         second = await self.guide.handle("u10", "ngành ngân hàng")

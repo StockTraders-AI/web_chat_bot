@@ -114,6 +114,13 @@ def extract_ticker(text: str) -> Optional[str]:
         ticker = action_match.group(1).upper()
         if ticker in ALLOWED_TICKERS:
             return ticker
+
+    for token in re.findall(r"\b[a-z]{2,5}\d?\b", normalized):
+        if token in STOCK_WORDS or token in DIRECT_RULE_STOPWORDS:
+            continue
+        ticker = token.upper()
+        if ticker in ALLOWED_TICKERS:
+            return ticker
     return None
 
 
@@ -131,7 +138,10 @@ def extract_branch(text: str) -> Optional[str]:
         flags=re.IGNORECASE,
     )[0]
     value = re.sub(r"\s+", " ", value).strip(" ?.!,")
-    if normalize_text(value) in {"nao", "gi", "chu luc"}:
+    normalized_value = normalize_text(value)
+    if normalized_value.startswith("tien"):
+        return None
+    if normalized_value in {"nao", "gi", "chu luc"}:
         return None
     return value or None
 
