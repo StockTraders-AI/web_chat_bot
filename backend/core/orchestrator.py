@@ -200,6 +200,62 @@ def latest_stock_4key_payload(messages: List[Dict[str, Any]]) -> Optional[Dict[s
     return None
 
 
+def _parse_iso_date(value: Any) -> Optional[datetime]:
+    raw = str(value or "").strip()[:10]
+    try:
+        return datetime.strptime(raw, "%Y-%m-%d")
+    except ValueError:
+        return None
+
+
+def _find_branch_drop_payload(value: Any) -> Optional[Dict[str, Any]]:
+    best: Optional[Dict[str, Any]] = None
+    best_date: Optional[datetime] = None
+
+    def visit(node: Any, branch_name: str = ""):
+        nonlocal best, best_date
+        if isinstance(node, dict):
+            current_branch = str(
+                node.get("keyName")
+                or node.get("branch")
+                or node.get("name")
+                or branch_name
+            ).strip()
+            smdts = node.get("smdts")
+            if isinstance(smdts, list):
+                for item in smdts:
+                    if not isinstance(item, dict):
+                        continue
+                    parsed_date = _parse_iso_date(item.get("date"))
+                    if not parsed_date:
+                        continue
+                    if best_date is None or parsed_date > best_date:
+                        best_date = parsed_date
+                        best = {
+                            "branch": current_branch,
+                            "date": str(item.get("date") or "").strip()[:10],
+                            "smdt": item.get("smdt"),
+                        }
+            for child in node.values():
+                visit(child, current_branch)
+        elif isinstance(node, list):
+            for item in node:
+                visit(item, branch_name)
+
+    visit(value)
+    return best
+
+
+def format_branch_drop_answer(payload: Dict[str, Any]) -> str:
+    branch = str(payload.get("branch") or "ngành").strip()
+    date_text = str(payload.get("date") or "").strip() or "ngày gần nhất"
+    smdt = _fmt_metric(payload.get("smdt"), "%")
+    return (
+        f"Ngành {branch} đã mất vai trò dẫn sóng lần gần nhất vào ngày {date_text} "
+        f"khi SMDT của ngành giảm xuống còn {smdt}, dưới ngưỡng 70.0% "
+        f"được coi là dấu hiệu mất vai trò dẫn dắt."
+    )
+
 def ensure_stock_4key_section(final_text: str, messages: List[Dict[str, Any]]) -> str:
     payload = latest_stock_4key_payload(messages)
     if not payload:
@@ -890,6 +946,13 @@ class Orchestrator:
                     "tool_call_id": tc.id,
                     "content": json.dumps(result, ensure_ascii=False)
                 })
+
+                if op_name == "getSMDTBranchDrop":
+                    branch_drop_payload = _find_branch_drop_payload(result)
+                    if branch_drop_payload:
+                        final_text = format_branch_drop_answer(branch_drop_payload)
+                        log("BRANCH DROP FORMATTER APPLIED")
+                        return messages, final_text
 
                 if op_name == "getStock4KeyEvaluation":
                     stock_4key_payload = _find_stock_4key_payload(result)

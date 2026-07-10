@@ -6,10 +6,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from core.orchestrator import ensure_stock_4key_section, format_stock_4key_answer, latest_stock_4key_payload, should_force_rules, is_stock_related
+from core.orchestrator import ensure_stock_4key_section, format_branch_drop_answer, format_stock_4key_answer, latest_stock_4key_payload, should_force_rules, is_stock_related, _find_branch_drop_payload
 
 
 class OrchestratorPostprocessTests(unittest.TestCase):
+    def test_branch_drop_formatter_uses_latest_drop_date(self):
+        payload = [{
+            "keyName": "Bất động sản dân cư",
+            "keyValue": "9-245-249-255-265-",
+            "smdts": [
+                {"date": "2025-03-27", "smdt": 69.9},
+                {"date": "2026-04-07", "smdt": 50.1},
+            ],
+        }]
+
+        latest = _find_branch_drop_payload(payload)
+        answer = format_branch_drop_answer(latest)
+
+        self.assertEqual(latest["date"], "2026-04-07")
+        self.assertIn("Bất động sản dân cư", answer)
+        self.assertIn("lần gần nhất", answer)
+        self.assertIn("2026-04-07", answer)
+        self.assertIn("50.1%", answer)
+        self.assertIn("70.0%", answer)
+        self.assertNotIn("2025-03-27", answer)
+
     def test_inserts_missing_4key_section_and_renumbers(self):
         final_text = (
             'Phan tich co phieu CTS ngay 2 thang 7 nam 2026 nhu sau:\n\n'
