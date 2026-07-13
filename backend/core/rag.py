@@ -455,12 +455,57 @@ class RAGStore:
 
         return score
     
+    def _pick_explicit_book_doc(self, query: str):
+        normalized = self._normalize_text(query)
+        titles = list(self.book_docs.keys())
+
+        def title_containing(*phrases: str):
+            for title in titles:
+                normalized_title = self._normalize_text(title)
+                if all(phrase in normalized_title for phrase in phrases):
+                    return title
+            return None
+
+        asks_definition = any(
+            phrase in normalized
+            for phrase in (
+                "la gi",
+                "nghia la gi",
+                "khai niem",
+                "dinh nghia",
+                "hieu the nao",
+                "nen hieu the nao",
+            )
+        )
+        asks_wave_concept = "song lon" in normalized or "chan song lon" in normalized
+        asks_benefit = any(phrase in normalized for phrase in ("loi ich", "vi sao", "tai sao nen", "nen giao dich"))
+
+        if asks_definition and asks_wave_concept and not asks_benefit:
+            return title_containing("hdsd", "stocktraders") or title_containing("hdsd")
+
+        return None
+
     def retrieve_best_book(self, query: str, top_k: int = 3):
         if not self.book_docs:
             return {
                 "doc_name": None,
                 "chunks": [],
                 "score": 0
+            }
+
+        explicit_doc = self._pick_explicit_book_doc(query)
+        if explicit_doc:
+            meta = self.book_docs.get(explicit_doc) or {}
+            chunks = meta.get("chunks") or []
+            scored_chunks = sorted(
+                ((self._score_book_chunk(query, explicit_doc, ch), ch) for ch in chunks),
+                key=lambda item: item[0],
+                reverse=True,
+            )
+            return {
+                "doc_name": explicit_doc,
+                "chunks": [chunk for _, chunk in scored_chunks[:top_k]],
+                "score": scored_chunks[0][0] if scored_chunks else 0,
             }
 
         scored = []

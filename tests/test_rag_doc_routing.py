@@ -9,6 +9,36 @@ from core.rag import RAGStore
 
 
 class RAGDocumentRoutingTests(unittest.IsolatedAsyncioTestCase):
+    def test_song_lon_definition_selects_hdsd_book(self):
+        rag = RAGStore.__new__(RAGStore)
+        rag.book_docs = {
+            "HDSD StockTraders AI - Update-30.06.pdf": {
+                "chunks": ["Sóng lớn là trạng thái thị trường được xác nhận bởi hệ thống StockTraders AI."],
+            },
+            "Loi ich giao dich tai chan song lon.pdf": {
+                "chunks": ["Giao dịch tại chân sóng lớn có một số lợi ích quan trọng."],
+            },
+        }
+
+        result = rag.retrieve_best_book("sóng lớn là gì", top_k=1)
+
+        self.assertEqual(result["doc_name"], "HDSD StockTraders AI - Update-30.06.pdf")
+
+    def test_song_lon_benefit_question_can_select_benefit_book(self):
+        rag = RAGStore.__new__(RAGStore)
+        rag.book_docs = {
+            "HDSD StockTraders AI - Update-30.06.pdf": {
+                "chunks": ["Sóng lớn là trạng thái thị trường được xác nhận bởi hệ thống StockTraders AI."],
+            },
+            "Loi ich giao dich tai chan song lon.pdf": {
+                "chunks": ["Lợi ích giao dịch tại chân sóng lớn là tiềm năng lợi nhuận cao."],
+            },
+        }
+
+        result = rag.retrieve_best_book("lợi ích giao dịch tại chân sóng lớn", top_k=1)
+
+        self.assertEqual(result["doc_name"], "Loi ich giao dich tai chan song lon.pdf")
+
     def test_branch_smdt_selects_branch_metric_chunk(self):
         rag = RAGStore.__new__(RAGStore)
         chunks = [
