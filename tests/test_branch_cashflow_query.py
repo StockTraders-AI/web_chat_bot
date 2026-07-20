@@ -10,7 +10,9 @@ from core.orchestrator import (  # noqa: E402
     Orchestrator,
     extract_branch_cashflow_items,
     format_branch_cashflow_answer,
+    format_stock_cashflow_answer,
     is_branch_cashflow_query,
+    is_stock_cashflow_query,
 )
 
 
@@ -20,6 +22,17 @@ class FakeExecutor:
 
     def call(self, operation, args, **kwargs):
         self.calls.append((operation, args, kwargs))
+        if operation == "getCashFlowTicker":
+            return {
+                "cashFlowTickers": [
+                    {
+                        "keyValue": "BSR",
+                        "cashFlows": [
+                            {"date": "2026-07-15", "content": "Tiền vào BSR", "value": 2}
+                        ],
+                    }
+                ]
+            }
         return {
             "cashFlowBranchs": [
                 {
@@ -36,6 +49,10 @@ class BranchCashflowQueryTests(unittest.TestCase):
     def test_detects_branch_cashflow_query(self):
         self.assertTrue(is_branch_cashflow_query("dòng tiền ngành ngân hàng hiện nay thế nào"))
         self.assertFalse(is_branch_cashflow_query("SMDT ngành ngân hàng hiện nay là bao nhiêu"))
+
+    def test_detects_stock_cashflow_query(self):
+        self.assertTrue(is_stock_cashflow_query("dòng tiền BSR 15-7-2026 thế nào"))
+        self.assertFalse(is_stock_cashflow_query("SMDT BSR 15-7-2026 thế nào"))
 
     def test_extract_branch_cashflow_items_handles_nested_payload(self):
         rows = extract_branch_cashflow_items(
@@ -73,6 +90,35 @@ class BranchCashflowQueryTests(unittest.TestCase):
                 )
             ],
         )
+
+    def test_answer_stock_cashflow_calls_cashflow_ticker(self):
+        orchestrator = Orchestrator.__new__(Orchestrator)
+        orchestrator.executor = FakeExecutor()
+
+        question = "dòng tiền BSR 15-7-2026 thế nào"
+        answer = orchestrator._answer_stock_cashflow(question)
+
+        self.assertEqual(answer, "Dòng tiền BSR phiên 15/07/2026: Tiền vào BSR")
+        self.assertEqual(
+            orchestrator.executor.calls,
+            [
+                (
+                    "getCashFlowTicker",
+                    {"ticker": "BSR", "date": "2026-07-15"},
+                    {"user_text": question},
+                )
+            ],
+        )
+
+    def test_format_stock_cashflow_answer_does_not_mention_smdt(self):
+        answer = format_stock_cashflow_answer(
+            "BSR",
+            {"date": "2026-07-15", "content": "Tiền vào"},
+            "2026-07-15",
+        )
+
+        self.assertNotIn("SMDT", answer)
+        self.assertNotIn("sức mạnh dòng tiền", answer.lower())
 
     def test_format_branch_cashflow_answer_does_not_mention_tickers_or_smdt(self):
         answer = format_branch_cashflow_answer(

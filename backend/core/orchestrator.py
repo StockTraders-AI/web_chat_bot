@@ -11,7 +11,7 @@ from core.memory import MemoryStore
 from core.rag import RAGStore
 from core.tool_engine import ToolRegistry
 from core.condition_engine import extract_rows, scan_vnindex_waitbuy_reversal
-from core.question_guide import QuestionGuide, extract_branch, extract_date_value
+from core.question_guide import QuestionGuide, extract_branch, extract_date_value, extract_ticker
 
 from services.api_executor import APIExecutor
 from services.branch_map import extract_branch_path
@@ -650,6 +650,17 @@ def format_waitbuy_value_answer(row: Dict[str, Any], requested_date: str) -> str
     return f"Phiên {date_text} có {waitbuy} cổ phiếu chờ mua."
 
 
+def is_stock_cashflow_query(text: str) -> bool:
+    normalized = normalize_search_text(text)
+    if is_definition_query(text):
+        return False
+    if "dong tien" not in normalized:
+        return False
+    if "smdt" in normalized or "suc manh dong tien" in normalized:
+        return False
+    return extract_ticker(text) is not None
+
+
 def is_branch_cashflow_query(text: str) -> bool:
     normalized = normalize_search_text(text)
     if is_definition_query(text):
@@ -706,6 +717,7 @@ def extract_branch_cashflow_items(raw: Any) -> List[Dict[str, Any]]:
         for key in (
             "cashFlowBranchDatas",
             "cashFlowBranchs",
+            "cashFlowTickers",
             "cashFlows",
             "data",
             "items",
@@ -743,6 +755,18 @@ def select_branch_cashflow_item(items: List[Dict[str, Any]], requested_date: str
         dated.sort(key=lambda item: _parse_iso_date(item.get("date")) or datetime.min, reverse=True)
         return dated[0]
     return items[0]
+
+
+def format_stock_cashflow_answer(ticker: str, item: Optional[Dict[str, Any]], requested_date: str) -> str:
+    ticker_text = ticker.strip().upper() or "mã"
+    if not item:
+        return f"Chưa có dữ liệu dòng tiền {ticker_text} cho {format_vn_date(requested_date)}."
+
+    date_text = format_vn_date(item.get("date") or requested_date)
+    content = _branch_cashflow_content(item)
+    if not content:
+        return f"Phiên {date_text} chưa có nội dung dòng tiền {ticker_text}."
+    return f"Dòng tiền {ticker_text} phiên {date_text}: {content}"
 
 
 def format_branch_cashflow_answer(branch: str, item: Optional[Dict[str, Any]], requested_date: str) -> str:
@@ -1292,6 +1316,21 @@ class Orchestrator:
                 return target
         return None
 
+    def _answer_stock_cashflow(self, user_text: str) -> str:
+        ticker = extract_ticker(user_text)
+        if not ticker:
+            return "Anh/chị muốn kiểm tra dòng tiền mã cổ phiếu nào?"
+
+        requested_date = _normalize_cashflow_lookup_date(user_text)
+        raw_cashflow = self.executor.call(
+            "getCashFlowTicker",
+            {"ticker": ticker, "date": requested_date},
+            user_text=user_text,
+        )
+        items = extract_branch_cashflow_items(raw_cashflow)
+        item = select_branch_cashflow_item(items, requested_date)
+        return format_stock_cashflow_answer(ticker, item, requested_date)
+
     def _answer_branch_cashflow(self, user_text: str) -> str:
         branch = extract_branch(user_text)
         if not branch:
@@ -1509,6 +1548,19 @@ Yêu cầu:
 
         if is_branch_cashflow_query(user_text):
             final_text = self._answer_branch_cashflow(user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
+
+        if is_stock_cashflow_query(user_text):
+            final_text = self._answer_stock_cashflow(user_text)
             final_text = clean_chat_output(sanitize_response_text(final_text))
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
