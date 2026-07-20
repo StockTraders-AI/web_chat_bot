@@ -75,7 +75,6 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call["user_id"], "portfolio:u1:p1")
         self.assertEqual(call["user_text"], "BVS thuoc nhom 4 key nao?")
         self.assertEqual(call["selected_model"], "gpt-4o")
-        self.assertNotIn("skip_question_guide", call)
 
     async def test_portfolio_chat_route_does_not_require_portfolio(self):
         payload = route.PortfolioChatIn(

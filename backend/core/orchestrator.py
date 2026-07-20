@@ -11,7 +11,6 @@ from core.memory import MemoryStore
 from core.rag import RAGStore
 from core.tool_engine import ToolRegistry
 from core.condition_engine import extract_rows, scan_vnindex_waitbuy_reversal
-from core.question_guide import QuestionGuide, extract_branch, extract_date_value, extract_ticker
 
 from services.api_executor import APIExecutor
 from services.branch_map import extract_branch_path
@@ -100,6 +99,68 @@ def normalize_search_text(text: str) -> str:
     normalized = normalized.lower()
     return re.sub(r"\s+", " ", normalized).strip()
 
+
+
+def extract_ticker(text: str) -> Optional[str]:
+    for token in re.findall(r"\b[A-Z][A-Z0-9]{1,6}\b", text or ""):
+        ticker = token.upper()
+        if ticker not in NON_TICKER_SYMBOLS and ticker in ALLOWED_TICKERS:
+            return ticker
+    return None
+
+
+def extract_branch(text: str) -> Optional[str]:
+    raw = text or ""
+    match = re.search(r"\b(?:ngành|nganh)\s+([\wÀ-ỹ\s]+)", raw, flags=re.IGNORECASE)
+    if not match:
+        match = re.search(r"\b(?:dòng|dong)\s+([\wÀ-ỹ\s]+)", raw, flags=re.IGNORECASE)
+    if not match:
+        return None
+
+    value = re.split(
+        r"\b(?:ngày|ngay|hôm nay|hom nay|hiện nay|hien nay|thế nào|the nao|có nên|co nen|không|ko|bao nhiêu|bao nhieu|từ khi nào|tu khi nao)\b",
+        match.group(1),
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
+    value = re.sub(r"\s+", " ", value).strip(" ?.!,")
+    normalized = normalize_search_text(value)
+    if not value or normalized.startswith("tien") or normalized in {"nao", "gi", "chu luc"}:
+        return None
+    return value
+
+
+def extract_date_value(text: str) -> Optional[str]:
+    normalized = normalize_search_text(text)
+
+    iso = re.search(r"\b(20\d{2})-(1[0-2]|0[1-9])-(3[01]|[12]\d|0[1-9])\b", normalized)
+    if iso:
+        return iso.group(0)
+
+    full = re.search(r"\b(3[01]|[12]\d|0?[1-9])[/-](1[0-2]|0?[1-9])[/-]((?:20)?\d{2})\b", normalized)
+    if full:
+        day = int(full.group(1))
+        month = int(full.group(2))
+        year = int(full.group(3))
+        if year < 100:
+            year += 2000
+        return f"{day:02d}/{month:02d}/{year}"
+
+    month_year = re.search(r"\b(?:thang\s*)?(1[0-2]|0?[1-9])[/-](20\d{2})\b", normalized)
+    if month_year:
+        return f"tháng {int(month_year.group(1))}/{month_year.group(2)}"
+
+    iso_month = re.search(r"\b(20\d{2})-(1[0-2]|0[1-9])\b", normalized)
+    if iso_month:
+        return f"tháng {int(iso_month.group(2))}/{iso_month.group(1)}"
+
+    year = re.search(r"\b(20\d{2})\b", normalized)
+    if year:
+        return year.group(1)
+
+    if any(value in normalized for value in ("hom nay", "hien nay", "hien tai", "bay gio", "gan nhat")):
+        return "hôm nay"
+    return None
 
 def ensure_smdt_percent(text: str) -> str:
     if "smdt" not in normalize_search_text(text):
@@ -921,11 +982,6 @@ class Orchestrator:
 
         self.executor = APIExecutor(registry)
         self.oa = OpenAIClient()
-        self.question_guide = QuestionGuide(
-            self.rag,
-            memory=self.memory,
-            openai_client=self.oa,
-        )
         self._user_chat_locks: Dict[str, asyncio.Lock] = {}
 
     # =====================================================
@@ -1485,8 +1541,7 @@ Yêu cầu:
         user_id: str,
         user_text: str,
         language: str,
-        selected_model: Optional[str],
-        skip_question_guide: bool = False
+        selected_model: Optional[str]
     ):
 
         lock = self._user_chat_locks.setdefault(user_id, asyncio.Lock())
@@ -1495,8 +1550,7 @@ Yêu cầu:
                 user_id=user_id,
                 user_text=user_text,
                 language=language,
-                selected_model=selected_model,
-                skip_question_guide=skip_question_guide,
+                selected_model=selected_model
             ):
 
                 yield event, data
@@ -1506,8 +1560,7 @@ Yêu cầu:
         user_id: str,
         user_text: str,
         language: str,
-        selected_model: Optional[str],
-        skip_question_guide: bool = False
+        selected_model: Optional[str]
     ):
 
         model = pick_model(selected_model)
@@ -1527,28 +1580,6 @@ Yêu cầu:
             await self.memory.add(user_id, "assistant", final_text)
             yield ("done", done_data([]))
             return
-
-        # Rule/API-shaped questions should go straight to RAG/tool rules.
-        # The semantic question guide is only for broad ambiguous prompts.
-        bypass_question_guide = skip_question_guide or should_force_rules(user_text)
-        guide_result = None if bypass_question_guide else await self.question_guide.handle(user_id, user_text)
-        if guide_result and guide_result.action == "ask":
-
-            final_text = clean_chat_output(sanitize_response_text(guide_result.message))
-            full = ""
-            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
-                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
-                if chunk:
-                    full += chunk
-                    yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
-            yield ("done", done_data([]))
-            return
-
-        guided_question = False
-        if guide_result and guide_result.action == "run" and guide_result.canonical_question:
-            user_text = guide_result.canonical_question
-            guided_question = True
 
         if is_branch_cashflow_query(user_text):
             final_text = self._answer_branch_cashflow(user_text)
@@ -1615,7 +1646,7 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        if not guided_question and is_waitbuy_explain_query(user_text):
+        if is_waitbuy_explain_query(user_text):
             final_text = await self._answer_waitbuy_explanation(user_text=user_text, model=model)
             final_text = clean_chat_output(sanitize_response_text(final_text))
             full = ""

@@ -79,15 +79,14 @@ async def portfolio_chat(
     conversation_id = normalize_conversation_id(payload.conversation_id)
     user_id = normalize_user_id(payload.user_id)
     chat_user_id = f"portfolio:{user_id}:{conversation_id}"
-    user_text, uses_portfolio_context = build_chat_input(question, payload.portfolio)
+    user_text, _ = build_chat_input(question, payload.portfolio)
 
     answer, done_data = await collect_standard_chat(
         current_orchestrator(),
         user_id=chat_user_id,
         user_text=user_text,
         language=payload.language,
-        selected_model=payload.model,
-        skip_question_guide=uses_portfolio_context,
+        selected_model=payload.model
     )
 
     return {
