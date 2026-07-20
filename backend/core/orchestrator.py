@@ -1528,7 +1528,10 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        guide_result = None if skip_question_guide else await self.question_guide.handle(user_id, user_text)
+        # Rule/API-shaped questions should go straight to RAG/tool rules.
+        # The semantic question guide is only for broad ambiguous prompts.
+        bypass_question_guide = skip_question_guide or should_force_rules(user_text)
+        guide_result = None if bypass_question_guide else await self.question_guide.handle(user_id, user_text)
         if guide_result and guide_result.action == "ask":
 
             final_text = clean_chat_output(sanitize_response_text(guide_result.message))
