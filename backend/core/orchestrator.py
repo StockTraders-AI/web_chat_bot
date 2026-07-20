@@ -11,9 +11,10 @@ from core.memory import MemoryStore
 from core.rag import RAGStore
 from core.tool_engine import ToolRegistry
 from core.condition_engine import extract_rows, scan_vnindex_waitbuy_reversal
-from core.question_guide import QuestionGuide, extract_date_value
+from core.question_guide import QuestionGuide, extract_branch, extract_date_value
 
 from services.api_executor import APIExecutor
+from services.branch_map import extract_branch_path
 from services.openai_client import OpenAIClient, current_token_usage, reset_token_usage
 from services.ticker_policy import (
     ALLOWED_TICKERS,
@@ -649,6 +650,113 @@ def format_waitbuy_value_answer(row: Dict[str, Any], requested_date: str) -> str
     return f"Phiên {date_text} có {waitbuy} cổ phiếu chờ mua."
 
 
+def is_branch_cashflow_query(text: str) -> bool:
+    normalized = normalize_search_text(text)
+    if is_definition_query(text):
+        return False
+    if "dong tien" not in normalized:
+        return False
+    if "smdt" in normalized or "suc manh dong tien" in normalized:
+        return False
+    if "nganh" not in normalized and not re.search(r"\bdong\s+(?!tien\b)", normalized):
+        return False
+    return extract_branch(text) is not None
+
+
+def _normalize_cashflow_lookup_date(text: str) -> str:
+    value = extract_date_value(text)
+    normalized_value = normalize_search_text(value or "")
+    if not value or normalized_value in {"hom nay", "hien nay", "hien tai", "bay gio", "gan nhat"}:
+        return datetime.now().date().isoformat()
+
+    full = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(20\d{2})", value)
+    if full:
+        day, month, year = map(int, full.groups())
+        try:
+            return datetime(year, month, day).strftime("%Y-%m-%d")
+        except ValueError:
+            return datetime.now().date().isoformat()
+
+    month = re.search(r"(?:thang\s*)?(\d{1,2})/(20\d{2})", normalized_value)
+    if month:
+        return f"{int(month.group(2)):04d}-{int(month.group(1)):02d}"
+
+    return str(value)
+
+
+def extract_branch_cashflow_items(raw: Any) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+
+    def visit(node: Any, parent_date: Any = None):
+        if isinstance(node, list):
+            for item in node:
+                visit(item, parent_date)
+            return
+        if not isinstance(node, dict):
+            return
+
+        current_date = node.get("date") or node.get("tradingDate") or node.get("time") or parent_date
+        if current_date and any(
+            key in node for key in ("content", "cashflow", "cashFlow", "value", "signal", "status")
+        ):
+            item = dict(node)
+            item.setdefault("date", current_date)
+            items.append(item)
+
+        for key in (
+            "cashFlowBranchDatas",
+            "cashFlowBranchs",
+            "cashFlows",
+            "data",
+            "items",
+            "records",
+            "result",
+            "results",
+        ):
+            if key in node:
+                visit(node.get(key), current_date)
+
+    visit(raw)
+    return items
+
+
+def _branch_cashflow_content(item: Dict[str, Any]) -> str:
+    for key in ("content", "cashflow", "cashFlow", "value", "signal", "status"):
+        value = item.get(key)
+        if value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def select_branch_cashflow_item(items: List[Dict[str, Any]], requested_date: str) -> Optional[Dict[str, Any]]:
+    if not items:
+        return None
+
+    target = str(requested_date or "").strip()
+    if target:
+        exact = next((item for item in items if str(item.get("date") or "").strip()[: len(target)] == target), None)
+        if exact:
+            return exact
+
+    dated = [item for item in items if _parse_iso_date(item.get("date"))]
+    if dated:
+        dated.sort(key=lambda item: _parse_iso_date(item.get("date")) or datetime.min, reverse=True)
+        return dated[0]
+    return items[0]
+
+
+def format_branch_cashflow_answer(branch: str, item: Optional[Dict[str, Any]], requested_date: str) -> str:
+    branch_text = branch.strip() or "ngành"
+    if not item:
+        return f"Chưa có dữ liệu dòng tiền ngành {branch_text} cho {format_vn_date(requested_date)}."
+
+    date_text = format_vn_date(item.get("date") or requested_date)
+    content = _branch_cashflow_content(item)
+    if not content:
+        return f"Phiên {date_text} chưa có nội dung dòng tiền ngành {branch_text}."
+    return f"Dòng tiền ngành {branch_text} phiên {date_text}: {content}"
+
+
 def extract_recent_total_trade_request(text: str) -> Optional[Dict[str, Any]]:
     normalized = normalize_search_text(text)
     match = re.search(r"\b(\d{1,3})\s+phien\s+gan\s+nhat\b", normalized)
@@ -1184,6 +1292,28 @@ class Orchestrator:
                 return target
         return None
 
+    def _answer_branch_cashflow(self, user_text: str) -> str:
+        branch = extract_branch(user_text)
+        if not branch:
+            return "Anh/chị muốn kiểm tra dòng tiền ngành nào?"
+
+        requested_date = _normalize_cashflow_lookup_date(user_text)
+        branch_path = extract_branch_path(branch) or extract_branch_path(user_text)
+        api_args: Dict[str, Any] = {"date": requested_date}
+        if branch_path:
+            api_args["path"] = branch_path
+        else:
+            api_args["name"] = branch
+
+        raw_cashflow = self.executor.call(
+            "getCashFlowBranch",
+            api_args,
+            user_text=user_text,
+        )
+        items = extract_branch_cashflow_items(raw_cashflow)
+        item = select_branch_cashflow_item(items, requested_date)
+        return format_branch_cashflow_answer(branch, item, requested_date)
+
     def _answer_recent_stock_wave(self, user_text: str) -> str:
         request = extract_recent_stock_wave_request(user_text)
         if not request:
@@ -1376,6 +1506,19 @@ Yêu cầu:
         if guide_result and guide_result.action == "run" and guide_result.canonical_question:
             user_text = guide_result.canonical_question
             guided_question = True
+
+        if is_branch_cashflow_query(user_text):
+            final_text = self._answer_branch_cashflow(user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
 
         if is_recent_stock_wave_query(user_text):
             final_text = self._answer_recent_stock_wave(user_text)
