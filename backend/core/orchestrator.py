@@ -11,7 +11,7 @@ from core.memory import MemoryStore
 from core.rag import RAGStore
 from core.tool_engine import ToolRegistry
 from core.condition_engine import extract_rows, scan_vnindex_waitbuy_reversal
-from core.question_guide import QuestionGuide
+from core.question_guide import QuestionGuide, extract_date_value
 
 from services.api_executor import APIExecutor
 from services.openai_client import OpenAIClient, current_token_usage, reset_token_usage
@@ -582,6 +582,70 @@ def format_vn_date(value: Any) -> str:
     except (TypeError, ValueError):
         return str(value or "")
 
+
+def _normalize_waitbuy_lookup_date(text: str) -> Optional[str]:
+    value = extract_date_value(text)
+    if not value:
+        return None
+
+    normalized = normalize_search_text(str(value))
+    if normalized == "hom nay":
+        return datetime.now().strftime("%Y-%m-%d")
+
+    raw = str(value).strip()
+    if re.fullmatch(r"20\d{2}-\d{2}-\d{2}", raw):
+        return raw
+
+    match = re.fullmatch(r"(\d{1,2})/(\d{1,2})/(20\d{2})", raw)
+    if match:
+        day, month, year = map(int, match.groups())
+        try:
+            return datetime(year, month, day).strftime("%Y-%m-%d")
+        except ValueError:
+            return None
+
+    return None
+
+
+def is_waitbuy_value_query(text: str) -> bool:
+    normalized = normalize_search_text(text)
+    if is_definition_query(text):
+        return False
+    if not ("cho mua" in normalized or "waitbuy" in normalized):
+        return False
+    if any(k in normalized for k in ("thuyet minh", "giai thich", "vi sao", "tai sao")):
+        return False
+    return _normalize_waitbuy_lookup_date(text) is not None
+
+
+def extract_stock_wave_rows(raw: Any) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    def visit(node: Any):
+        if isinstance(node, list):
+            for item in node:
+                visit(item)
+            return
+        if not isinstance(node, dict):
+            return
+        if "date" in node and any(key in node for key in ("waitbuy", "buy", "sell", "waitsell")):
+            rows.append(node)
+            return
+        for key in ("waveDatas", "stockWaveDatas", "data", "items", "records", "result", "results"):
+            if key in node:
+                visit(node.get(key))
+
+    visit(raw)
+    return rows
+
+
+def format_waitbuy_value_answer(row: Dict[str, Any], requested_date: str) -> str:
+    date_text = format_vn_date(row.get("date") or requested_date)
+    waitbuy = row.get("waitbuy")
+    if waitbuy in (None, ""):
+        return f"Phiên {date_text} chưa có dữ liệu chờ mua."
+    return f"Phiên {date_text} có {waitbuy} cổ phiếu chờ mua."
+
 # ORCHESTRATOR
 class Orchestrator:
 
@@ -989,6 +1053,30 @@ class Orchestrator:
                 return target
         return None
 
+    def _answer_waitbuy_value(self, user_text: str) -> str:
+        requested_date = _normalize_waitbuy_lookup_date(user_text)
+        if not requested_date:
+            return "Anh/chị muốn xem chờ mua ngày nào?"
+
+        raw_wave = self.executor.call(
+            "getStockWave",
+            {"date": requested_date},
+            user_text=user_text,
+        )
+        rows = extract_stock_wave_rows(raw_wave)
+        row = next(
+            (
+                item for item in rows
+                if str(item.get("date") or "").strip()[:10] == requested_date
+            ),
+            rows[0] if rows else None,
+        )
+
+        if not row:
+            return f"Phiên {format_vn_date(requested_date)} chưa có dữ liệu chờ mua."
+
+        return format_waitbuy_value_answer(row, requested_date)
+
     async def _answer_waitbuy_explanation(self, user_text: str, model: str) -> str:
         target = await self._find_waitbuy_target()
         period = extract_requested_signal_period(user_text)
@@ -1126,6 +1214,19 @@ Yêu cầu:
         if guide_result and guide_result.action == "run" and guide_result.canonical_question:
             user_text = guide_result.canonical_question
             guided_question = True
+
+        if is_waitbuy_value_query(user_text):
+            final_text = self._answer_waitbuy_value(user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
 
         if not guided_question and is_waitbuy_explain_query(user_text):
             final_text = await self._answer_waitbuy_explanation(user_text=user_text, model=model)
