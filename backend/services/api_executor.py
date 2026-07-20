@@ -354,7 +354,7 @@ class APIExecutor:
             r"C\u00e2u h\u1ecfi v\u1ec1 [th\u00e1ng, n\u0103m] l\u00e0 s\u00f3ng l\u1edbn hay s\u00f3ng h\u1ed3i.txt".encode("ascii").decode("unicode_escape"),
         }
         date = args.get("date")
-        if doc_name in month_only_docs and isinstance(date, str):
+        if operation_id != "getAnalyzeWave" and doc_name in month_only_docs and isinstance(date, str):
             if len(date) == 10 and date.count("-") == 2:
                 log("DOC RULE NORMALIZE DATE:", date, "->", date[:7])
                 args["date"] = date[:7]
