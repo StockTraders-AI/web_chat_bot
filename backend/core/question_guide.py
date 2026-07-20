@@ -251,6 +251,27 @@ def is_explicit_stock_analysis(normalized: str) -> bool:
         )
     )
 
+def is_cashflow_status_query(normalized: str) -> bool:
+    return "dong tien" in normalized and any(
+        phrase in normalized
+        for phrase in (
+            "bat dau do vao",
+            "dang bat dau do vao",
+            "bat dau nhen nhom",
+            "dang bat dau nhen nhom",
+            "nhen nhom",
+            "do vao vao thang",
+        )
+    )
+
+def _cashflow_status_canonical_question(original: str, ticker: Optional[str] = None, branch: Optional[str] = None) -> str:
+    date_value = extract_date_value(original) or "hiện nay"
+    if ticker:
+        return f"Dòng tiền {ticker} {date_value} thế nào?"
+    if branch:
+        return f"Dòng tiền ngành {branch} {date_value} thế nào?"
+    return original
+
 def classify_groups(text: str) -> Set[str]:
     normalized = normalize_text(text)
     groups: Set[str] = set()
@@ -519,9 +540,13 @@ class QuestionGuide:
             ticker = extract_ticker(user_text)
             if branch:
                 await self._clear_state(user_id)
+                if intent == "cashflow" and is_cashflow_status_query(normalize_text(original)):
+                    return GuideResult("run", canonical_question=_cashflow_status_canonical_question(original, branch=branch))
                 return await self._after_branch_collected(user_id, intent, branch, original)
             if ticker:
                 await self._clear_state(user_id)
+                if intent == "cashflow" and is_cashflow_status_query(normalize_text(original)):
+                    return GuideResult("run", canonical_question=_cashflow_status_canonical_question(original, ticker=ticker))
                 return await self._after_ticker_collected(user_id, intent, ticker, original)
             return GuideResult("ask", message=await self._naturalize_question(
                 user_text, "Anh/chị đang muốn kiểm tra một mã cổ phiếu hay một ngành cụ thể?"
@@ -623,6 +648,11 @@ class QuestionGuide:
         if subject_kind == "both":
             return GuideResult("pass")
 
+        if subject_kind == "missing" and is_cashflow_status_query(normalized):
+            await self._save_state(user_id, {"kind": "missing_subject", "intent": "cashflow", "original": user_text})
+            return GuideResult("ask", message=await self._naturalize_question(
+                user_text, "Anh/chị muốn kiểm tra dòng tiền của mã cổ phiếu hay ngành nào?"
+            ))
         if subject_kind == "missing" and (
             (stock_intent or branch_intent)
             and not any(k in normalized for k in ("co phieu", " ma ", "nganh", "dong"))
