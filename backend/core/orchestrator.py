@@ -77,7 +77,7 @@ FORCE_RULES_PHRASES = (
     "phan tich nganh", "phan tich co phieu", "phan tich ma", "smdt co phieu",
     "smdt nganh", "dong tien", "cho mua", "cho ban", "tin hieu",
     "nganh nao", "ma nao", "gia co phieu", "gia hom nay", "vuot", "cross",
-    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "key nao", "key gi", "co key gi", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
+    "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "song lon", "song hoi", "key nao", "key gi", "co key gi", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 SMDT_DATA_INTENT_WORDS = (
     "hom nay", "ngay", "co phieu", "ma", "nganh", "bao nhieu", "tang",

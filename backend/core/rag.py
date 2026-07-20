@@ -181,6 +181,23 @@ class RAGStore:
         if smdt_intent:
             return title_containing("suc manh dong tien") or title_containing("smdt")
 
+        wave_classification_intent = any(
+            phrase in normalized
+            for phrase in (
+                "chan song",
+                "song lon",
+                "song hoi",
+                "xac nhan tao day",
+                "chuan bi tao day",
+            )
+        ) and (
+            re.search(r"\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b", normalized)
+            or "gan nhat" in normalized
+            or "thang" in normalized
+        )
+        if wave_classification_intent:
+            return title_containing("xac nhan chan song") or title_containing("song lon", "song hoi")
+
         strong_stock_intent = any(
             phrase in normalized
             for phrase in (
