@@ -711,6 +711,11 @@ def format_waitbuy_value_answer(row: Dict[str, Any], requested_date: str) -> str
     return f"Phiên {date_text} có {waitbuy} cổ phiếu chờ mua."
 
 
+def is_cashflow_range_query(text: str) -> bool:
+    normalized = normalize_search_text(text)
+    return "dong tien" in normalized and "tu" in normalized and "den nay" in normalized
+
+
 def is_stock_cashflow_query(text: str) -> bool:
     normalized = normalize_search_text(text)
     if is_definition_query(text):
@@ -718,6 +723,8 @@ def is_stock_cashflow_query(text: str) -> bool:
     if "dong tien" not in normalized:
         return False
     if "smdt" in normalized or "suc manh dong tien" in normalized:
+        return False
+    if is_cashflow_range_query(text):
         return False
     return extract_ticker(text) is not None
 
@@ -730,10 +737,11 @@ def is_branch_cashflow_query(text: str) -> bool:
         return False
     if "smdt" in normalized or "suc manh dong tien" in normalized:
         return False
+    if is_cashflow_range_query(text):
+        return False
     if "nganh" not in normalized and not re.search(r"\bdong\s+(?!tien\b)", normalized):
         return False
     return extract_branch(text) is not None
-
 
 def _normalize_cashflow_lookup_date(text: str) -> str:
     value = extract_date_value(text)
