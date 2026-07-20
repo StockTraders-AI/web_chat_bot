@@ -21,13 +21,16 @@ MHC CII KHG MPC FPT PLX VGS VOS SGB NTL HQC
 """.split()
 )
 
+MARKET_INDEX_TICKERS = frozenset({"VNINDEX"})
+INDEX_TICKER_OPERATIONS = frozenset({"getTotalTrade", "getTotalTradeReal"})
+
 NON_TICKER_TERMS = frozenset(
     {
         "AI", "API", "HTTP", "HTTPS", "JSON", "GET", "POST", "GPT",
         "SMDT", "RSI", "MACD", "NAV", "ETF", "IPO", "ROA", "ROE",
         "EPS", "PBR", "PER", "PE", "PB", "EBITDA", "USD", "CAGR",
         "YOY", "MOM", "TTM", "ALL", "NULL", "TRUE", "FALSE",
-        "MUA", "BAN", "CAN", "NHAC", "THEO", "DOI", "TRANH",
+        "MUA", "BAN", "CAN", "NHAC", "THEO", "DOI", "TRANH", "VNINDEX",
     }
 )
 
@@ -67,12 +70,19 @@ def find_disallowed_tickers(text: str) -> list[str]:
     return found
 
 
+def _is_supported_ticker(operation_id: str, value: Any) -> bool:
+    ticker = normalize_ticker(value)
+    if ticker in ALLOWED_TICKERS:
+        return True
+    return operation_id in INDEX_TICKER_OPERATIONS and ticker in MARKET_INDEX_TICKERS
+
+
 def invalid_api_ticker(operation_id: str, args: Dict[str, Any]) -> Optional[str]:
     """Return an invalid ticker argument without exposing it in error messages."""
     for key in TICKER_FIELDS:
         if key in args and args[key] not in (None, ""):
             value = normalize_ticker(args[key])
-            if value not in ALLOWED_TICKERS:
+            if not _is_supported_ticker(operation_id, value):
                 return value
 
     if operation_id in TICKER_KEYVALUE_OPERATIONS:
@@ -88,7 +98,7 @@ def invalid_api_ticker(operation_id: str, args: Dict[str, Any]) -> Optional[str]
     else:
         values = ()
     for value in values:
-        if value and normalize_ticker(value) not in ALLOWED_TICKERS:
+        if value and not _is_supported_ticker(operation_id, value):
             return normalize_ticker(value)
     return None
 
@@ -120,7 +130,7 @@ def _sanitize_api_value(operation_id: str, value: Any, key: str = "") -> Any:
 
     if isinstance(value, dict):
         ticker = _record_ticker(value, operation_id)
-        if ticker and ticker not in ALLOWED_TICKERS:
+        if ticker and not _is_supported_ticker(operation_id, ticker):
             return _DROP
         cleaned = {}
         for child_key, child_value in value.items():

@@ -16,6 +16,8 @@ from core.question_guide import QuestionGuide, extract_date_value
 from services.api_executor import APIExecutor
 from services.openai_client import OpenAIClient, current_token_usage, reset_token_usage
 from services.ticker_policy import (
+    ALLOWED_TICKERS,
+    MARKET_INDEX_TICKERS,
     allowed_tickers_text,
     find_disallowed_tickers,
     sanitize_response_text,
@@ -646,6 +648,66 @@ def format_waitbuy_value_answer(row: Dict[str, Any], requested_date: str) -> str
         return f"Phiên {date_text} chưa có dữ liệu chờ mua."
     return f"Phiên {date_text} có {waitbuy} cổ phiếu chờ mua."
 
+
+def extract_recent_total_trade_request(text: str) -> Optional[Dict[str, Any]]:
+    normalized = normalize_search_text(text)
+    match = re.search(r"\b(\d{1,3})\s+phien\s+gan\s+nhat\b", normalized)
+    if not match:
+        return None
+
+    if not any(
+        phrase in normalized
+        for phrase in ("chi so", "gia", "lich su", "ohlc", "open", "high", "low", "close", "vnindex")
+    ):
+        return None
+
+    ticker = None
+    for token in re.findall(r"\b[A-Z][A-Z0-9]{1,6}\b", text or ""):
+        token = token.upper()
+        if token in ALLOWED_TICKERS or token in MARKET_INDEX_TICKERS:
+            ticker = token
+            break
+
+    if not ticker:
+        return None
+
+    last_dates = int(match.group(1))
+    if last_dates <= 0:
+        return None
+
+    return {"ticker": ticker, "lastDates": min(last_dates, 120)}
+
+
+def is_recent_total_trade_query(text: str) -> bool:
+    return extract_recent_total_trade_request(text) is not None
+
+
+def _format_trade_number(value: Any) -> str:
+    if value in (None, ""):
+        return "NA"
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    return f"{number:.2f}".rstrip("0").rstrip(".")
+
+
+def format_recent_total_trade_answer(ticker: str, rows: List[Dict[str, Any]], last_dates: int) -> str:
+    if not rows:
+        return f"Chưa có dữ liệu {ticker} trong {last_dates} phiên gần nhất."
+
+    lines = [f"{ticker} trong {last_dates} phiên gần nhất:"]
+    for row in rows:
+        date_text = format_vn_date(row.get("date"))
+        open_value = _format_trade_number(row.get("open"))
+        high_value = _format_trade_number(row.get("high"))
+        low_value = _format_trade_number(row.get("low"))
+        close_value = _format_trade_number(row.get("close"))
+        lines.append(
+            f"- {date_text}: close {close_value}, open {open_value}, high {high_value}, low {low_value}"
+        )
+    return "\n".join(lines)
+
 # ORCHESTRATOR
 class Orchestrator:
 
@@ -1053,6 +1115,23 @@ class Orchestrator:
                 return target
         return None
 
+    def _answer_recent_total_trade(self, user_text: str) -> str:
+        request = extract_recent_total_trade_request(user_text)
+        if not request:
+            return "Anh/chị muốn xem chỉ số/mã nào và bao nhiêu phiên gần nhất?"
+
+        raw_trade = self.executor.call(
+            "getTotalTrade",
+            request,
+            user_text=user_text,
+        )
+        rows = extract_rows(raw_trade, ("totalTradeDatas", "tradeDatas", "records", "items"))
+        return format_recent_total_trade_answer(
+            request["ticker"],
+            rows,
+            request["lastDates"],
+        )
+
     def _answer_waitbuy_value(self, user_text: str) -> str:
         requested_date = _normalize_waitbuy_lookup_date(user_text)
         if not requested_date:
@@ -1214,6 +1293,19 @@ Yêu cầu:
         if guide_result and guide_result.action == "run" and guide_result.canonical_question:
             user_text = guide_result.canonical_question
             guided_question = True
+
+        if is_recent_total_trade_query(user_text):
+            final_text = self._answer_recent_total_trade(user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
 
         if is_waitbuy_value_query(user_text):
             final_text = self._answer_waitbuy_value(user_text)
