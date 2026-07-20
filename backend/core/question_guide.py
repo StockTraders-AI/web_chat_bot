@@ -126,9 +126,9 @@ def extract_ticker(text: str) -> Optional[str]:
 
 def extract_branch(text: str) -> Optional[str]:
     raw = text or ""
-    match = re.search(r"\b(?:ngành|dòng)\s+([\wÀ-ỹ\s]+)", raw, flags=re.IGNORECASE)
+    match = re.search(r"\b(?:ngành|nganh)\s+([\wÀ-ỹ\s]+)", raw, flags=re.IGNORECASE)
     if not match:
-        match = re.search(r"\b(?:nganh|dong)\s+([a-z\s]+)", raw, flags=re.IGNORECASE)
+        match = re.search(r"\b(?:dòng|dong)\s+([\wÀ-ỹ\s]+)", raw, flags=re.IGNORECASE)
     if not match:
         return None
     value = re.split(

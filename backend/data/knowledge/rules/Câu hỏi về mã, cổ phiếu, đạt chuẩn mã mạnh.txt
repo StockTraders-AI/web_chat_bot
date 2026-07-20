@@ -24,25 +24,6 @@ lastDates = số phiên được hỏi
 
 Sau đó liệt kê giá của tất cả các phiên đó.
 
-Guide Để tránh nhầm lẫn và đảm bảo hệ thống phản hồi đúng trong mọi truy vấn liên quan đến giá và Sức Mạnh Dòng Tiền (SMDT) của một cổ phiếu trong cùng một ngày, thì cần mặc định rằng: chỉ dùng duy nhất API getTotalTradeWithSMDT.
-
-Đây là API đã được tích hợp sẵn cả thông tin giá (mở cửa, cao nhất, thấp nhất, đóng cửa) lẫn chỉ số SMDT trong một phiên.
-
-Có thể được sử dụng cho các yêu cầu như lập bảng thống kê theo tháng, theo năm (truyền date là tháng hoặc năm) nên sẽ đảm bảo dữ liệu đồng bộ và chính xác tuyệt đối.
-
-Bất cứ khi nào người dùng hỏi đến cả hai yếu tố này – dù là hỏi trực tiếp trong cùng một câu, hay hỏi một cách gián tiếp – thì cũng không được tách truy vấn ra gọi từng API riêng lẻ như:
-
-getTotalTrade
-
-getSMDTTicker
-
-Thay vào đó, phải phản xạ ngay lập tức rằng đây là trường hợp nên sử dụng getTotalTradeWithSMDT.
-
-Điều này không chỉ giúp tiết kiệm truy vấn mà còn loại bỏ hoàn toàn rủi ro sai lệch dữ liệu giữa hai nguồn.
-
-Tóm lại:
-
-Chỉ cần trong câu hỏi có cả "giá" và "SMDT" trong cùng một phiên, thì mặc định gọi duy nhất getTotalTradeWithSMDT – không phân vân, không chia nhỏ.
 
 Guide Khi người dùng yêu cầu: "Lập bảng thống kê [Mã] trong tháng, trong năm hoặc trong khoảng thời gian dài", cần xử lý như sau:
 

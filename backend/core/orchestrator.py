@@ -708,6 +708,75 @@ def format_recent_total_trade_answer(ticker: str, rows: List[Dict[str, Any]], la
         )
     return "\n".join(lines)
 
+
+def extract_recent_stock_wave_request(text: str) -> Optional[Dict[str, Any]]:
+    normalized = normalize_search_text(text)
+    match = re.search(r"\b(\d{1,3})\s+phien\s+gan\s+nhat\b", normalized)
+    if not match:
+        return None
+
+    if "chan song" in normalized:
+        return None
+
+    is_wave_metric = any(
+        phrase in normalized
+        for phrase in (
+            "do song",
+            "so lieu do song",
+            "so lieu song",
+            "stock wave",
+            "cho mua",
+            "cho ban",
+            "tin hieu mua",
+            "tin hieu ban",
+            "do tin cay",
+            "waitbuy",
+            "waitsell",
+        )
+    )
+    if not is_wave_metric:
+        return None
+
+    last_dates = int(match.group(1))
+    if last_dates <= 0:
+        return None
+
+    year_match = re.search(r"\b(20\d{2})\b", normalized)
+    year = int(year_match.group(1)) if year_match else datetime.now().year
+    return {"date": str(year), "lastDates": min(last_dates, 120)}
+
+
+def is_recent_stock_wave_query(text: str) -> bool:
+    return extract_recent_stock_wave_request(text) is not None
+
+
+def recent_stock_wave_rows(raw: Any, last_dates: int) -> List[Dict[str, Any]]:
+    rows = extract_stock_wave_rows(raw)
+    rows = [row for row in rows if _parse_iso_date(row.get("date"))]
+    rows.sort(key=lambda row: _parse_iso_date(row.get("date")) or datetime.min, reverse=True)
+    return rows[:last_dates]
+
+
+def format_recent_stock_wave_answer(rows: List[Dict[str, Any]], last_dates: int) -> str:
+    if not rows:
+        return f"Chưa có dữ liệu dò sóng trong {last_dates} phiên gần nhất."
+
+    lines = [f"Số liệu dò sóng {last_dates} phiên gần nhất:"]
+    for row in rows:
+        date_text = format_vn_date(row.get("date"))
+        parts = [
+            f"mua {_format_trade_number(row.get('buy'))}",
+            f"bán {_format_trade_number(row.get('sell'))}",
+            f"chờ mua {_format_trade_number(row.get('waitbuy'))}",
+            f"chờ bán {_format_trade_number(row.get('waitsell'))}",
+            f"tổng {_format_trade_number(row.get('total'))}",
+        ]
+        reliability = row.get("reliability")
+        if reliability not in (None, ""):
+            parts.append(f"độ tin cậy {_format_trade_number(reliability)}%")
+        lines.append(f"- {date_text}: " + ", ".join(parts))
+    return "\n".join(lines)
+
 # ORCHESTRATOR
 class Orchestrator:
 
@@ -1115,6 +1184,20 @@ class Orchestrator:
                 return target
         return None
 
+    def _answer_recent_stock_wave(self, user_text: str) -> str:
+        request = extract_recent_stock_wave_request(user_text)
+        if not request:
+            return "Anh/chị muốn xem số liệu dò sóng bao nhiêu phiên gần nhất?"
+
+        api_args = {"date": request["date"]}
+        raw_wave = self.executor.call(
+            "getStockWave",
+            api_args,
+            user_text=user_text,
+        )
+        rows = recent_stock_wave_rows(raw_wave, request["lastDates"])
+        return format_recent_stock_wave_answer(rows, request["lastDates"])
+
     def _answer_recent_total_trade(self, user_text: str) -> str:
         request = extract_recent_total_trade_request(user_text)
         if not request:
@@ -1293,6 +1376,19 @@ Yêu cầu:
         if guide_result and guide_result.action == "run" and guide_result.canonical_question:
             user_text = guide_result.canonical_question
             guided_question = True
+
+        if is_recent_stock_wave_query(user_text):
+            final_text = self._answer_recent_stock_wave(user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
 
         if is_recent_total_trade_query(user_text):
             final_text = self._answer_recent_total_trade(user_text)

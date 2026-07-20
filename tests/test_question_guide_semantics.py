@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from core.memory import MemoryStore
-from core.question_guide import QuestionGuide
+from core.question_guide import QuestionGuide, extract_branch
 
 
 class FakeRAG:
@@ -169,6 +169,15 @@ class QuestionGuideSemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.action, "run")
         self.assertIn("NVL", result.canonical_question)
         self.assertNotIn("khoảng thời gian", result.message)
+
+    async def test_branch_cashflow_prefers_industry_subject(self):
+        question = "dòng tiền ngành ngân hàng hiện nay thế nào"
+        result = await self.guide.handle("cashflow-branch", question)
+
+        self.assertEqual(extract_branch(question), "ngân hàng")
+        self.assertEqual(result.action, "run")
+        self.assertEqual(result.canonical_question, "Dòng tiền ngành ngân hàng hiện nay thế nào?")
+        self.assertNotIn("mã cổ phiếu", result.message)
     async def test_subject_then_time_are_collected_in_sequence(self):
         first = await self.guide.handle("u10", "smdt tháng")
         second = await self.guide.handle("u10", "ngành ngân hàng")
