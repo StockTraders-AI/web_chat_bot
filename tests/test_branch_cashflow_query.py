@@ -69,6 +69,28 @@ class BranchCashflowQueryTests(unittest.TestCase):
         self.assertEqual(rows[0]["date"], "2026-07-20")
         self.assertEqual(rows[0]["content"], "Tiền vào")
 
+    def test_extract_cash_ticker_datas_shape_from_live_api(self):
+        rows = extract_branch_cashflow_items(
+            [
+                {
+                    "date": "2026-07-20",
+                    "cashTickerDatas": [
+                        {
+                            "content": "Tiếp tục đổ vào",
+                            "percent": "0.00%",
+                            "price": 0.0,
+                            "ticker": "SSI",
+                            "type": "HSX",
+                        }
+                    ],
+                }
+            ]
+        )
+
+        self.assertEqual(rows[0]["date"], "2026-07-20")
+        self.assertEqual(rows[0]["ticker"], "SSI")
+        self.assertEqual(rows[0]["content"], "Tiếp tục đổ vào")
+
     def test_answer_branch_cashflow_calls_cashflow_branch_with_path(self):
         orchestrator = Orchestrator.__new__(Orchestrator)
         orchestrator.executor = FakeExecutor()

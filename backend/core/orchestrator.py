@@ -718,6 +718,7 @@ def extract_branch_cashflow_items(raw: Any) -> List[Dict[str, Any]]:
             "cashFlowBranchDatas",
             "cashFlowBranchs",
             "cashFlowTickers",
+            "cashTickerDatas",
             "cashFlows",
             "data",
             "items",
