@@ -206,6 +206,43 @@ CREATE TABLE IF NOT EXISTS condition_flows (
 CREATE INDEX IF NOT EXISTS idx_condition_flows_status
 ON condition_flows(status);
 
+CREATE TABLE IF NOT EXISTS condition_signals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  flow_id INTEGER NOT NULL,
+  flow_name TEXT NOT NULL,
+  condition_keys_json TEXT NOT NULL DEFAULT '[]',
+  signal_key TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  message TEXT NOT NULL,
+  condition_results_json TEXT NOT NULL DEFAULT '[]',
+  check_date TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  delivery_key TEXT NOT NULL UNIQUE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_condition_signals_flow_date
+ON condition_signals(flow_id, check_date, id);
+
+CREATE INDEX IF NOT EXISTS idx_condition_signals_key_date
+ON condition_signals(signal_key, check_date, id);
+
+CREATE TABLE IF NOT EXISTS condition_signal_states (
+  flow_id INTEGER NOT NULL,
+  signal_key TEXT NOT NULL,
+  matched INTEGER NOT NULL DEFAULT 0 CHECK(matched IN (0, 1)),
+  transition_count INTEGER NOT NULL DEFAULT 0,
+  last_check_date TEXT NOT NULL DEFAULT '',
+  last_delivery_key TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(flow_id, signal_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_condition_signal_states_updated
+ON condition_signal_states(updated_at);
+
 CREATE INDEX IF NOT EXISTS idx_condition_templates_status
 ON condition_templates(status);
 
@@ -2039,6 +2076,217 @@ class MemoryStore:
             )
 
             await db.commit()
+
+
+    @staticmethod
+    def _condition_signal_from_row(row):
+        if not row:
+            return None
+
+        data = dict(row)
+
+        for source_key, target_key in (
+            ("condition_keys_json", "condition_keys"),
+            ("condition_results_json", "condition_results"),
+        ):
+            try:
+                data[target_key] = json.loads(data.get(source_key) or "[]")
+            except Exception:
+                data[target_key] = []
+            data.pop(source_key, None)
+
+        return data
+
+
+    async def update_condition_signal_state(
+        self,
+        flow_id: int,
+        signal_key: str,
+        matched: bool,
+        check_date: str,
+    ):
+        flow_id = int(flow_id)
+        signal_key = signal_key or ""
+        next_matched = 1 if matched else 0
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT
+                    matched,
+                    transition_count,
+                    last_delivery_key
+                FROM condition_signal_states
+                WHERE flow_id=? AND signal_key=?
+                """,
+                (flow_id, signal_key),
+            )
+            row = await cur.fetchone()
+
+            previous_matched = bool(row["matched"]) if row else False
+            transition_count = int(row["transition_count"] or 0) if row else 0
+            delivery_key = row["last_delivery_key"] if row else ""
+            should_publish = bool(matched) and not previous_matched
+
+            if should_publish:
+                transition_count += 1
+                delivery_key = f"{flow_id}:{signal_key}:{check_date or 'unknown'}:{transition_count}"
+
+            await db.execute(
+                """
+                INSERT INTO condition_signal_states(
+                    flow_id,
+                    signal_key,
+                    matched,
+                    transition_count,
+                    last_check_date,
+                    last_delivery_key,
+                    updated_at
+                )
+                VALUES(?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(flow_id, signal_key) DO UPDATE SET
+                    matched=excluded.matched,
+                    transition_count=excluded.transition_count,
+                    last_check_date=excluded.last_check_date,
+                    last_delivery_key=excluded.last_delivery_key,
+                    updated_at=CURRENT_TIMESTAMP
+                """,
+                (
+                    flow_id,
+                    signal_key,
+                    next_matched,
+                    transition_count,
+                    check_date or "",
+                    delivery_key or "",
+                ),
+            )
+            await db.commit()
+
+        return {
+            "flow_id": flow_id,
+            "signal_key": signal_key,
+            "previous_matched": previous_matched,
+            "matched": bool(matched),
+            "should_publish": should_publish,
+            "transition_count": transition_count,
+            "delivery_key": delivery_key or "",
+        }
+
+    async def upsert_condition_signal(
+        self,
+        flow_id: int,
+        flow_name: str,
+        condition_keys: list[str],
+        signal_key: str,
+        title: str,
+        message: str,
+        condition_results: list[dict],
+        check_date: str,
+        source: str,
+        delivery_key: str,
+    ):
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                """
+                INSERT INTO condition_signals(
+                    flow_id,
+                    flow_name,
+                    condition_keys_json,
+                    signal_key,
+                    title,
+                    message,
+                    condition_results_json,
+                    check_date,
+                    source,
+                    delivery_key,
+                    updated_at
+                )
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(delivery_key) DO UPDATE SET
+                    flow_name=excluded.flow_name,
+                    condition_keys_json=excluded.condition_keys_json,
+                    signal_key=excluded.signal_key,
+                    title=excluded.title,
+                    message=excluded.message,
+                    condition_results_json=excluded.condition_results_json,
+                    check_date=excluded.check_date,
+                    source=excluded.source,
+                    updated_at=CURRENT_TIMESTAMP
+                RETURNING id
+                """,
+                (
+                    int(flow_id),
+                    flow_name or "",
+                    json.dumps(condition_keys or [], ensure_ascii=False),
+                    signal_key or "",
+                    title or "",
+                    message or "",
+                    json.dumps(condition_results or [], ensure_ascii=False),
+                    check_date or "",
+                    source or "",
+                    delivery_key,
+                ),
+            )
+            row = await cur.fetchone()
+            await db.commit()
+            return row[0] if row else None
+
+    async def list_condition_signals(
+        self,
+        signal_key: str | None = None,
+        flow_id: int | None = None,
+        limit: int = 20,
+    ):
+        query = """
+            SELECT
+                id,
+                flow_id,
+                flow_name,
+                condition_keys_json,
+                signal_key,
+                title,
+                message,
+                condition_results_json,
+                check_date,
+                source,
+                delivery_key,
+                created_at,
+                updated_at
+            FROM condition_signals
+            WHERE 1=1
+        """
+        params = []
+
+        if signal_key:
+            query += " AND signal_key=?"
+            params.append(signal_key)
+
+        if flow_id is not None:
+            query += " AND flow_id=?"
+            params.append(int(flow_id))
+
+        query += " ORDER BY updated_at DESC, id DESC LIMIT ?"
+        params.append(max(1, min(int(limit or 20), 100)))
+
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(query, params)
+            rows = await cur.fetchall()
+
+        return [self._condition_signal_from_row(row) for row in rows]
+
+    async def get_latest_condition_signal(
+        self,
+        signal_key: str | None = None,
+        flow_id: int | None = None,
+    ):
+        signals = await self.list_condition_signals(
+            signal_key=signal_key,
+            flow_id=flow_id,
+            limit=1,
+        )
+        return signals[0] if signals else None
 
     async def confirm_condition_flow(
             self,

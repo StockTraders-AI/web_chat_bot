@@ -2,6 +2,7 @@ import json
 import httpx
 
 from services.ticker_policy import invalid_api_ticker, sanitize_api_result
+from core.realtime_wave import latest_wave_snapshot
 from datetime import datetime
 import re
 import unicodedata
@@ -302,31 +303,29 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
             "message": f"Thieu date de kiem tra waitbuy > {threshold:g}",
         }
 
-    raw = await post_data_api(
-        "getStockWave",
-        {"date": date},
-    )
+    raw = latest_wave_snapshot(date)
 
-    if is_api_error(raw):
+    if not raw:
         return {
             "ok": False,
             "matched": False,
             "condition_key": condition_key,
-            "message": raw["message"],
-            "error": raw,
+            "message": f"Chua co du lieu realtime wave cho ngay {str(date)[:10]}",
+            "error": {
+                "type": "realtime_wave_unavailable",
+                "channel": "wave",
+                "date": str(date)[:10],
+            },
         }
 
-    rows = []
-
-    if isinstance(raw, dict):
-        rows = raw.get("waveDatas") or raw.get("data") or []
+    rows = raw.get("waveDatas") or []
 
     if not rows:
         return {
             "ok": False,
             "matched": False,
             "condition_key": condition_key,
-            "message": "Khong co du lieu getStockWave",
+            "message": "Realtime wave chua co du lieu waitbuy",
             "raw": raw,
         }
 
@@ -335,6 +334,7 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
     waitbuy = to_float(
         latest.get("waitbuy")
         or latest.get("waitBuy")
+        or latest.get("wait_buy")
         or latest.get("cho_mua")
     )
 
@@ -346,13 +346,16 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
         "condition_key": condition_key,
         "condition": f"waitbuy > {threshold:g}",
         "data": {
-            "date": latest.get("date") or date,
+            "date": latest.get("date") or latest.get("tradingDate") or date,
             "waitbuy": waitbuy,
+            "source": raw.get("_source"),
+            "sent_at": raw.get("_sentAt"),
+            "received_at": raw.get("_receivedAt"),
         },
         "message": (
-            f"Cho mua tang tren {threshold:g} co phieu"
+            f"Cho mua realtime tang tren {threshold:g} co phieu"
             if matched
-            else "Khong dat dieu kien"
+            else "Khong dat dieu kien realtime wave"
         ),
     }
 

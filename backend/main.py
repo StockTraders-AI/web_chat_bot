@@ -12,6 +12,7 @@ from core.condition_engine import (
     evaluate_flow_expression,
     resolve_flow_condition_refs,
     resolve_template_support,
+    resolve_condition_key,
     run_condition,
 )
 
@@ -32,6 +33,7 @@ from core.chat_runtime import stream_standard_chat
 from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_target
 from core.model_router import pick_model
 from core.quota import QuotaService
+from core.realtime_wave import add_wave_listener, start_realtime_wave_client, stop_realtime_wave_client, wave_status
 from routes.iplatform_api import configure_iplatform_api, router as iplatform_router
 from routes.portfolio_chat import configure_portfolio_chat_api, router as portfolio_chat_router
 from services.openai_client import OpenAIClient
@@ -79,6 +81,7 @@ rag = RAGStore()
 registry = ToolRegistry()
 orch: Orchestrator | None = None
 sales: SalesDiscovery | None = None
+REALTIME_WAVE_CONDITION_KEYS = {"waitbuy_over_100", "waitbuy_over_200"}
 class ChatIn(BaseModel):
     user_id: str
     message: str
@@ -399,6 +402,151 @@ def sales_state_completed(targets: dict, configs: list[dict]) -> bool:
     return True
 
 
+def is_active_condition_flow(flow: dict) -> bool:
+    return flow.get("status") == "confirmed" and bool(flow.get("active"))
+
+
+def flow_delivery_key(flow_id: int, check_date: str, condition_results: list[dict]) -> str:
+    return f"{flow_id}:{check_date}"
+
+
+def signal_key_from_condition_keys(condition_keys: list[str]) -> str:
+    return "+".join(condition_keys)
+
+
+def signal_title(flow: dict, condition_results: list[dict]) -> str:
+    return (
+        flow.get("name")
+        or next(
+            (result.get("template_name") for result in condition_results if result.get("template_name")),
+            "Tin hieu dieu kien",
+        )
+    )
+
+
+async def persist_condition_signal(
+    flow: dict,
+    condition_keys: list[str],
+    condition_results: list[dict],
+    message: str,
+    check_date: str,
+    delivery_key: str,
+    source: str,
+):
+    await memory.upsert_condition_signal(
+        flow_id=int(flow["id"]),
+        flow_name=flow.get("name") or "",
+        condition_keys=condition_keys,
+        signal_key=signal_key_from_condition_keys(condition_keys),
+        title=signal_title(flow, condition_results),
+        message=message,
+        condition_results=condition_results,
+        check_date=check_date,
+        source=source,
+        delivery_key=delivery_key,
+    )
+
+
+async def handle_realtime_wave_update(payload: dict):
+    if not memory:
+        return
+
+    templates = await memory.list_condition_templates()
+    templates_by_id = {
+        int(template["id"]): template
+        for template in templates
+        if str(template.get("id", "")).isdigit()
+    }
+    flows = await memory.list_condition_flows()
+    status = wave_status()
+    check_date = status.get("latest_date") or datetime.now().strftime("%Y-%m-%d")
+
+    for flow in flows:
+        if not is_active_condition_flow(flow):
+            continue
+
+        refs = resolve_flow_condition_refs(flow.get("expression") or "", templates)
+        if not refs:
+            continue
+
+        ref_templates = [templates_by_id.get(int(ref["id"])) for ref in refs]
+        if any(template is None for template in ref_templates):
+            continue
+
+        resolved_keys = [
+            resolve_condition_key(template_condition_key(template))
+            for template in ref_templates
+            if template
+        ]
+
+        if not resolved_keys or any(key not in REALTIME_WAVE_CONDITION_KEYS for key in resolved_keys):
+            continue
+
+        condition_results = []
+        matches = {}
+
+        for ref, template in zip(refs, ref_templates):
+            template_id = int(ref["id"])
+            condition_context = {
+                "date": check_date,
+                "condition_key": template_condition_key(template),
+            }
+            result = await run_condition(
+                template_id=template_id,
+                context=condition_context,
+            )
+            result["template_id"] = template_id
+            result["template_name"] = template.get("name")
+            matches[template_id] = bool(result.get("matched"))
+            condition_results.append(result)
+
+        matched = evaluate_flow_expression(flow_refs_expression(refs), matches)
+        signal_key = signal_key_from_condition_keys(resolved_keys)
+        state = await memory.update_condition_signal_state(
+            flow_id=int(flow["id"]),
+            signal_key=signal_key,
+            matched=matched,
+            check_date=check_date,
+        )
+
+        if not matched:
+            continue
+
+        if not state["should_publish"]:
+            continue
+
+        delivery_key = state["delivery_key"]
+
+        demo_message = build_demo_flow_ai_message(
+            flow["name"],
+            condition_results,
+            trigger_prompt=flow.get("trigger_prompt"),
+            check_date=check_date,
+        )
+        await persist_condition_signal(
+            flow=flow,
+            condition_keys=resolved_keys,
+            condition_results=condition_results,
+            message=demo_message,
+            check_date=check_date,
+            delivery_key=delivery_key,
+            source="realtime_wave",
+        )
+
+        delivered = []
+        for user in await memory.list_sales_demo_users():
+            await memory.add(user["id"], "assistant", demo_message)
+            delivered.append(user["id"])
+
+        print(
+            "REALTIME_WAVE_FLOW_DELIVERED:",
+            f"flow_id={flow['id']}",
+            f"date={check_date}",
+            f"transition={state['transition_count']}",
+            f"users={len(delivered)}",
+        )
+
+
 @app.on_event("startup")
 async def startup():
     global orch, sales
@@ -410,6 +558,13 @@ async def startup():
     configure_iplatform_api(lambda: orch)
     configure_portfolio_chat_api(lambda: orch)
     sales = SalesDiscovery(memory=memory)
+    add_wave_listener(handle_realtime_wave_update)
+    start_realtime_wave_client()
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    await stop_realtime_wave_client()
 
 @app.get("/meta/models")
 def meta_models():
@@ -1039,6 +1194,48 @@ async def demo_check_condition_flow(
         "delivered_count": len(delivered),
         "delivered_users": delivered,
         "results": condition_results,
+    }
+
+
+@app.get("/condition-realtime/wave/status")
+async def condition_realtime_wave_status(
+    authorization: Optional[str] = Header(default=None),
+    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
+):
+    await require_super_admin(authorization, session_cookie)
+    return wave_status()
+
+
+
+@app.get("/public/condition-signals/latest")
+async def public_latest_condition_signal(
+    signal_key: Optional[str] = None,
+    flow_id: Optional[int] = None,
+):
+    signal = await memory.get_latest_condition_signal(
+        signal_key=signal_key,
+        flow_id=flow_id,
+    )
+
+    return {
+        "ok": True,
+        "signal": signal,
+    }
+
+
+@app.get("/public/condition-signals")
+async def public_condition_signals(
+    signal_key: Optional[str] = None,
+    flow_id: Optional[int] = None,
+    limit: int = 20,
+):
+    return {
+        "ok": True,
+        "signals": await memory.list_condition_signals(
+            signal_key=signal_key,
+            flow_id=flow_id,
+            limit=limit,
+        ),
     }
 
 
