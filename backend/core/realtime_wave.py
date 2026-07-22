@@ -216,60 +216,69 @@ async def _run_realtime_wave_client():
         print(f"REALTIME_WAVE_SOCKET_DISABLED: {SOCKETIO_IMPORT_ERROR}")
         return
 
-    client = socketio_module.AsyncClient(
-        reconnection=True,
-        reconnection_attempts=0,
-        logger=False,
-        engineio_logger=False,
-    )
-    _socket_client = client
-
-    @client.event(namespace=REALTIME_NAMESPACE)
-    async def connect():
-        await client.emit(
-            "message",
-            {
-                "action": "subscribe",
-                "channels": ["wave"],
-            },
-            namespace=REALTIME_NAMESPACE,
+    while REALTIME_WAVE_ENABLED:
+        client = socketio_module.AsyncClient(
+            reconnection=True,
+            reconnection_attempts=0,
+            logger=False,
+            engineio_logger=False,
         )
-        print("REALTIME_WAVE_SOCKET_CONNECTED")
+        _socket_client = client
 
-    @client.event(namespace=REALTIME_NAMESPACE)
-    async def disconnect():
-        print("REALTIME_WAVE_SOCKET_DISCONNECTED")
-
-    @client.event(namespace=REALTIME_NAMESPACE)
-    async def connect_error(data):
-        print("REALTIME_WAVE_SOCKET_CONNECT_ERROR:", data)
-
-    @client.on("message", namespace=REALTIME_NAMESPACE)
-    async def on_message(payload):
-        if update_wave_payload(payload):
-            status = wave_status()
-            print(
-                "REALTIME_WAVE_MESSAGE:",
-                f"rows={status['row_count']}",
-                f"latest_date={status['latest_date']}",
+        @client.event(namespace=REALTIME_NAMESPACE)
+        async def connect():
+            global _last_socket_error
+            _last_socket_error = ""
+            await client.emit(
+                "message",
+                {
+                    "action": "subscribe",
+                    "channels": ["wave"],
+                },
+                namespace=REALTIME_NAMESPACE,
             )
-            _dispatch_wave_payload(payload)
+            print("REALTIME_WAVE_SOCKET_CONNECTED")
 
-    try:
-        await client.connect(
-            _socket_connect_url(),
-            transports=["websocket"],
-            namespaces=[REALTIME_NAMESPACE],
-        )
-        await client.wait()
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        _last_socket_error = str(exc)
-        print("REALTIME_WAVE_SOCKET_ERROR:", exc)
-    finally:
-        if client.connected:
-            await client.disconnect()
+        @client.event(namespace=REALTIME_NAMESPACE)
+        async def disconnect():
+            print("REALTIME_WAVE_SOCKET_DISCONNECTED")
+
+        @client.event(namespace=REALTIME_NAMESPACE)
+        async def connect_error(data):
+            global _last_socket_error
+            _last_socket_error = f"connect_error: {data!r}"
+            print("REALTIME_WAVE_SOCKET_CONNECT_ERROR:", data)
+
+        @client.on("message", namespace=REALTIME_NAMESPACE)
+        async def on_message(payload):
+            if update_wave_payload(payload):
+                status = wave_status()
+                print(
+                    "REALTIME_WAVE_MESSAGE:",
+                    f"rows={status['row_count']}",
+                    f"latest_date={status['latest_date']}",
+                )
+                _dispatch_wave_payload(payload)
+
+        try:
+            await client.connect(
+                _socket_connect_url(),
+                transports=["websocket", "polling"],
+                namespaces=[REALTIME_NAMESPACE],
+                wait_timeout=10,
+            )
+            await client.wait()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            _last_socket_error = str(exc)
+            print("REALTIME_WAVE_SOCKET_ERROR:", exc)
+        finally:
+            if client.connected:
+                await client.disconnect()
+
+        await asyncio.sleep(5)
+        print("REALTIME_WAVE_SOCKET_RETRYING")
 
 
 def start_realtime_wave_client():
