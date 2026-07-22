@@ -253,8 +253,7 @@ async def _run_realtime_wave_client():
 
     while REALTIME_WAVE_ENABLED:
         client = socketio_module.AsyncClient(
-            reconnection=True,
-            reconnection_attempts=0,
+            reconnection=False,
             logger=False,
             engineio_logger=False,
         )
@@ -310,7 +309,7 @@ async def _run_realtime_wave_client():
         try:
             await client.connect(
                 _socket_connect_url(),
-                transports=["websocket", "polling"],
+                transports=["websocket"],
                 namespaces=[REALTIME_NAMESPACE],
                 wait_timeout=10,
             )
@@ -445,7 +444,15 @@ def start_realtime_wave_client():
     return _socket_task
 
 
-async def ensure_realtime_wave_client(timeout: float = 5.0):
+def _should_restart_stale_socket(status: dict) -> bool:
+    return (
+        bool(status.get("task_running"))
+        and not bool(status.get("connected"))
+        and bool(status.get("last_error"))
+    )
+
+
+async def ensure_realtime_wave_client(timeout: float = 5.0, restart_stale: bool = True):
     task = start_realtime_wave_client()
     if not task:
         return wave_status()
@@ -458,6 +465,21 @@ async def ensure_realtime_wave_client(timeout: float = 5.0):
         if status["connected"] or status["task_done"]:
             return status
         await asyncio.sleep(0.1)
+
+    status = wave_status()
+    if restart_stale and _should_restart_stale_socket(status):
+        _record_socket_event("auto_restart", reason=status.get("last_error") or "stale_disconnected")
+        await stop_realtime_wave_client()
+        task = start_realtime_wave_client()
+        if not task:
+            return wave_status()
+
+        deadline = loop.time() + max(0.0, timeout)
+        while loop.time() < deadline:
+            status = wave_status()
+            if status["connected"] or status["task_done"]:
+                return status
+            await asyncio.sleep(0.1)
 
     return wave_status()
 
