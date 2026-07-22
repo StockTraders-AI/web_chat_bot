@@ -152,6 +152,7 @@ let editingConditionTemplateId = null;
 let checkingDemoFlowId = null;
 let demoCheckResults = {};
 let activeFlowCheckDates = {};
+let realtimeWaveStatusTimer = null;
 let conditionPage = 1;
 const CONDITION_PAGE_SIZE = 7;
 let currentView = "chat";
@@ -679,6 +680,10 @@ function setMainView(view) {
 
   closeAccountDropdown();
 
+  if (!isConditions) {
+    stopRealtimeWaveStatusMonitor();
+  }
+
   if (isConditions) {
     loadConditionTemplates().then(loadConditionFlows);
   }
@@ -724,6 +729,9 @@ function showConditionStep(step) {
 
   if (isStep3) {
     renderActiveFlows();
+    startRealtimeWaveStatusMonitor("step3_open");
+  } else {
+    stopRealtimeWaveStatusMonitor();
   }
 }
 
@@ -2787,6 +2795,61 @@ function logRealtimeWatch(flowId, watch) {
   });
 }
 
+async function logRealtimeWaveStatus(reason = "manual") {
+  if (!window.console) return;
+
+  try {
+    const res = await fetch("/condition-realtime/wave/status", {
+      credentials: "same-origin",
+    });
+    const status = await res.json().catch(() => ({}));
+
+    console.info("CONDITION_REALTIME_WAVE_STATUS", {
+      reason,
+      ok: res.ok,
+      connected: status.connected,
+      task_running: status.task_running,
+      task_done: status.task_done,
+      has_socketio: status.has_socketio,
+      row_count: status.row_count,
+      latest_date: status.latest_date,
+      received_at: status.received_at,
+      sent_at: status.sent_at,
+      last_error: status.last_error,
+      url: status.url,
+      namespace: status.namespace,
+      raw: status,
+    });
+  } catch (err) {
+    console.info("CONDITION_REALTIME_WAVE_STATUS", {
+      reason,
+      ok: false,
+      error: err?.message || String(err),
+    });
+  }
+}
+
+function startRealtimeWaveStatusMonitor(reason = "step3") {
+  logRealtimeWaveStatus(reason);
+
+  if (realtimeWaveStatusTimer) return;
+
+  realtimeWaveStatusTimer = window.setInterval(() => {
+    if (currentView !== "conditions" || conditionStep3El?.hidden) {
+      stopRealtimeWaveStatusMonitor();
+      return;
+    }
+
+    logRealtimeWaveStatus("interval");
+  }, 5000);
+}
+
+function stopRealtimeWaveStatusMonitor() {
+  if (!realtimeWaveStatusTimer) return;
+  window.clearInterval(realtimeWaveStatusTimer);
+  realtimeWaveStatusTimer = null;
+}
+
 async function toggleActiveFlow(id) {
   const flow = conditionFlows.find((item) => item.id === id);
   if (!flow) return;
@@ -2813,6 +2876,7 @@ async function toggleActiveFlow(id) {
     if (!res.ok) throw new Error(data?.detail || "toggle failed");
 
     logRealtimeWatch(id, data.realtime_watch);
+    startRealtimeWaveStatusMonitor(nextActive ? "flow_enabled" : "flow_disabled");
     showToast(
       realtimeWatchMessage(data.realtime_watch, nextActive),
       data.realtime_watch?.realtime_supported || !nextActive ? "success" : "error"
