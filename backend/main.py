@@ -1357,10 +1357,27 @@ async def public_latest_condition_signal(
         signal_key=signal_key,
         flow_id=flow_id,
     )
+    response = signal.get("message") if signal else None
+
+    if signal:
+        state = await memory.get_condition_signal_state(
+            int(signal.get("flow_id")),
+            signal.get("signal_key") or signal_key or "",
+        )
+        state_updated_at = state.get("updated_at")
+        signal_updated_at = signal.get("updated_at")
+
+        if (
+            state_updated_at
+            and signal_updated_at
+            and not state.get("matched")
+            and str(state_updated_at) >= str(signal_updated_at)
+        ):
+            response = None
 
     return {
         "ok": True,
-        "response": signal.get("message") if signal else None,
+        "response": response,
     }
 
 
