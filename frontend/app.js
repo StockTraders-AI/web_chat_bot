@@ -124,6 +124,8 @@ const flowConditionKeywordEl = document.getElementById("flowConditionKeyword");
 const conditionSearchEl = document.getElementById("conditionSearch");
 const conditionPaginationEl = document.getElementById("conditionPagination");
 const ACTIVE_USER_STORAGE_KEY = "salesDemoActiveUser";
+const ACTIVE_MAIN_VIEW_STORAGE_KEY = "stockTradersActiveMainView";
+const ACTIVE_CONDITION_STEP_STORAGE_KEY = "stockTradersActiveConditionStep";
 const AUDIT_PAGE_SIZE = 3;
 
 let users = [];
@@ -406,6 +408,8 @@ async function enterApp() {
     hideProfileForm();
     addEmptyState();
   }
+
+  await restoreMainView();
 }
 
 async function restoreAuthSession() {
@@ -548,8 +552,82 @@ function closeCreateAccountModal() {
   createPasswordEl.value = "";
 }
 
+function canAccessMainView(view) {
+  if (view === "chat") return canUseChat();
+  if (view === "accounts") return currentAccount?.role === "super_admin";
+  if (view === "conditions") return currentAccount?.role === "super_admin";
+  if (view === "sales-targets") return ["admin", "super_admin"].includes(currentAccount?.role);
+  if (view === "case-ideas") return ["admin", "super_admin"].includes(currentAccount?.role);
+  return false;
+}
+
+function getStoredMainView() {
+  try {
+    return localStorage.getItem(ACTIVE_MAIN_VIEW_STORAGE_KEY) || "chat";
+  } catch {
+    return "chat";
+  }
+}
+
+function saveMainView(view) {
+  try {
+    localStorage.setItem(ACTIVE_MAIN_VIEW_STORAGE_KEY, view);
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function getStoredConditionStep() {
+  try {
+    const step = Number(localStorage.getItem(ACTIVE_CONDITION_STEP_STORAGE_KEY));
+    return [1, 2, 3].includes(step) ? step : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function saveConditionStep(step) {
+  try {
+    localStorage.setItem(ACTIVE_CONDITION_STEP_STORAGE_KEY, String(step));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+async function restoreMainView() {
+  const savedView = getStoredMainView();
+
+  if (!canAccessMainView(savedView)) {
+    await showChatView();
+    return;
+  }
+
+  if (savedView === "accounts") {
+    await showAccountAdminView();
+    return;
+  }
+
+  if (savedView === "conditions") {
+    await showConditionAdminView(getStoredConditionStep());
+    return;
+  }
+
+  if (savedView === "sales-targets") {
+    await showSalesTargetAdminView();
+    return;
+  }
+
+  if (savedView === "case-ideas") {
+    await showCaseIdeaAdminView();
+    return;
+  }
+
+  await showChatView();
+}
+
 function setMainView(view) {
   currentView = view;
+  saveMainView(view);
 
   const isAccounts = view === "accounts";
   const isConditions = view === "conditions";
@@ -615,6 +693,8 @@ function setMainView(view) {
 }
 
 function showConditionStep(step) {
+  saveConditionStep(step);
+
   const isStep1 = step === 1;
   const isStep2 = step === 2;
   const isStep3 = step === 3;
@@ -672,6 +752,13 @@ async function showChatView() {
   const messages = await loadChatHistory(currentUserId);
   renderChatHistory(messages);
   await refreshProgress(currentUserId);
+}
+
+async function showConditionAdminView(step = getStoredConditionStep()) {
+  if (currentAccount?.role !== "super_admin") return;
+  hideProfileForm();
+  setMainView("conditions");
+  showConditionStep(step);
 }
 
 async function showAccountAdminView() {
@@ -3242,8 +3329,7 @@ chatViewBtn.addEventListener("click", showChatView);
 salesTargetViewBtn?.addEventListener("click", showSalesTargetAdminView);
 caseIdeaViewBtn?.addEventListener("click", showCaseIdeaAdminView);
 conditionViewBtn?.addEventListener("click", () => {
-  hideProfileForm();
-  setMainView("conditions");
+  showConditionAdminView();
 });
 conditionStep1Btn?.addEventListener("click", () => {showConditionStep(1);});
 conditionStep2Btn?.addEventListener("click", () => {showConditionStep(2);});
