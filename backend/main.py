@@ -139,6 +139,7 @@ class ConditionTestIn(BaseModel):
 
 class ConditionFlowDemoCheckIn(BaseModel):
     context: Dict[str, Any] = {}
+    trigger_prompt: Optional[str] = None
 
 
 class ConditionFlowActiveIn(BaseModel):
@@ -1237,10 +1238,22 @@ async def demo_check_condition_flow(
     if flow["status"] != "confirmed":
         raise HTTPException(status_code=400, detail="Mẫu kết hợp chưa được xác nhận")
 
+    if payload.trigger_prompt is not None:
+        trigger_prompt = payload.trigger_prompt.strip()
+        await memory.update_condition_flow_trigger_prompt(
+            flow_id=flow_id,
+            trigger_prompt=trigger_prompt,
+        )
+        flow = {
+            **flow,
+            "trigger_prompt": trigger_prompt,
+        }
+
     context = dict(payload.context or {})
     context.setdefault("date", datetime.now().strftime("%Y-%m-%d"))
 
     condition_results = []
+    condition_keys = []
     matches = {}
     refs = await resolve_valid_flow_refs(flow["expression"])
 
@@ -1256,9 +1269,13 @@ async def demo_check_condition_flow(
                 "template_id": template_id,
             }
         else:
+            condition_key = template_condition_key(template)
+            resolved_key = resolve_condition_key(condition_key)
+            if resolved_key:
+                condition_keys.append(resolved_key)
             condition_context = {
                 **context,
-                "condition_key": template_condition_key(template),
+                "condition_key": condition_key,
             }
             result = await run_condition(
                 template_id=template_id,
@@ -1280,6 +1297,17 @@ async def demo_check_condition_flow(
     )
 
     if matched:
+        if condition_keys:
+            signal_key = signal_key_from_condition_keys(condition_keys)
+            await persist_condition_signal(
+                flow=flow,
+                condition_keys=condition_keys,
+                condition_results=condition_results,
+                message=demo_message,
+                check_date=context.get("date"),
+                delivery_key=f"demo:{flow_id}:{signal_key}:{context.get('date')}",
+                source="demo_check",
+            )
         for user in await memory.list_sales_demo_users():
             await memory.add(user["id"], "assistant", demo_message)
             delivered.append(user["id"])

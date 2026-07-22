@@ -2681,6 +2681,14 @@ function renderDemoCheckResult(result) {
 }
 
 async function demoCheckConditionFlow(id) {
+  const flow = conditionFlows.find((item) => Number(item.id) === Number(id));
+  const promptEl = document.getElementById(`triggerPrompt-${id}`);
+  const triggerPrompt = String(promptEl?.value ?? flow?.trigger_prompt ?? "").trim();
+
+  if (flow) {
+    flow.trigger_prompt = triggerPrompt;
+  }
+
   checkingDemoFlowId = id;
   demoCheckResults[id] = null;
   renderActiveFlows();
@@ -2696,6 +2704,7 @@ async function demoCheckConditionFlow(id) {
         context: {
           date: checkDate,
         },
+        trigger_prompt: triggerPrompt,
       }),
     });
 
