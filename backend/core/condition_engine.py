@@ -12,8 +12,6 @@ API_TIMEOUT_SECONDS = 120.0
 API_CONNECT_TIMEOUT_SECONDS = 20.0
 
 SUPPORTED_CONDITION_KEYS = {
-    "waitbuy_over_100",
-    "waitbuy_over_200",
     "vnindex_down_10_waitbuy_reversal",
     "core_branch_smdt_cross_70",
     "core_branch_smdt_cross_70_cashflow_in",
@@ -21,6 +19,9 @@ SUPPORTED_CONDITION_KEYS = {
     "smdt_up_3_sessions",
     "smdt_branch_up_3_sessions",
 }
+
+WAITBUY_THRESHOLD_CONDITION_KEY = "waitbuy_over_threshold"
+WAITBUY_THRESHOLD_LEGACY_KEY_PREFIX = "waitbuy_over_"
 
 
 async def post_data_api(endpoint: str, params: dict | None = None):
@@ -186,20 +187,114 @@ def normalize_condition_text(text: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
+def normalize_logic_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFD", text or "")
+    normalized = "".join(
+        char for char in normalized
+        if unicodedata.category(char) != "Mn"
+    )
+    return normalized.lower().replace(",", ".")
+
+
+def format_condition_number(value: float) -> str:
+    number = float(value)
+    text = f"{number:g}"
+    return text.replace(".", "p")
+
+
+def parse_condition_number(text: str) -> float | None:
+    try:
+        return float(str(text).replace("p", "."))
+    except Exception:
+        return None
+
+
+def waitbuy_threshold_key(threshold: float) -> str:
+    return WAITBUY_THRESHOLD_CONDITION_KEY
+
+
+def waitbuy_threshold_from_key(condition_key: str) -> float | None:
+    raw = str(condition_key or "").strip()
+    if not raw.startswith(WAITBUY_THRESHOLD_LEGACY_KEY_PREFIX):
+        return None
+
+    suffix = raw[len(WAITBUY_THRESHOLD_LEGACY_KEY_PREFIX):]
+    if not re.fullmatch(r"\d+(?:p\d+)?", suffix):
+        return None
+
+    return parse_condition_number(suffix)
+
+
+def is_waitbuy_threshold_condition(condition_logic: str) -> bool:
+    text = normalize_logic_text(condition_logic)
+    if not re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua)\b", text):
+        return False
+    return bool(
+        re.search(
+            r"(?:>=|=>|>|lon\s+hon(?:\s+hoac\s+bang)?|tren|vuot)\s*(?:\d+(?:\.\d+)?|x)\b",
+            text,
+        )
+    )
+
+
+def parse_waitbuy_threshold_condition(condition_logic: str) -> float | None:
+    text = normalize_logic_text(condition_logic)
+    if not is_waitbuy_threshold_condition(text):
+        return None
+
+    match = re.search(
+        r"(?:>=|=>|>|lon\s+hon(?:\s+hoac\s+bang)?|tren|vuot)\s*(\d+(?:\.\d+)?)",
+        text,
+    )
+
+    if not match:
+        return None
+
+    return parse_condition_number(match.group(1))
+
+
+def condition_context_threshold(context: dict, raw_condition: str) -> float | None:
+    for key in ("threshold", "waitbuy_threshold"):
+        if key in context:
+            threshold = parse_condition_number(context.get(key))
+            if threshold is not None:
+                return threshold
+
+    params = context.get("condition_params")
+    if isinstance(params, dict):
+        for key in ("threshold", "waitbuy_threshold"):
+            if key in params:
+                threshold = parse_condition_number(params.get(key))
+                if threshold is not None:
+                    return threshold
+
+    threshold = parse_waitbuy_threshold_condition(raw_condition)
+    if threshold is not None:
+        return threshold
+
+    return waitbuy_threshold_from_key(raw_condition)
+
+
+def is_waitbuy_threshold_key(condition_key: str) -> bool:
+    raw = str(condition_key or "").strip()
+    return raw == WAITBUY_THRESHOLD_CONDITION_KEY or waitbuy_threshold_from_key(raw) is not None
+
+
+def is_supported_condition_key(condition_key: str) -> bool:
+    return condition_key in SUPPORTED_CONDITION_KEYS or is_waitbuy_threshold_key(condition_key)
+
+
+def is_realtime_wave_condition_key(condition_key: str) -> bool:
+    return str(condition_key or "").strip() == WAITBUY_THRESHOLD_CONDITION_KEY
+
 def resolve_condition_key(condition_logic: str) -> str:
     raw = (condition_logic or "").strip()
 
-    if raw in {
-        "waitbuy_over_100",
-        "waitbuy_over_200",
-        "vnindex_down_10_waitbuy_reversal",
-        "core_branch_smdt_cross_70",
-        "core_branch_smdt_cross_70_cashflow_in",
-        "smdt_ticker_cross_70_prev_up",
-        "smdt_up_3_sessions",
-        "smdt_branch_up_3_sessions",
-    }:
+    if raw in SUPPORTED_CONDITION_KEYS:
         return raw
+
+    if raw == WAITBUY_THRESHOLD_CONDITION_KEY or waitbuy_threshold_from_key(raw) is not None:
+        return WAITBUY_THRESHOLD_CONDITION_KEY
 
     normalized = normalize_condition_text(raw)
 
@@ -261,17 +356,8 @@ def resolve_condition_key(condition_logic: str) -> str:
     ):
         return "vnindex_down_10_waitbuy_reversal"
 
-    if (
-        ("waitbuy" in normalized or "cho mua" in normalized)
-        and "100" in normalized
-    ):
-        return "waitbuy_over_100"
-
-    if (
-        ("waitbuy" in normalized or "cho mua" in normalized)
-        and "200" in normalized
-    ):
-        return "waitbuy_over_200"
+    if is_waitbuy_threshold_condition(raw):
+        return WAITBUY_THRESHOLD_CONDITION_KEY
 
     return raw
 
@@ -286,7 +372,7 @@ def resolve_template_support(template: dict) -> dict:
         "resolved_condition_key": resolved_key,
         "support_status": (
             "supported"
-            if resolved_key in SUPPORTED_CONDITION_KEYS
+            if is_supported_condition_key(resolved_key)
             else "unsupported"
         ),
     }
@@ -348,6 +434,7 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
         "data": {
             "date": latest.get("date") or latest.get("tradingDate") or date,
             "waitbuy": waitbuy,
+            "threshold": threshold,
             "source": raw.get("_source"),
             "sent_at": raw.get("_sentAt"),
             "received_at": raw.get("_receivedAt"),
@@ -359,21 +446,6 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
         ),
     }
 
-
-async def condition_waitbuy_over_100(context: dict):
-    return await condition_waitbuy_over_threshold(
-        context,
-        threshold=100,
-        condition_key="waitbuy_over_100",
-    )
-
-
-async def condition_waitbuy_over_200(context: dict):
-    return await condition_waitbuy_over_threshold(
-        context,
-        threshold=200,
-        condition_key="waitbuy_over_200",
-    )
 
 
 def extract_rows(raw, list_keys: tuple[str, ...]) -> list[dict]:
@@ -1343,8 +1415,6 @@ async def condition_smdt_branch_up_3_sessions(context: dict):
     }
 
 CONDITION_HANDLERS = {
-    "waitbuy_over_100": condition_waitbuy_over_100,
-    "waitbuy_over_200": condition_waitbuy_over_200,
     "vnindex_down_10_waitbuy_reversal": condition_vnindex_down_10_waitbuy_reversal,
     "core_branch_smdt_cross_70": condition_core_branch_smdt_cross_70,
     "core_branch_smdt_cross_70_cashflow_in": condition_core_branch_smdt_cross_70_cashflow_in,
@@ -1355,7 +1425,24 @@ CONDITION_HANDLERS = {
 
 
 async def run_condition(template_id: int, context: dict):
-    condition_key = resolve_condition_key(context.get("condition_key"))
+    raw_condition = context.get("condition_key")
+    condition_key = resolve_condition_key(raw_condition)
+
+    if condition_key == WAITBUY_THRESHOLD_CONDITION_KEY:
+        waitbuy_threshold = condition_context_threshold(context, raw_condition or "")
+        if waitbuy_threshold is None:
+            return {
+                "ok": False,
+                "matched": False,
+                "condition_key": condition_key,
+                "message": "Thieu nguong X cho dieu kien waitbuy > X",
+            }
+
+        return await condition_waitbuy_over_threshold(
+            context,
+            threshold=waitbuy_threshold,
+            condition_key=condition_key,
+        )
     handler = CONDITION_HANDLERS.get(condition_key)
 
     if handler:

@@ -13,6 +13,8 @@ from core.condition_engine import (
     resolve_flow_condition_refs,
     resolve_template_support,
     resolve_condition_key,
+    is_realtime_wave_condition_key,
+    waitbuy_threshold_from_key,
     run_condition,
 )
 
@@ -81,7 +83,6 @@ rag = RAGStore()
 registry = ToolRegistry()
 orch: Orchestrator | None = None
 sales: SalesDiscovery | None = None
-REALTIME_WAVE_CONDITION_KEYS = {"waitbuy_over_100", "waitbuy_over_200"}
 class ChatIn(BaseModel):
     user_id: str
     message: str
@@ -415,6 +416,13 @@ def signal_key_from_condition_keys(condition_keys: list[str]) -> str:
     return "+".join(condition_keys)
 
 
+def normalize_public_signal_key(signal_key: str | None) -> str | None:
+    if not signal_key:
+        return signal_key
+    if waitbuy_threshold_from_key(signal_key) is not None:
+        return "waitbuy_over_threshold"
+    return signal_key
+
 def signal_title(flow: dict, condition_results: list[dict]) -> str:
     return (
         flow.get("name")
@@ -474,7 +482,7 @@ async def inspect_realtime_wave_flow(
     ]
     signal_key = signal_key_from_condition_keys(resolved_keys)
     realtime_supported = bool(resolved_keys) and all(
-        key in REALTIME_WAVE_CONDITION_KEYS for key in resolved_keys
+        is_realtime_wave_condition_key(key) for key in resolved_keys
     )
     skip_reasons = []
 
@@ -577,7 +585,9 @@ async def handle_realtime_wave_update(payload: dict):
             if template
         ]
 
-        if not resolved_keys or any(key not in REALTIME_WAVE_CONDITION_KEYS for key in resolved_keys):
+        if not resolved_keys or any(
+            not is_realtime_wave_condition_key(key) for key in resolved_keys
+        ):
             continue
 
         condition_results = []
@@ -1353,6 +1363,7 @@ async def public_latest_condition_signal(
     signal_key: Optional[str] = None,
     flow_id: Optional[int] = None,
 ):
+    signal_key = normalize_public_signal_key(signal_key)
     signal = await memory.get_latest_condition_signal(
         signal_key=signal_key,
         flow_id=flow_id,
@@ -1390,7 +1401,7 @@ async def public_condition_signals(
     return {
         "ok": True,
         "signals": await memory.list_condition_signals(
-            signal_key=signal_key,
+            signal_key=normalize_public_signal_key(signal_key),
             flow_id=flow_id,
             limit=limit,
         ),
