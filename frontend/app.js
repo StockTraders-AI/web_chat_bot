@@ -112,6 +112,7 @@ const saveConditionFlowBtn = document.getElementById("saveConditionFlow");
 const conditionFlowListEl = document.getElementById("conditionFlowList");
 const cancelFlowEditBtn = document.getElementById("cancelFlowEdit");
 const flowSearchEl = document.getElementById("flowSearch");
+const flowFilterTypeEl = document.getElementById("flowFilterType");
 const clearSelectedConditionsBtn = document.getElementById("clearSelectedConditions");
 
 const openFlowModalBtn = document.getElementById("openFlowModalBtn");
@@ -2035,8 +2036,6 @@ function renderConditionTypeOptions() {
     activeFlowFilterTypeEl.value = current;
   }
 
-  const flowFilterTypeEl = document.getElementById("flowFilterType");
-
   if (flowFilterTypeEl) {
     const current = flowFilterTypeEl.value;
 
@@ -2451,19 +2450,48 @@ function formatFlowExpression(expression = "") {
     .join(" ");
 }
 
+function flowConditionIds(flow) {
+  return String(flow?.expression || "")
+    .trim()
+    .split(/\s+/)
+    .map((part) => Number(part))
+    .filter(Boolean);
+}
+
+function flowTypeKeys(flow) {
+  const keys = flowConditionIds(flow)
+    .map((id) => conditionTemplates.find((item) => Number(item.id) === Number(id))?.type)
+    .filter(Boolean);
+
+  return [...new Set(keys)];
+}
+
+function flowTypeLabel(flow) {
+  const labels = flowTypeKeys(flow).map(conditionTypeLabel).filter(Boolean);
+  return labels.length ? labels.join(", ") : "-";
+}
+
+function flowMatchesType(flow, typeFilter) {
+  return !typeFilter || flowTypeKeys(flow).includes(typeFilter);
+}
+
 function renderConditionFlows() {
   if (!conditionFlowListEl) return;
 
+  const typeFilter = flowFilterTypeEl?.value || "";
   const keyword = (flowSearchEl?.value || "").trim().toLowerCase();
   const visibleFlows = conditionFlows.filter((flow) => {
     const readableExpression = formatFlowExpression(flow.expression || "");
-
-    return (
+    const readableType = flowTypeLabel(flow).toLowerCase();
+    const matchType = flowMatchesType(flow, typeFilter);
+    const matchKeyword =
       !keyword ||
       (flow.name || "").toLowerCase().includes(keyword) ||
       (flow.prompt_template || "").toLowerCase().includes(keyword) ||
-      readableExpression.toLowerCase().includes(keyword)
-    );
+      readableType.includes(keyword) ||
+      readableExpression.toLowerCase().includes(keyword);
+
+    return matchType && matchKeyword;
   });
 
   if (!visibleFlows.length) {
@@ -2482,7 +2510,7 @@ function renderConditionFlows() {
         </div>
 
         <div>
-          ${escapeHtml(flow.prompt_template || "-")}
+          ${escapeHtml(flowTypeLabel(flow))}
         </div>
 
         <div class="logic-cell">
@@ -2528,13 +2556,15 @@ function renderActiveFlows() {
 
   const confirmedFlows = conditionFlows.filter((flow) => {
     const isConfirmed = flow.status === "confirmed";
-    const matchType = !typeFilter || flow.type === typeFilter;
+    const matchType = flowMatchesType(flow, typeFilter);
     const readableExpression = formatFlowExpression(flow.expression || "");
+    const readableType = flowTypeLabel(flow).toLowerCase();
 
     const matchKeyword =
       !keyword ||
       (flow.name || "").toLowerCase().includes(keyword) ||
       readableExpression.toLowerCase().includes(keyword) ||
+      readableType.includes(keyword) ||
       (flow.prompt_template || "").toLowerCase().includes(keyword) ||
       (flow.trigger_prompt || "").toLowerCase().includes(keyword);
 
@@ -2560,7 +2590,7 @@ function renderActiveFlows() {
         </div>
 
         <div>
-          ${escapeHtml(flow.prompt_template || "-")}
+          ${escapeHtml(flowTypeLabel(flow))}
         </div>
 
         <div class="logic-cell">
@@ -3403,6 +3433,7 @@ conditionFilterTypeEl?.addEventListener("change", () => {
   conditionPage = 1;
   renderConditionTemplates();
 });
+flowFilterTypeEl?.addEventListener("change", renderConditionFlows);
 activeFlowFilterTypeEl?.addEventListener("change", renderActiveFlows);
 activeFlowSearchEl?.addEventListener("input", renderActiveFlows);
 
