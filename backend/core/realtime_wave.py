@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import inspect
 import os
 from datetime import datetime, timezone
@@ -11,6 +12,23 @@ except Exception as exc:  # pragma: no cover - depends on optional runtime packa
     SOCKETIO_IMPORT_ERROR = exc
 else:
     SOCKETIO_IMPORT_ERROR = None
+
+
+def _ensure_socketio():
+    global socketio, SOCKETIO_IMPORT_ERROR
+
+    if socketio is not None:
+        return socketio
+
+    try:
+        socketio = importlib.import_module("socketio")
+    except Exception as exc:  # pragma: no cover - depends on optional runtime package
+        SOCKETIO_IMPORT_ERROR = exc
+        return None
+
+    SOCKETIO_IMPORT_ERROR = None
+    return socketio
+
 
 REALTIME_CORE_URL = os.getenv(
     "REALTIME_CORE_URL",
@@ -33,6 +51,7 @@ _wave_cache = {
 _socket_task: asyncio.Task | None = None
 _socket_client = None
 _wave_listeners = []
+_last_socket_error = ""
 
 
 def _utc_now() -> str:
@@ -139,17 +158,24 @@ def latest_wave_snapshot(date: str | None = None) -> dict | None:
 
 
 def wave_status() -> dict:
+    _ensure_socketio()
     latest = latest_wave_snapshot()
     rows = _wave_cache["rows"]
+    task_done = bool(_socket_task and _socket_task.done())
     return {
         "enabled": REALTIME_WAVE_ENABLED,
         "has_socketio": socketio is not None,
         "connected": bool(_socket_client and getattr(_socket_client, "connected", False)),
+        "task_running": bool(_socket_task and not _socket_task.done()),
+        "task_done": task_done,
         "row_count": len(rows),
         "latest_date": _row_date((latest or {}).get("waveDatas", [{}])[-1]) if latest else "",
         "sent_at": _wave_cache["sent_at"],
         "received_at": _wave_cache["received_at"],
         "import_error": str(SOCKETIO_IMPORT_ERROR) if SOCKETIO_IMPORT_ERROR else "",
+        "last_error": _last_socket_error,
+        "url": _socket_connect_url(),
+        "namespace": REALTIME_NAMESPACE,
     }
 
 
@@ -183,13 +209,14 @@ def _socket_connect_url() -> str:
 
 
 async def _run_realtime_wave_client():
-    global _socket_client
+    global _last_socket_error, _socket_client
 
-    if socketio is None:
+    socketio_module = _ensure_socketio()
+    if socketio_module is None:
         print(f"REALTIME_WAVE_SOCKET_DISABLED: {SOCKETIO_IMPORT_ERROR}")
         return
 
-    client = socketio.AsyncClient(
+    client = socketio_module.AsyncClient(
         reconnection=True,
         reconnection_attempts=0,
         logger=False,
@@ -238,6 +265,7 @@ async def _run_realtime_wave_client():
     except asyncio.CancelledError:
         raise
     except Exception as exc:
+        _last_socket_error = str(exc)
         print("REALTIME_WAVE_SOCKET_ERROR:", exc)
     finally:
         if client.connected:
@@ -251,11 +279,32 @@ def start_realtime_wave_client():
         print("REALTIME_WAVE_SOCKET_DISABLED: REALTIME_WAVE_ENABLED=false")
         return None
 
+    if _ensure_socketio() is None:
+        print(f"REALTIME_WAVE_SOCKET_DISABLED: {SOCKETIO_IMPORT_ERROR}")
+        return None
+
     if _socket_task and not _socket_task.done():
         return _socket_task
 
     _socket_task = asyncio.create_task(_run_realtime_wave_client())
     return _socket_task
+
+
+async def ensure_realtime_wave_client(timeout: float = 5.0):
+    task = start_realtime_wave_client()
+    if not task:
+        return wave_status()
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(0.0, timeout)
+
+    while loop.time() < deadline:
+        status = wave_status()
+        if status["connected"] or status["task_done"]:
+            return status
+        await asyncio.sleep(0.1)
+
+    return wave_status()
 
 
 async def stop_realtime_wave_client():

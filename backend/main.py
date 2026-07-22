@@ -33,7 +33,7 @@ from core.chat_runtime import stream_standard_chat
 from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_target
 from core.model_router import pick_model
 from core.quota import QuotaService
-from core.realtime_wave import add_wave_listener, start_realtime_wave_client, stop_realtime_wave_client, wave_status
+from core.realtime_wave import add_wave_listener, ensure_realtime_wave_client, start_realtime_wave_client, stop_realtime_wave_client, wave_status
 from routes.iplatform_api import configure_iplatform_api, router as iplatform_router
 from routes.portfolio_chat import configure_portfolio_chat_api, router as portfolio_chat_router
 from services.openai_client import OpenAIClient
@@ -451,7 +451,10 @@ async def inspect_realtime_wave_flow(
     flow: dict,
     templates: list[dict] | None = None,
     evaluate_current: bool = True,
+    ensure_wave: bool = False,
 ):
+    if ensure_wave:
+        await ensure_realtime_wave_client()
     templates = templates if templates is not None else await memory.list_condition_templates()
     templates_by_id = {
         int(template["id"]): template
@@ -1225,7 +1228,7 @@ async def set_condition_flow_active(
         **flow,
         "active": 1 if payload.active else 0,
     }
-    realtime_watch = await inspect_realtime_wave_flow(updated_flow)
+    realtime_watch = await inspect_realtime_wave_flow(updated_flow, ensure_wave=True)
     print(
         "CONDITION_FLOW_ACTIVE_TOGGLE:",
         f"flow_id={flow_id}",
@@ -1327,9 +1330,23 @@ async def condition_realtime_wave_status(
     session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
 ):
     await require_super_admin(authorization, session_cookie)
-    return wave_status()
+    return await ensure_realtime_wave_client()
 
 
+@app.post("/condition-realtime/wave/restart")
+async def condition_realtime_wave_restart(
+    authorization: Optional[str] = Header(default=None),
+    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
+):
+    await require_super_admin(authorization, session_cookie)
+    before = wave_status()
+    await stop_realtime_wave_client()
+    after = await ensure_realtime_wave_client()
+    return {
+        "ok": True,
+        "before": before,
+        "after": after,
+    }
 
 
 @app.get("/condition-realtime/wave/debug")
@@ -1340,6 +1357,7 @@ async def condition_realtime_wave_debug(
 ):
     await require_super_admin(authorization, session_cookie)
 
+    await ensure_realtime_wave_client()
     templates = await memory.list_condition_templates()
     status = wave_status()
     check_date = status.get("latest_date") or datetime.now().strftime("%Y-%m-%d")
