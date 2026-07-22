@@ -33,7 +33,7 @@ from core.chat_runtime import stream_standard_chat
 from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_target
 from core.model_router import pick_model
 from core.quota import QuotaService
-from core.realtime_wave import add_wave_listener, ensure_realtime_wave_client, start_realtime_wave_client, stop_realtime_wave_client, wave_status
+from core.realtime_wave import add_wave_listener, ensure_realtime_wave_client, probe_realtime_wave_connection, start_realtime_wave_client, stop_realtime_wave_client, wave_status
 from routes.iplatform_api import configure_iplatform_api, router as iplatform_router
 from routes.portfolio_chat import configure_portfolio_chat_api, router as portfolio_chat_router
 from services.openai_client import OpenAIClient
@@ -1347,6 +1347,17 @@ async def condition_realtime_wave_restart(
         "before": before,
         "after": after,
     }
+
+
+@app.post("/condition-realtime/wave/probe")
+async def condition_realtime_wave_probe(
+    timeout: float = 20.0,
+    authorization: Optional[str] = Header(default=None),
+    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
+):
+    await require_super_admin(authorization, session_cookie)
+    bounded_timeout = min(max(timeout, 1.0), 60.0)
+    return await probe_realtime_wave_connection(timeout=bounded_timeout)
 
 
 @app.get("/condition-realtime/wave/debug")
