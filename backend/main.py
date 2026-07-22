@@ -1219,6 +1219,9 @@ async def public_latest_condition_signal(
 
     return {
         "ok": True,
+        "response": signal.get("message") if signal else None,
+        "title": signal.get("title") if signal else None,
+        "check_date": signal.get("check_date") if signal else None,
         "signal": signal,
     }
 
