@@ -9,6 +9,7 @@ import unicodedata
 API_BASE = "https://stocktradersai.vn"
 
 SUPPORTED_CONDITION_KEYS = {
+    "waitbuy_over_100",
     "waitbuy_over_200",
     "vnindex_down_10_waitbuy_reversal",
     "core_branch_smdt_cross_70",
@@ -183,6 +184,7 @@ def resolve_condition_key(condition_logic: str) -> str:
     raw = (condition_logic or "").strip()
 
     if raw in {
+        "waitbuy_over_100",
         "waitbuy_over_200",
         "vnindex_down_10_waitbuy_reversal",
         "core_branch_smdt_cross_70",
@@ -255,6 +257,12 @@ def resolve_condition_key(condition_logic: str) -> str:
 
     if (
         ("waitbuy" in normalized or "cho mua" in normalized)
+        and "100" in normalized
+    ):
+        return "waitbuy_over_100"
+
+    if (
+        ("waitbuy" in normalized or "cho mua" in normalized)
         and "200" in normalized
     ):
         return "waitbuy_over_200"
@@ -278,14 +286,15 @@ def resolve_template_support(template: dict) -> dict:
     }
 
 
-async def condition_waitbuy_over_200(context: dict):
+async def condition_waitbuy_over_threshold(context: dict, threshold: float, condition_key: str):
     date = context.get("date")
 
     if not date:
         return {
             "ok": False,
             "matched": False,
-            "message": "Thiếu date để kiểm tra waitbuy > 200",
+            "condition_key": condition_key,
+            "message": f"Thieu date de kiem tra waitbuy > {threshold:g}",
         }
 
     raw = await post_data_api(
@@ -297,6 +306,7 @@ async def condition_waitbuy_over_200(context: dict):
         return {
             "ok": False,
             "matched": False,
+            "condition_key": condition_key,
             "message": raw["message"],
             "error": raw,
         }
@@ -310,7 +320,8 @@ async def condition_waitbuy_over_200(context: dict):
         return {
             "ok": False,
             "matched": False,
-            "message": "Không có dữ liệu getStockWave",
+            "condition_key": condition_key,
+            "message": "Khong co du lieu getStockWave",
             "raw": raw,
         }
 
@@ -322,23 +333,39 @@ async def condition_waitbuy_over_200(context: dict):
         or latest.get("cho_mua")
     )
 
-    matched = waitbuy > 200
+    matched = waitbuy > threshold
 
     return {
         "ok": True,
         "matched": matched,
-        "condition_key": "waitbuy_over_200",
-        "condition": "waitbuy > 200",
+        "condition_key": condition_key,
+        "condition": f"waitbuy > {threshold:g}",
         "data": {
             "date": latest.get("date") or date,
             "waitbuy": waitbuy,
         },
         "message": (
-            "Chờ mua tăng trên 200 cổ phiếu"
+            f"Cho mua tang tren {threshold:g} co phieu"
             if matched
-            else "Không đạt điều kiện"
+            else "Khong dat dieu kien"
         ),
     }
+
+
+async def condition_waitbuy_over_100(context: dict):
+    return await condition_waitbuy_over_threshold(
+        context,
+        threshold=100,
+        condition_key="waitbuy_over_100",
+    )
+
+
+async def condition_waitbuy_over_200(context: dict):
+    return await condition_waitbuy_over_threshold(
+        context,
+        threshold=200,
+        condition_key="waitbuy_over_200",
+    )
 
 
 def extract_rows(raw, list_keys: tuple[str, ...]) -> list[dict]:
@@ -1308,6 +1335,7 @@ async def condition_smdt_branch_up_3_sessions(context: dict):
     }
 
 CONDITION_HANDLERS = {
+    "waitbuy_over_100": condition_waitbuy_over_100,
     "waitbuy_over_200": condition_waitbuy_over_200,
     "vnindex_down_10_waitbuy_reversal": condition_vnindex_down_10_waitbuy_reversal,
     "core_branch_smdt_cross_70": condition_core_branch_smdt_cross_70,
