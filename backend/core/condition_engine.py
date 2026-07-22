@@ -7,6 +7,8 @@ import re
 import unicodedata
 
 API_BASE = "https://stocktradersai.vn"
+API_TIMEOUT_SECONDS = 120.0
+API_CONNECT_TIMEOUT_SECONDS = 20.0
 
 SUPPORTED_CONDITION_KEYS = {
     "waitbuy_over_100",
@@ -35,7 +37,10 @@ async def post_data_api(endpoint: str, params: dict | None = None):
 
     try:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(40.0, connect=10.0)
+            timeout=httpx.Timeout(
+                API_TIMEOUT_SECONDS,
+                connect=API_CONNECT_TIMEOUT_SECONDS,
+            )
         ) as client:
             res = await client.post(url, params=params)
             res.raise_for_status()
