@@ -675,7 +675,10 @@ def meta_models():
 
 @app.get("/")
 def serve_index():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+    return FileResponse(
+        os.path.join(FRONTEND_DIR, "index.html"),
+        headers={"Cache-Control": "no-store"},
+    )
 
 @app.post("/auth/login")
 async def auth_login(payload: LoginIn, response: Response):
@@ -1671,7 +1674,10 @@ async def chat_history(user_id: str):
 
 @app.get("/frontend/{path:path}")
 def serve_static(path: str):
-    return FileResponse(os.path.join(FRONTEND_DIR, path))
+    return FileResponse(
+        os.path.join(FRONTEND_DIR, path),
+        headers={"Cache-Control": "no-store"},
+    )
 
 @app.post("/chat/stream")
 async def chat_stream(
