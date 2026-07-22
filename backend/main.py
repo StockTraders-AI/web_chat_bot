@@ -33,7 +33,7 @@ from core.chat_runtime import stream_standard_chat
 from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_target
 from core.model_router import pick_model
 from core.quota import QuotaService
-from core.realtime_wave import add_wave_listener, ensure_realtime_wave_client, probe_realtime_wave_connection, start_realtime_wave_client, stop_realtime_wave_client, wave_status
+from core.realtime_wave import add_wave_listener, ensure_realtime_wave_client, start_realtime_wave_client, stop_realtime_wave_client, wave_status
 from routes.iplatform_api import configure_iplatform_api, router as iplatform_router
 from routes.portfolio_chat import configure_portfolio_chat_api, router as portfolio_chat_router
 from services.openai_client import OpenAIClient
@@ -605,15 +605,6 @@ async def handle_realtime_wave_update(payload: dict):
             matched=matched,
             check_date=check_date,
         )
-        print(
-            "REALTIME_WAVE_FLOW_CHECKED:",
-            f"flow_id={flow['id']}",
-            f"signal_key={signal_key}",
-            f"date={check_date}",
-            f"matched={matched}",
-            f"should_publish={state['should_publish']}",
-            f"transition={state['transition_count']}",
-        )
 
         if not matched:
             continue
@@ -639,18 +630,9 @@ async def handle_realtime_wave_update(payload: dict):
             source="realtime_wave",
         )
 
-        delivered = []
         for user in await memory.list_sales_demo_users():
             await memory.add(user["id"], "assistant", demo_message)
-            delivered.append(user["id"])
 
-        print(
-            "REALTIME_WAVE_FLOW_DELIVERED:",
-            f"flow_id={flow['id']}",
-            f"date={check_date}",
-            f"transition={state['transition_count']}",
-            f"users={len(delivered)}",
-        )
 
 
 @app.on_event("startup")
@@ -1229,17 +1211,6 @@ async def set_condition_flow_active(
         "active": 1 if payload.active else 0,
     }
     realtime_watch = await inspect_realtime_wave_flow(updated_flow, ensure_wave=True)
-    print(
-        "CONDITION_FLOW_ACTIVE_TOGGLE:",
-        f"flow_id={flow_id}",
-        f"active={payload.active}",
-        f"signal_key={realtime_watch.get('signal_key')}",
-        f"realtime_supported={realtime_watch.get('realtime_supported')}",
-        f"current_matched={realtime_watch.get('current_matched')}",
-        f"skip_reasons={','.join(realtime_watch.get('skip_reasons') or []) or '-'}",
-        f"wave_connected={realtime_watch.get('wave', {}).get('connected')}",
-        f"wave_rows={realtime_watch.get('wave', {}).get('row_count')}",
-    )
 
     return {
         "ok": True,
@@ -1346,44 +1317,6 @@ async def condition_realtime_wave_restart(
         "ok": True,
         "before": before,
         "after": after,
-    }
-
-
-@app.post("/condition-realtime/wave/probe")
-async def condition_realtime_wave_probe(
-    timeout: float = 20.0,
-    authorization: Optional[str] = Header(default=None),
-    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
-):
-    await require_super_admin(authorization, session_cookie)
-    bounded_timeout = min(max(timeout, 1.0), 60.0)
-    return await probe_realtime_wave_connection(timeout=bounded_timeout)
-
-
-@app.get("/condition-realtime/wave/debug")
-async def condition_realtime_wave_debug(
-    include_inactive: bool = False,
-    authorization: Optional[str] = Header(default=None),
-    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
-):
-    await require_super_admin(authorization, session_cookie)
-
-    await ensure_realtime_wave_client()
-    templates = await memory.list_condition_templates()
-    status = wave_status()
-    check_date = status.get("latest_date") or datetime.now().strftime("%Y-%m-%d")
-    debug_flows = []
-
-    for flow in await memory.list_condition_flows():
-        if not include_inactive and not is_active_condition_flow(flow):
-            continue
-        debug_flows.append(await inspect_realtime_wave_flow(flow, templates))
-
-    return {
-        "ok": True,
-        "wave": status,
-        "check_date": check_date,
-        "flows": debug_flows,
     }
 
 
