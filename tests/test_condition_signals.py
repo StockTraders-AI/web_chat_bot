@@ -94,6 +94,13 @@ class ConditionSignalStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(third["transition_count"], 2)
         self.assertNotEqual(first["delivery_key"], third["delivery_key"])
 
+        state = await self.store.get_condition_signal_state(
+            flow_id=12,
+            signal_key="waitbuy_over_100",
+        )
+        self.assertTrue(state["matched"])
+        self.assertEqual(state["transition_count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2098,6 +2098,48 @@ class MemoryStore:
         return data
 
 
+
+    async def get_condition_signal_state(
+        self,
+        flow_id: int,
+        signal_key: str,
+    ):
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT
+                    flow_id,
+                    signal_key,
+                    matched,
+                    transition_count,
+                    last_check_date,
+                    last_delivery_key,
+                    created_at,
+                    updated_at
+                FROM condition_signal_states
+                WHERE flow_id=? AND signal_key=?
+                """,
+                (int(flow_id), signal_key or ""),
+            )
+            row = await cur.fetchone()
+
+        if not row:
+            return {
+                "flow_id": int(flow_id),
+                "signal_key": signal_key or "",
+                "matched": False,
+                "transition_count": 0,
+                "last_check_date": "",
+                "last_delivery_key": "",
+                "created_at": None,
+                "updated_at": None,
+            }
+
+        data = dict(row)
+        data["matched"] = bool(data.get("matched"))
+        return data
+
     async def update_condition_signal_state(
         self,
         flow_id: int,

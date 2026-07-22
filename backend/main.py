@@ -447,6 +447,100 @@ async def persist_condition_signal(
     )
 
 
+async def inspect_realtime_wave_flow(
+    flow: dict,
+    templates: list[dict] | None = None,
+    evaluate_current: bool = True,
+):
+    templates = templates if templates is not None else await memory.list_condition_templates()
+    templates_by_id = {
+        int(template["id"]): template
+        for template in templates
+        if str(template.get("id", "")).isdigit()
+    }
+    status = wave_status()
+    check_date = status.get("latest_date") or datetime.now().strftime("%Y-%m-%d")
+    active_confirmed = is_active_condition_flow(flow)
+    refs = resolve_flow_condition_refs(flow.get("expression") or "", templates)
+    ref_templates = [templates_by_id.get(int(ref["id"])) for ref in refs]
+    resolved_keys = [
+        resolve_condition_key(template_condition_key(template))
+        for template in ref_templates
+        if template
+    ]
+    signal_key = signal_key_from_condition_keys(resolved_keys)
+    realtime_supported = bool(resolved_keys) and all(
+        key in REALTIME_WAVE_CONDITION_KEYS for key in resolved_keys
+    )
+    skip_reasons = []
+
+    if flow.get("status") != "confirmed":
+        skip_reasons.append("flow_not_confirmed")
+    if not bool(flow.get("active")):
+        skip_reasons.append("flow_not_active")
+    if not refs:
+        skip_reasons.append("no_condition_refs")
+    if any(template is None for template in ref_templates):
+        skip_reasons.append("missing_condition_template")
+    if resolved_keys and not realtime_supported:
+        skip_reasons.append("has_non_wave_condition")
+    if not status.get("connected"):
+        skip_reasons.append("wave_socket_not_connected")
+    if not status.get("row_count"):
+        skip_reasons.append("no_wave_cache")
+
+    condition_results = []
+    matches = {}
+    matched = None
+
+    state = await memory.get_condition_signal_state(
+        int(flow["id"]),
+        signal_key,
+    ) if signal_key else None
+    latest_signal = await memory.get_latest_condition_signal(
+        signal_key=signal_key,
+        flow_id=int(flow["id"]),
+    ) if signal_key else None
+
+    if evaluate_current and active_confirmed and realtime_supported:
+        for ref, template in zip(refs, ref_templates):
+            template_id = int(ref["id"])
+            result = await run_condition(
+                template_id=template_id,
+                context={
+                    "date": check_date,
+                    "condition_key": template_condition_key(template),
+                },
+            )
+            result["template_id"] = template_id
+            result["template_name"] = template.get("name")
+            matches[template_id] = bool(result.get("matched"))
+            condition_results.append(result)
+
+        matched = evaluate_flow_expression(flow_refs_expression(refs), matches)
+
+    return {
+        "id": flow.get("id"),
+        "name": flow.get("name"),
+        "status": flow.get("status"),
+        "active": bool(flow.get("active")),
+        "expression": flow.get("expression"),
+        "refs": refs,
+        "condition_keys": resolved_keys,
+        "signal_key": signal_key,
+        "realtime_supported": realtime_supported,
+        "active_confirmed": active_confirmed,
+        "skip_reasons": skip_reasons,
+        "wave": status,
+        "check_date": check_date,
+        "current_matched": matched,
+        "state": state,
+        "latest_signal_id": latest_signal.get("id") if latest_signal else None,
+        "latest_response": latest_signal.get("message") if latest_signal else None,
+        "condition_results": condition_results,
+    }
+
+
 async def handle_realtime_wave_update(payload: dict):
     if not memory:
         return
@@ -507,6 +601,15 @@ async def handle_realtime_wave_update(payload: dict):
             signal_key=signal_key,
             matched=matched,
             check_date=check_date,
+        )
+        print(
+            "REALTIME_WAVE_FLOW_CHECKED:",
+            f"flow_id={flow['id']}",
+            f"signal_key={signal_key}",
+            f"date={check_date}",
+            f"matched={matched}",
+            f"should_publish={state['should_publish']}",
+            f"transition={state['transition_count']}",
         )
 
         if not matched:
@@ -1115,10 +1218,28 @@ async def set_condition_flow_active(
 
     await memory.set_condition_flow_active(flow_id, payload.active)
 
+    updated_flow = {
+        **flow,
+        "active": 1 if payload.active else 0,
+    }
+    realtime_watch = await inspect_realtime_wave_flow(updated_flow)
+    print(
+        "CONDITION_FLOW_ACTIVE_TOGGLE:",
+        f"flow_id={flow_id}",
+        f"active={payload.active}",
+        f"signal_key={realtime_watch.get('signal_key')}",
+        f"realtime_supported={realtime_watch.get('realtime_supported')}",
+        f"current_matched={realtime_watch.get('current_matched')}",
+        f"skip_reasons={','.join(realtime_watch.get('skip_reasons') or []) or '-'}",
+        f"wave_connected={realtime_watch.get('wave', {}).get('connected')}",
+        f"wave_rows={realtime_watch.get('wave', {}).get('row_count')}",
+    )
+
     return {
         "ok": True,
         "id": flow_id,
         "active": payload.active,
+        "realtime_watch": realtime_watch,
     }
 
 
@@ -1205,6 +1326,33 @@ async def condition_realtime_wave_status(
     await require_super_admin(authorization, session_cookie)
     return wave_status()
 
+
+
+
+@app.get("/condition-realtime/wave/debug")
+async def condition_realtime_wave_debug(
+    include_inactive: bool = False,
+    authorization: Optional[str] = Header(default=None),
+    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
+):
+    await require_super_admin(authorization, session_cookie)
+
+    templates = await memory.list_condition_templates()
+    status = wave_status()
+    check_date = status.get("latest_date") or datetime.now().strftime("%Y-%m-%d")
+    debug_flows = []
+
+    for flow in await memory.list_condition_flows():
+        if not include_inactive and not is_active_condition_flow(flow):
+            continue
+        debug_flows.append(await inspect_realtime_wave_flow(flow, templates))
+
+    return {
+        "ok": True,
+        "wave": status,
+        "check_date": check_date,
+        "flows": debug_flows,
+    }
 
 
 @app.get("/public/condition-signals/latest")

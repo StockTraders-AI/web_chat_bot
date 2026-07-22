@@ -2733,6 +2733,60 @@ async function demoCheckConditionFlow(id) {
   }
 }
 
+function realtimeWatchMessage(watch, active) {
+  if (!active) return "Da tat kich ban";
+  if (!watch) return "Da bat kich ban";
+
+  const reasons = watch.skip_reasons || [];
+
+  if (watch.realtime_supported && watch.active_confirmed) {
+    if (reasons.includes("wave_socket_not_connected")) {
+      return "Da bat, nhung socket wave chua connected";
+    }
+    if (reasons.includes("no_wave_cache")) {
+      return "Da bat, dang cho du lieu socket wave";
+    }
+    if (watch.current_matched === true) {
+      return "Da bat, realtime dang check: dieu kien hien DAT";
+    }
+    if (watch.current_matched === false) {
+      return "Da bat, realtime dang check: dieu kien hien chua dat";
+    }
+    return "Da bat, realtime se check khi socket wave doi";
+  }
+
+  if (reasons.includes("has_non_wave_condition")) {
+    return "Da bat, nhung flow nay chua chay realtime wave do co dieu kien khong thuoc wave";
+  }
+  if (reasons.includes("flow_not_confirmed")) {
+    return "Flow chua xac nhan nen chua chay realtime";
+  }
+  if (reasons.includes("flow_not_active")) {
+    return "Flow chua active nen chua chay realtime";
+  }
+  if (reasons.includes("no_condition_refs")) {
+    return "Flow chua co dieu kien de realtime check";
+  }
+
+  return "Da bat, nhung realtime wave chua san sang";
+}
+
+function logRealtimeWatch(flowId, watch) {
+  if (!window.console || !watch) return;
+  console.info("CONDITION_REALTIME_WATCH", {
+    flow_id: flowId,
+    signal_key: watch.signal_key,
+    condition_keys: watch.condition_keys,
+    realtime_supported: watch.realtime_supported,
+    active_confirmed: watch.active_confirmed,
+    current_matched: watch.current_matched,
+    skip_reasons: watch.skip_reasons,
+    wave: watch.wave,
+    state: watch.state,
+    condition_results: watch.condition_results,
+  });
+}
+
 async function toggleActiveFlow(id) {
   const flow = conditionFlows.find((item) => item.id === id);
   if (!flow) return;
@@ -2754,9 +2808,15 @@ async function toggleActiveFlow(id) {
       body: JSON.stringify({ active: nextActive }),
     });
 
-    if (!res.ok) throw new Error("toggle failed");
+    const data = await res.json().catch(() => ({}));
 
-    showToast(nextActive ? "Đã bật kịch bản" : "Đã tắt kịch bản");
+    if (!res.ok) throw new Error(data?.detail || "toggle failed");
+
+    logRealtimeWatch(id, data.realtime_watch);
+    showToast(
+      realtimeWatchMessage(data.realtime_watch, nextActive),
+      data.realtime_watch?.realtime_supported || !nextActive ? "success" : "error"
+    );
   } catch {
     flow.is_active = current;
     flow.active = current;
