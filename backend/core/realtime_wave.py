@@ -145,10 +145,11 @@ def latest_wave_snapshot(date: str | None = None) -> dict | None:
         selected_rows = [row for row in rows if _row_date(row) == requested_date]
         if not selected_rows:
             dated_rows = [row for row in rows if _row_date(row)]
-            if not dated_rows:
-                return None
-            fallback_date = max(_row_date(row) for row in dated_rows)
-            selected_rows = [row for row in dated_rows if _row_date(row) == fallback_date]
+            if dated_rows:
+                fallback_date = max(_row_date(row) for row in dated_rows)
+                selected_rows = [row for row in dated_rows if _row_date(row) == fallback_date]
+            else:
+                selected_rows = rows
 
     selected_rows = sorted(selected_rows, key=_row_date)
 
