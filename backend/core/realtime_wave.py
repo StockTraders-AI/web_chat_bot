@@ -139,11 +139,16 @@ def latest_wave_snapshot(date: str | None = None) -> dict | None:
 
     requested_date = str(date or "")[:10]
     selected_rows = rows
+    fallback_date = ""
 
     if requested_date:
         selected_rows = [row for row in rows if _row_date(row) == requested_date]
         if not selected_rows:
-            return None
+            dated_rows = [row for row in rows if _row_date(row)]
+            if not dated_rows:
+                return None
+            fallback_date = max(_row_date(row) for row in dated_rows)
+            selected_rows = [row for row in dated_rows if _row_date(row) == fallback_date]
 
     selected_rows = sorted(selected_rows, key=_row_date)
 
@@ -153,8 +158,10 @@ def latest_wave_snapshot(date: str | None = None) -> dict | None:
         "_source": "realtime_wave",
         "_sentAt": _wave_cache["sent_at"],
         "_receivedAt": _wave_cache["received_at"],
+        "_requestedDate": requested_date,
+        "_fallbackDate": fallback_date,
+        "_usedFallbackLatest": bool(fallback_date),
     }
-
 
 def wave_status() -> dict:
     _ensure_socketio()

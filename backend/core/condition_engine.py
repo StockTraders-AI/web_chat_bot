@@ -438,6 +438,9 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
             "source": raw.get("_source"),
             "sent_at": raw.get("_sentAt"),
             "received_at": raw.get("_receivedAt"),
+            "requested_date": raw.get("_requestedDate"),
+            "fallback_date": raw.get("_fallbackDate"),
+            "used_fallback_latest": bool(raw.get("_usedFallbackLatest")),
         },
         "message": (
             f"Cho mua realtime tang tren {threshold:g} co phieu"

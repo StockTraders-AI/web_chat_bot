@@ -121,6 +121,37 @@ class WaitbuyThresholdConditionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["data"]["waitbuy"], 75.0)
         self.assertEqual(result["data"]["threshold"], 80.0)
 
+    async def test_run_condition_uses_latest_wave_cache_when_requested_date_missing(self):
+        update_wave_payload({
+            "channel": "wave",
+            "data": {
+                "waveDatas": [
+                    {
+                        "date": "2026-07-22",
+                        "waitbuy": 75,
+                    }
+                ]
+            },
+            "sentAt": "2026-07-22T08:00:00.000Z",
+        })
+
+        with patch("core.condition_engine.post_data_api") as post_data_api:
+            result = await run_condition(
+                template_id=12,
+                context={
+                    "condition_key": "waitbuy > 70",
+                    "date": "2026-07-23",
+                },
+            )
+
+        post_data_api.assert_not_called()
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["matched"])
+        self.assertEqual(result["data"]["date"], "2026-07-22")
+        self.assertEqual(result["data"]["requested_date"], "2026-07-23")
+        self.assertEqual(result["data"]["fallback_date"], "2026-07-22")
+        self.assertTrue(result["data"]["used_fallback_latest"])
+
     async def test_run_condition_waitbuy_over_100_does_not_fallback_to_stock_wave_api(self):
         with patch("core.condition_engine.post_data_api") as post_data_api:
             result = await run_condition(
