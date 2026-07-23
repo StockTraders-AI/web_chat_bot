@@ -443,7 +443,7 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
             "used_fallback_latest": bool(raw.get("_usedFallbackLatest")),
         },
         "message": (
-            f"Cho mua realtime tang tren {threshold:g} co phieu"
+            f"Cho mua hien o muc {waitbuy:g}, vuot nguong {threshold:g}"
             if matched
             else "Khong dat dieu kien realtime wave"
         ),
