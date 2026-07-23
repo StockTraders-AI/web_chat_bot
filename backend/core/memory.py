@@ -214,6 +214,7 @@ CREATE TABLE IF NOT EXISTS condition_signals (
   signal_key TEXT NOT NULL,
   title TEXT NOT NULL DEFAULT '',
   message TEXT NOT NULL,
+  recommendation TEXT NOT NULL DEFAULT '',
   condition_results_json TEXT NOT NULL DEFAULT '[]',
   check_date TEXT NOT NULL DEFAULT '',
   source TEXT NOT NULL DEFAULT '',
@@ -321,6 +322,13 @@ class MemoryStore:
             try:
                 await db.execute(
                     "ALTER TABLE condition_flows ADD COLUMN trigger_prompt TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass
+
+            try:
+                await db.execute(
+                    "ALTER TABLE condition_signals ADD COLUMN recommendation TEXT NOT NULL DEFAULT ''"
                 )
             except Exception:
                 pass
@@ -2227,6 +2235,7 @@ class MemoryStore:
         check_date: str,
         source: str,
         delivery_key: str,
+        recommendation: str = "",
     ):
         async with aiosqlite.connect(self.db_path) as db:
             cur = await db.execute(
@@ -2238,19 +2247,21 @@ class MemoryStore:
                     signal_key,
                     title,
                     message,
+                    recommendation,
                     condition_results_json,
                     check_date,
                     source,
                     delivery_key,
                     updated_at
                 )
-                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(delivery_key) DO UPDATE SET
                     flow_name=excluded.flow_name,
                     condition_keys_json=excluded.condition_keys_json,
                     signal_key=excluded.signal_key,
                     title=excluded.title,
                     message=excluded.message,
+                    recommendation=excluded.recommendation,
                     condition_results_json=excluded.condition_results_json,
                     check_date=excluded.check_date,
                     source=excluded.source,
@@ -2264,6 +2275,7 @@ class MemoryStore:
                     signal_key or "",
                     title or "",
                     message or "",
+                    recommendation or "",
                     json.dumps(condition_results or [], ensure_ascii=False),
                     check_date or "",
                     source or "",
@@ -2289,6 +2301,7 @@ class MemoryStore:
                 signal_key,
                 title,
                 message,
+                recommendation,
                 condition_results_json,
                 check_date,
                 source,

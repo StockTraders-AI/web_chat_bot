@@ -44,6 +44,7 @@ class ConditionSignalStoreTests(unittest.IsolatedAsyncioTestCase):
             title="Cho mua tang manh",
             message="Lan 2",
             condition_results=[{"matched": True, "value": 101}],
+            recommendation="Khuyen nghi 2",
             check_date="2026-07-22",
             source="realtime_wave",
             delivery_key="12:2026-07-22",
@@ -55,6 +56,7 @@ class ConditionSignalStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(signals), 1)
         self.assertEqual(latest["flow_id"], 12)
         self.assertEqual(latest["message"], "Lan 2")
+        self.assertEqual(latest["recommendation"], "Khuyen nghi 2")
         self.assertEqual(latest["condition_keys"], ["waitbuy_over_100"])
         self.assertEqual(latest["condition_results"][0]["value"], 101)
 

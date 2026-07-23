@@ -282,36 +282,115 @@ def build_demo_flow_ai_message(
     trigger_prompt: str | None,
     check_date: str | None,
 ) -> str:
+    return build_demo_flow_ai_signal(
+        flow_name,
+        condition_results,
+        trigger_prompt=trigger_prompt,
+        check_date=check_date,
+    )["response"]
+
+
+def compact_signal_text(value: Any, fallback: str = "", max_chars: int = 220) -> str:
+    text = str(value or fallback or "").strip()
+    text = " ".join(text.split())
+
+    if len(text) <= max_chars:
+        return text
+
+    return text[:max_chars].rsplit(" ", 1)[0].strip()
+
+
+def fallback_signal_card(
+    flow_name: str,
+    condition_results: list[dict],
+    trigger_prompt: str | None,
+    check_date: str | None,
+) -> dict:
     fallback_message = build_demo_flow_message(
         flow_name,
         condition_results,
         trigger_prompt=None,
         check_date=check_date,
     )
+    return {
+        "title": compact_signal_text(flow_name, "Tin hieu thi truong", max_chars=90),
+        "response": compact_signal_text(fallback_message, max_chars=240),
+        "recommendation": "Khuyến nghị: Theo dõi thêm, chỉ giải ngân thăm dò khi tín hiệu xác nhận.",
+    }
+
+
+def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
+    raw = (content or "").strip()
+
+    if raw.startswith("```"):
+        raw = raw.strip("`").strip()
+        if raw.lower().startswith("json"):
+            raw = raw[4:].strip()
+
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = {}
+
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    return {
+        "title": compact_signal_text(parsed.get("title"), fallback["title"], max_chars=90),
+        "response": compact_signal_text(parsed.get("response"), fallback["response"], max_chars=260),
+        "recommendation": compact_signal_text(
+            parsed.get("recommendation"),
+            fallback["recommendation"],
+            max_chars=160,
+        ),
+    }
+
+
+def build_demo_flow_ai_signal(
+    flow_name: str,
+    condition_results: list[dict],
+    trigger_prompt: str | None,
+    check_date: str | None,
+) -> dict:
+    fallback = fallback_signal_card(
+        flow_name,
+        condition_results,
+        trigger_prompt=trigger_prompt,
+        check_date=check_date,
+    )
 
     if not trigger_prompt or not trigger_prompt.strip():
-        return fallback_message
+        return fallback
 
     try:
         client = OpenAIClient()
+        messages = build_demo_flow_ai_messages(
+            flow_name=flow_name,
+            condition_results=condition_results,
+            trigger_prompt=trigger_prompt,
+            check_date=check_date,
+        )
+        messages.append({
+            "role": "user",
+            "content": (
+                "Tra ve duy nhat JSON hop le, khong markdown, gom dung 3 truong: "
+                "title, response, recommendation. "
+                "title khoảng 10 chữ. response là nhận định ngắn 1 câu. "
+                "recommendation khoảng 15 chữ, bắt đầu bằng 'Khuyến nghị:'."
+            ),
+        })
         resp = client.chat(
             model=DEFAULT_MODEL,
-            messages=build_demo_flow_ai_messages(
-                flow_name=flow_name,
-                condition_results=condition_results,
-                trigger_prompt=trigger_prompt,
-                check_date=check_date,
-            ),
+            messages=messages,
             tools=None,
             tool_choice="auto",
         )
-        message = (resp.choices[0].message.content or "").strip()
+        content = (resp.choices[0].message.content or "").strip()
 
-        return message or fallback_message
+        return parse_signal_card_ai_content(content, fallback)
     except Exception as exc:
         print("DEMO_FLOW_AI_MESSAGE_ERROR:", exc)
-        return fallback_message
-
+        return fallback
 
 def template_condition_key(template: dict) -> str:
     return " ".join([
@@ -441,18 +520,21 @@ async def persist_condition_signal(
     check_date: str,
     delivery_key: str,
     source: str,
+    title: str | None = None,
+    recommendation: str = "",
 ):
     await memory.upsert_condition_signal(
         flow_id=int(flow["id"]),
         flow_name=flow.get("name") or "",
         condition_keys=condition_keys,
         signal_key=signal_key_from_condition_keys(condition_keys),
-        title=signal_title(flow, condition_results),
+        title=title or signal_title(flow, condition_results),
         message=message,
         condition_results=condition_results,
         check_date=check_date,
         source=source,
         delivery_key=delivery_key,
+        recommendation=recommendation,
     )
 
 
@@ -625,7 +707,7 @@ async def handle_realtime_wave_update(payload: dict):
 
         delivery_key = state["delivery_key"]
 
-        demo_message = build_demo_flow_ai_message(
+        signal_card = build_demo_flow_ai_signal(
             flow["name"],
             condition_results,
             trigger_prompt=flow.get("trigger_prompt"),
@@ -635,14 +717,16 @@ async def handle_realtime_wave_update(payload: dict):
             flow=flow,
             condition_keys=resolved_keys,
             condition_results=condition_results,
-            message=demo_message,
+            message=signal_card["response"],
             check_date=check_date,
             delivery_key=delivery_key,
             source="realtime_wave",
+            title=signal_card["title"],
+            recommendation=signal_card["recommendation"],
         )
 
         for user in await memory.list_sales_demo_users():
-            await memory.add(user["id"], "assistant", demo_message)
+            await memory.add(user["id"], "assistant", signal_card["response"])
 
 
 
@@ -1299,12 +1383,13 @@ async def demo_check_condition_flow(
 
     matched = evaluate_flow_expression(flow_refs_expression(refs), matches)
     delivered = []
-    demo_message = build_demo_flow_ai_message(
+    signal_card = build_demo_flow_ai_signal(
         flow["name"],
         condition_results,
         trigger_prompt=flow.get("trigger_prompt"),
         check_date=context.get("date"),
     )
+    demo_message = signal_card["response"]
 
     if matched:
         if condition_keys:
@@ -1317,6 +1402,8 @@ async def demo_check_condition_flow(
                 check_date=context.get("date"),
                 delivery_key=f"demo:{flow_id}:{signal_key}:{context.get('date')}",
                 source="demo_check",
+                title=signal_card["title"],
+                recommendation=signal_card["recommendation"],
             )
         for user in await memory.list_sales_demo_users():
             await memory.add(user["id"], "assistant", demo_message)
@@ -1326,6 +1413,9 @@ async def demo_check_condition_flow(
         "ok": True,
         "matched": matched,
         "message": demo_message,
+        "title": signal_card["title"],
+        "response": signal_card["response"],
+        "recommendation": signal_card["recommendation"],
         "check_date": context.get("date"),
         "delivered_count": len(delivered),
         "delivered_users": delivered,
@@ -1372,7 +1462,9 @@ async def public_latest_condition_signal(
         signal_key=signal_key,
         flow_id=flow_id,
     )
+    title = signal.get("title") if signal else None
     response = signal.get("message") if signal else None
+    recommendation = signal.get("recommendation") if signal else None
 
     if signal:
         state = await memory.get_condition_signal_state(
@@ -1388,11 +1480,15 @@ async def public_latest_condition_signal(
             and not state.get("matched")
             and str(state_updated_at) >= str(signal_updated_at)
         ):
+            title = None
             response = None
+            recommendation = None
 
     return {
         "ok": True,
+        "title": title,
         "response": response,
+        "recommendation": recommendation,
     }
 
 
