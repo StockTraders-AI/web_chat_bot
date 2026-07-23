@@ -313,8 +313,8 @@ def fallback_signal_card(
         check_date=check_date,
     )
     return {
-        "title": compact_signal_text(flow_name, "Tin hieu thi truong", max_chars=90),
-        "response": compact_signal_text(fallback_message, max_chars=240),
+        "title": compact_signal_text(flow_name, "Tin hieu thi truong", max_chars=160),
+        "response": compact_signal_text(fallback_message, max_chars=1200),
         "recommendation": "Khuyến nghị: Theo dõi thêm, chỉ giải ngân thăm dò khi tín hiệu xác nhận.",
     }
 
@@ -336,12 +336,12 @@ def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
         parsed = {}
 
     return {
-        "title": compact_signal_text(parsed.get("title"), fallback["title"], max_chars=90),
-        "response": compact_signal_text(parsed.get("response"), fallback["response"], max_chars=260),
+        "title": compact_signal_text(parsed.get("title"), fallback["title"], max_chars=160),
+        "response": compact_signal_text(parsed.get("response"), fallback["response"], max_chars=1200),
         "recommendation": compact_signal_text(
             parsed.get("recommendation"),
             fallback["recommendation"],
-            max_chars=160,
+            max_chars=500,
         ),
     }
 
@@ -373,10 +373,11 @@ def build_demo_flow_ai_signal(
         messages.append({
             "role": "user",
             "content": (
-                "Tra ve duy nhat JSON hop le, khong markdown, gom dung 3 truong: "
+                "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
                 "title, response, recommendation. "
-                "title khoảng 10 chữ. response là nhận định ngắn 1 câu. "
-                "recommendation khoảng 15 chữ, bắt đầu bằng 'Khuyến nghị:'."
+                "Follow the admin prompt from UI for tone, length, wording, and exclusions. "
+                "Do not shorten the response unless the admin prompt asks for it. "
+                "If the admin prompt specifies approximate word counts, follow those counts as closely as possible."
             ),
         })
         resp = client.chat(

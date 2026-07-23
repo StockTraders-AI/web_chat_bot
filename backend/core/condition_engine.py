@@ -1190,25 +1190,22 @@ def build_demo_flow_ai_messages(
         {
             "role": "system",
             "content": (
-                "Bạn là trợ lý StockTraders AI viết một câu chào mở đầu trong khung chat khi khách vừa vào web. "
-                "Đây không phải email, không phải bản tin, không phải khuyến nghị đầu tư dài. "
-                "Chỉ viết 1-2 câu ngắn, tự nhiên, thân thiện, như một nhân viên tư vấn mở lời. "
-                "Chọn đúng 1 mã/ngành/tín hiệu nổi bật nhất để nói, không liệt kê nhiều kết quả. "
-                "Không dùng các cụm kiểu 'Kính chào quý khách', 'Chúng tôi muốn thông báo', 'Trân trọng', 'vui lòng liên hệ'. "
-                "Không xuống dòng chữ ký. Không markdown. Không tự thêm lời khuyên mua/bán. "
-                "Nếu nhắc chỉ số SMDT, luôn viết kèm ký hiệu % sau số, ví dụ 72.5%. "
-                "Dựa đúng dữ liệu được cung cấp, không bịa mã/ngành/số liệu. Nếu có nhiều kết quả, hãy tự chọn một dòng đáng chú ý nhất dựa trên mức tăng, độ rõ của tín hiệu, hoặc item đầu tiên nếu dữ liệu không đủ để xếp hạng. "
-                "Nếu prompt của admin chỉ nêu ý tưởng, hãy diễn đạt lại thành câu chào dễ hiểu."
+                "You generate Vietnamese content for a StockTraders AI condition signal card. "
+                "The admin prompt is the primary writing instruction: follow its requested tone, length, wording, and exclusions. "
+                "Only override the admin prompt when needed to keep the output valid JSON, stay faithful to provided data, or avoid inventing facts. "
+                "Use only the supplied condition data; do not invent tickers, sectors, dates, thresholds, or numbers. "
+                "Do not add markdown or explanations outside the JSON."
             ),
         },
         {
             "role": "user",
             "content": (
-                "Ý tưởng/prompt của admin:\n"
+                "Admin prompt from UI:\n"
                 f"{trigger_prompt.strip()}\n\n"
-                "Dữ liệu điều kiện đã thỏa:\n"
+                "Matched condition data:\n"
                 f"{json.dumps(context, ensure_ascii=False, indent=2)}\n\n"
-                "Hãy viết một câu chào ngắn để bot mở đầu cuộc chat với khách, chỉ nói về 1 tín hiệu nổi bật nhất."
+                "Create the signal card content by following the admin prompt. "
+                "Return a JSON object only, with string fields title, response, recommendation."
             ),
         },
     ]
