@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import inspect
 import os
+import httpx
 from datetime import datetime, timezone
 from urllib.parse import urlsplit, urlunsplit
 
@@ -41,6 +42,11 @@ REALTIME_WAVE_ENABLED = os.getenv("REALTIME_WAVE_ENABLED", "true").strip().lower
     "yes",
     "on",
 }
+REALTIME_WAVE_BOOTSTRAP_URL = os.getenv(
+    "REALTIME_WAVE_BOOTSTRAP_URL",
+    "http://45.251.114.164:5173/api/stock-wave-current",
+).strip()
+REALTIME_WAVE_BOOTSTRAP_TIMEOUT = float(os.getenv("REALTIME_WAVE_BOOTSTRAP_TIMEOUT", "5") or 5)
 _wave_cache = {
     "payload": None,
     "rows": [],
@@ -51,6 +57,8 @@ _socket_task: asyncio.Task | None = None
 _socket_client = None
 _wave_listeners = []
 _last_socket_error = ""
+_last_bootstrap_error = ""
+_last_bootstrap_at = ""
 
 
 def _utc_now() -> str:
@@ -118,7 +126,10 @@ def update_wave_payload(payload) -> bool:
     data = payload.get("data") if "data" in payload else payload
     rows = _extract_wave_rows(data)
 
-    sent_at = str(payload.get("sentAt") or payload.get("sent_at") or "")
+    if not rows:
+        return False
+
+    sent_at = str(payload.get("sentAt") or payload.get("sent_at") or payload.get("cachedAt") or "")
     if sent_at and rows:
         sent_date = sent_at[:10]
         for row in rows:
@@ -130,6 +141,39 @@ def update_wave_payload(payload) -> bool:
     _wave_cache["sent_at"] = sent_at
     _wave_cache["received_at"] = _utc_now()
     return True
+
+
+async def bootstrap_wave_snapshot() -> bool:
+    global _last_bootstrap_error, _last_bootstrap_at
+
+    if _wave_cache["rows"] or not REALTIME_WAVE_BOOTSTRAP_URL:
+        return bool(_wave_cache["rows"])
+
+    try:
+        async with httpx.AsyncClient(timeout=REALTIME_WAVE_BOOTSTRAP_TIMEOUT) as client:
+            res = await client.get(REALTIME_WAVE_BOOTSTRAP_URL)
+            res.raise_for_status()
+            payload = res.json()
+    except Exception as exc:
+        _last_bootstrap_error = str(exc)
+        return False
+
+    loaded = update_wave_payload(payload)
+    _last_bootstrap_at = _utc_now() if loaded else ""
+    if loaded:
+        _last_bootstrap_error = ""
+    else:
+        _last_bootstrap_error = "bootstrap payload has no wave rows"
+    return loaded
+
+
+async def ensure_wave_snapshot(date: str | None = None) -> dict | None:
+    snapshot = latest_wave_snapshot(date)
+    if snapshot:
+        return snapshot
+
+    await bootstrap_wave_snapshot()
+    return latest_wave_snapshot(date)
 
 
 def latest_wave_snapshot(date: str | None = None) -> dict | None:
@@ -181,6 +225,9 @@ def wave_status() -> dict:
         "received_at": _wave_cache["received_at"],
         "import_error": str(SOCKETIO_IMPORT_ERROR) if SOCKETIO_IMPORT_ERROR else "",
         "last_error": _last_socket_error,
+        "bootstrap_url": REALTIME_WAVE_BOOTSTRAP_URL,
+        "bootstrap_at": _last_bootstrap_at,
+        "bootstrap_error": _last_bootstrap_error,
         "url": _socket_connect_url(),
         "namespace": REALTIME_NAMESPACE,
     }

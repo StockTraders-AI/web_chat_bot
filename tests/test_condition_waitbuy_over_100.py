@@ -12,11 +12,17 @@ from core.condition_engine import (  # noqa: E402
     resolve_template_support,
     run_condition,
 )
+from core import realtime_wave  # noqa: E402
 from core.realtime_wave import clear_wave_cache, update_wave_payload  # noqa: E402
 
 
 class WaitbuyThresholdConditionTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.previous_bootstrap_url = realtime_wave.REALTIME_WAVE_BOOTSTRAP_URL
+        realtime_wave.REALTIME_WAVE_BOOTSTRAP_URL = ""
+
     def tearDown(self):
+        realtime_wave.REALTIME_WAVE_BOOTSTRAP_URL = self.previous_bootstrap_url
         clear_wave_cache()
 
     def test_resolves_condition_12_text_to_waitbuy_over_100(self):

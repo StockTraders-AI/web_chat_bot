@@ -2,7 +2,7 @@ import json
 import httpx
 
 from services.ticker_policy import invalid_api_ticker, sanitize_api_result
-from core.realtime_wave import latest_wave_snapshot
+from core.realtime_wave import ensure_wave_snapshot
 from datetime import datetime
 import re
 import unicodedata
@@ -389,7 +389,7 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
             "message": f"Thieu date de kiem tra waitbuy > {threshold:g}",
         }
 
-    raw = latest_wave_snapshot(date)
+    raw = await ensure_wave_snapshot(date)
 
     if not raw:
         return {
