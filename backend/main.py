@@ -35,7 +35,7 @@ from core.chat_runtime import stream_standard_chat
 from core.sales_discovery import OPENING_MESSAGE, SalesDiscovery, is_explainer_target
 from core.model_router import pick_model
 from core.quota import QuotaService
-from core.realtime_wave import add_wave_listener, ensure_realtime_wave_client, start_realtime_wave_client, stop_realtime_wave_client, wave_status
+from core.realtime_wave import add_wave_listener, ensure_realtime_wave_client, start_realtime_wave_client, stop_realtime_wave_client, wave_debug_snapshot, wave_status
 from routes.iplatform_api import configure_iplatform_api, router as iplatform_router
 from routes.portfolio_chat import configure_portfolio_chat_api, router as portfolio_chat_router
 from services.openai_client import OpenAIClient
@@ -1337,10 +1337,14 @@ async def demo_check_condition_flow(
 async def condition_realtime_wave_status(
     authorization: Optional[str] = Header(default=None),
     session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
+    debug: bool = False,
+    date: Optional[str] = None,
 ):
     await require_super_admin(authorization, session_cookie)
-    return await ensure_realtime_wave_client()
-
+    status = await ensure_realtime_wave_client()
+    if debug:
+        return wave_debug_snapshot(date)
+    return status
 
 @app.post("/condition-realtime/wave/restart")
 async def condition_realtime_wave_restart(

@@ -185,6 +185,44 @@ def wave_status() -> dict:
     }
 
 
+
+
+def wave_debug_snapshot(date: str | None = None, sample_limit: int = 5) -> dict:
+    status = wave_status()
+    rows = [row for row in _wave_cache["rows"] if isinstance(row, dict)]
+    sample_limit = max(1, min(int(sample_limit or 5), 20))
+    snapshot = latest_wave_snapshot(date)
+    payload = _wave_cache["payload"]
+
+    if isinstance(payload, dict):
+        payload_type = "dict"
+        payload_keys = list(payload.keys())[:30]
+    elif isinstance(payload, list):
+        payload_type = "list"
+        payload_keys = []
+    elif payload is None:
+        payload_type = "none"
+        payload_keys = []
+    else:
+        payload_type = type(payload).__name__
+        payload_keys = []
+
+    return {
+        **status,
+        "debug": {
+            "requested_date": str(date or "")[:10],
+            "payload_type": payload_type,
+            "payload_keys": payload_keys,
+            "sample_rows": rows[:sample_limit],
+            "latest_rows": rows[-sample_limit:],
+            "snapshot_row_count": len((snapshot or {}).get("waveDatas", [])),
+            "snapshot_rows": (snapshot or {}).get("waveDatas", [])[:sample_limit],
+            "snapshot_requested_date": (snapshot or {}).get("_requestedDate", ""),
+            "snapshot_fallback_date": (snapshot or {}).get("_fallbackDate", ""),
+            "snapshot_used_fallback_latest": bool((snapshot or {}).get("_usedFallbackLatest")),
+        },
+    }
+
 def add_wave_listener(listener):
     if listener not in _wave_listeners:
         _wave_listeners.append(listener)

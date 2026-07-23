@@ -2672,6 +2672,29 @@ async function updateActiveFlowTriggerPrompt(id, value) {
   }
 }
 
+async function logRealtimeWaveDebug(flowId, checkDate, demoResult) {
+  try {
+    const params = new URLSearchParams({ debug: "1" });
+    if (checkDate) params.set("date", checkDate);
+
+    const res = await fetch(`/condition-realtime/wave/status?${params.toString()}`, {
+      credentials: "same-origin",
+    });
+    const wave = await res.json().catch(() => ({}));
+
+    console.groupCollapsed("CONDITION_DEMO_WAVE_DEBUG");
+    console.log({
+      flow_id: flowId,
+      check_date: checkDate,
+      demo_result: demoResult,
+      wave,
+    });
+    console.groupEnd();
+  } catch (error) {
+    console.warn("CONDITION_DEMO_WAVE_DEBUG_FAILED", error);
+  }
+}
+
 function renderDemoCheckResult(result) {
   if (!result) return "";
 
@@ -2745,6 +2768,7 @@ async function demoCheckConditionFlow(id) {
         matched: false,
         results: [],
       };
+      await logRealtimeWaveDebug(id, checkDate, data);
       showToast(data?.detail || "Check demo thất bại", "error");
       return;
     }
@@ -2753,6 +2777,8 @@ async function demoCheckConditionFlow(id) {
       ...data,
       check_date: data.check_date || checkDate,
     };
+
+    await logRealtimeWaveDebug(id, checkDate, demoCheckResults[id]);
 
     if (data.matched) {
       showToast(`Đã gửi demo cho ${data.delivered_count || 0} user`);
