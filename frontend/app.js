@@ -2682,16 +2682,33 @@ async function logRealtimeWaveDebug(flowId, checkDate, demoResult) {
     });
     const wave = await res.json().catch(() => ({}));
 
-    console.groupCollapsed("CONDITION_DEMO_WAVE_DEBUG");
-    console.log({
+    const debug = wave?.debug || {};
+    console.log("CONDITION_DEMO_SOCKET_DATA", {
       flow_id: flowId,
       check_date: checkDate,
+      condition_results: demoResult?.results || [],
+      socket: {
+        connected: Boolean(wave?.connected),
+        row_count: Number(wave?.row_count || 0),
+        latest_date: wave?.latest_date || "",
+        sent_at: wave?.sent_at || "",
+        received_at: wave?.received_at || "",
+        last_error: wave?.last_error || "",
+      },
+      raw_sample_rows: debug.sample_rows || [],
+      raw_latest_rows: debug.latest_rows || [],
+      selected_snapshot_rows: debug.snapshot_rows || [],
+      snapshot: {
+        requested_date: debug.snapshot_requested_date || debug.requested_date || "",
+        fallback_date: debug.snapshot_fallback_date || "",
+        used_fallback_latest: Boolean(debug.snapshot_used_fallback_latest),
+        row_count: Number(debug.snapshot_row_count || 0),
+      },
       demo_result: demoResult,
       wave,
     });
-    console.groupEnd();
   } catch (error) {
-    console.warn("CONDITION_DEMO_WAVE_DEBUG_FAILED", error);
+    console.warn("CONDITION_DEMO_SOCKET_DATA_FAILED", error);
   }
 }
 

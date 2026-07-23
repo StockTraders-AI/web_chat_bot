@@ -1383,15 +1383,17 @@ async def demo_check_condition_flow(
 
     matched = evaluate_flow_expression(flow_refs_expression(refs), matches)
     delivered = []
-    signal_card = build_demo_flow_ai_signal(
-        flow["name"],
-        condition_results,
-        trigger_prompt=flow.get("trigger_prompt"),
-        check_date=context.get("date"),
-    )
-    demo_message = signal_card["response"]
+    signal_card = None
+    demo_message = None
 
     if matched:
+        signal_card = build_demo_flow_ai_signal(
+            flow["name"],
+            condition_results,
+            trigger_prompt=flow.get("trigger_prompt"),
+            check_date=context.get("date"),
+        )
+        demo_message = signal_card["response"]
         if condition_keys:
             signal_key = signal_key_from_condition_keys(condition_keys)
             await persist_condition_signal(
@@ -1413,9 +1415,9 @@ async def demo_check_condition_flow(
         "ok": True,
         "matched": matched,
         "message": demo_message,
-        "title": signal_card["title"],
-        "response": signal_card["response"],
-        "recommendation": signal_card["recommendation"],
+        "title": signal_card["title"] if signal_card else None,
+        "response": signal_card["response"] if signal_card else None,
+        "recommendation": signal_card["recommendation"] if signal_card else None,
         "check_date": context.get("date"),
         "delivered_count": len(delivered),
         "delivered_users": delivered,
