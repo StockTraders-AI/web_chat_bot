@@ -90,6 +90,7 @@ const step3PromptSaveBtn = document.getElementById("step3PromptSave");
 const step3PromptModalTitleEl = document.getElementById("step3PromptModalTitle");
 const step3PromptTitleEl = document.getElementById("step3PromptTitle");
 const step3PromptResponseEl = document.getElementById("step3PromptResponse");
+const step3PromptDocsEl = document.getElementById("step3PromptDocs");
 const step3PromptRecommendationEl = document.getElementById("step3PromptRecommendation");
 
 const conditionFilterTypeEl = document.getElementById("conditionFilterType");
@@ -2393,6 +2394,7 @@ async function saveConditionFlow() {
     trigger_prompt: existingFlow?.trigger_prompt || "",
     trigger_title: existingFlow?.trigger_title || "",
     trigger_recommendation: existingFlow?.trigger_recommendation || "",
+    trigger_docs: existingFlow?.trigger_docs || "",
     status: "draft",
   };
 
@@ -2509,7 +2511,7 @@ function isWaitbuySignalFlow(flow) {
 
 function step3PromptPreview(flow) {
   const parts = isWaitbuySignalFlow(flow)
-    ? [flow.trigger_title, flow.trigger_prompt, flow.trigger_recommendation]
+    ? [flow.trigger_title, flow.trigger_docs, flow.trigger_prompt, flow.trigger_recommendation]
     : [flow.trigger_prompt];
   const text = parts
     .map((item) => String(item || "").trim())
@@ -2550,6 +2552,10 @@ function openStep3PromptModal(id) {
     step3PromptTitleEl.value = flow.trigger_title || "";
     step3PromptTitleEl.closest("label")?.classList.toggle("hidden", !isWaitbuySignalFlow(flow));
   }
+  if (step3PromptDocsEl) {
+    step3PromptDocsEl.value = flow.trigger_docs || "";
+    step3PromptDocsEl.closest("label")?.classList.toggle("hidden", !isWaitbuySignalFlow(flow));
+  }
   if (step3PromptResponseEl) {
     step3PromptResponseEl.value = flow.trigger_prompt || "";
   }
@@ -2579,6 +2585,7 @@ async function saveStep3PromptModal() {
   await updateActiveFlowTriggerPrompt(id, {
     trigger_prompt: String(step3PromptResponseEl?.value || "").trim(),
     trigger_title: String(step3PromptTitleEl?.value || "").trim(),
+    trigger_docs: String(step3PromptDocsEl?.value || "").trim(),
     trigger_recommendation: String(step3PromptRecommendationEl?.value || "").trim(),
   });
   renderActiveFlows();
@@ -2768,13 +2775,17 @@ async function updateActiveFlowTriggerPrompt(id, value) {
       ? value.trigger_recommendation
       : recommendationEl?.value ?? flow.trigger_recommendation ?? ""
   ).trim();
+  const triggerDocs = String(
+    isPatchObject ? value.trigger_docs : flow.trigger_docs ?? ""
+  ).trim();
 
   const samePrompt = (flow.trigger_prompt || "") === prompt;
   const sameTitle = (flow.trigger_title || "") === triggerTitle;
   const sameRecommendation =
     (flow.trigger_recommendation || "") === triggerRecommendation;
+  const sameDocs = (flow.trigger_docs || "") === triggerDocs;
 
-  if (samePrompt && (!waitbuyFlow || (sameTitle && sameRecommendation))) return;
+  if (samePrompt && (!waitbuyFlow || (sameTitle && sameRecommendation && sameDocs))) return;
 
   const body = {
     trigger_prompt: prompt,
@@ -2782,6 +2793,7 @@ async function updateActiveFlowTriggerPrompt(id, value) {
 
   if (waitbuyFlow) {
     body.trigger_title = triggerTitle;
+    body.trigger_docs = triggerDocs;
     body.trigger_recommendation = triggerRecommendation;
   }
 
@@ -2802,6 +2814,7 @@ async function updateActiveFlowTriggerPrompt(id, value) {
     flow.trigger_prompt = prompt;
     if (waitbuyFlow) {
       flow.trigger_title = triggerTitle;
+      flow.trigger_docs = triggerDocs;
       flow.trigger_recommendation = triggerRecommendation;
     }
   } catch {
@@ -2899,12 +2912,14 @@ async function demoCheckConditionFlow(id) {
   const triggerRecommendation = String(
     recommendationEl?.value ?? flow?.trigger_recommendation ?? ""
   ).trim();
+  const triggerDocs = String(flow?.trigger_docs ?? "").trim();
   const waitbuyFlow = isWaitbuySignalFlow(flow);
 
   if (flow) {
     flow.trigger_prompt = triggerPrompt;
     if (waitbuyFlow) {
       flow.trigger_title = triggerTitle;
+      flow.trigger_docs = triggerDocs;
       flow.trigger_recommendation = triggerRecommendation;
     }
   }
@@ -2928,6 +2943,7 @@ async function demoCheckConditionFlow(id) {
         ...(waitbuyFlow
           ? {
               trigger_title: triggerTitle,
+              trigger_docs: triggerDocs,
               trigger_recommendation: triggerRecommendation,
             }
           : {}),

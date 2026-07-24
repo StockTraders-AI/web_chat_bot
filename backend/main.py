@@ -143,6 +143,7 @@ class ConditionFlowDemoCheckIn(BaseModel):
     trigger_prompt: Optional[str] = None
     trigger_title: Optional[str] = None
     trigger_recommendation: Optional[str] = None
+    trigger_docs: Optional[str] = None
 
 
 class ConditionFlowActiveIn(BaseModel):
@@ -153,6 +154,7 @@ class ConditionFlowTriggerPromptIn(BaseModel):
     trigger_prompt: str = ""
     trigger_title: Optional[str] = None
     trigger_recommendation: Optional[str] = None
+    trigger_docs: Optional[str] = None
 
 
 class ConditionFlowIn(BaseModel):
@@ -162,6 +164,7 @@ class ConditionFlowIn(BaseModel):
     trigger_prompt: str = ""
     trigger_title: str = ""
     trigger_recommendation: str = ""
+    trigger_docs: str = ""
     status: str = "draft"
 
 
@@ -172,6 +175,7 @@ class ConditionFlowUpdateIn(BaseModel):
     trigger_prompt: str = ""
     trigger_title: str = ""
     trigger_recommendation: str = ""
+    trigger_docs: str = ""
     status: str = "draft"
 
 
@@ -289,12 +293,14 @@ def build_demo_flow_ai_message(
     condition_results: list[dict],
     trigger_prompt: str | None,
     check_date: str | None,
+    trigger_docs: str | None = None,
 ) -> str:
     return build_demo_flow_ai_signal(
         flow_name,
         condition_results,
         trigger_prompt=trigger_prompt,
         check_date=check_date,
+        trigger_docs=trigger_docs,
     )["response"]
 
 
@@ -472,6 +478,7 @@ def build_demo_flow_ai_signal(
     check_date: str | None,
     trigger_title: str | None = None,
     trigger_recommendation: str | None = None,
+    trigger_docs: str | None = None,
 ) -> dict:
     fallback = fallback_signal_card(
         flow_name,
@@ -482,8 +489,9 @@ def build_demo_flow_ai_signal(
     title_prompt = (trigger_title or "").strip()
     response_prompt = (trigger_prompt or "").strip()
     recommendation_prompt = (trigger_recommendation or "").strip()
+    docs_prompt = compact_signal_text(trigger_docs, "", max_chars=4000)
 
-    if not any([title_prompt, response_prompt, recommendation_prompt]):
+    if not any([title_prompt, response_prompt, recommendation_prompt, docs_prompt]):
         return fallback
 
     field_prompt = "\n".join([
@@ -491,6 +499,7 @@ def build_demo_flow_ai_signal(
         f"Title prompt: {title_prompt or 'Create a concise Vietnamese market signal title.'}",
         f"Response prompt: {response_prompt or 'Create a concise Vietnamese market interpretation.'}",
         f"Recommendation prompt: {recommendation_prompt or 'Create a concise Vietnamese action recommendation.'}",
+        f"StockTradersAI reference docs: {docs_prompt}" if docs_prompt else "StockTradersAI reference docs: none",
     ])
 
     try:
@@ -560,6 +569,7 @@ def build_demo_flow_ai_response(
     condition_results: list[dict],
     trigger_prompt: str | None,
     check_date: str | None,
+    trigger_docs: str | None = None,
 ) -> str:
     fallback = fallback_signal_card(
         flow_name,
@@ -568,6 +578,14 @@ def build_demo_flow_ai_response(
         check_date=check_date,
     )["response"]
     response_prompt = (trigger_prompt or "").strip()
+    docs_prompt = compact_signal_text(trigger_docs, "", max_chars=4000)
+
+    if docs_prompt:
+        response_prompt = "\n".join([
+            response_prompt or "Create a concise Vietnamese market interpretation from the matched condition data.",
+            "StockTradersAI reference docs:",
+            docs_prompt,
+        ])
 
     if not response_prompt:
         response_prompt = "Create a concise Vietnamese market interpretation from the matched condition data."
@@ -933,6 +951,7 @@ async def handle_realtime_wave_update(payload: dict):
                     condition_results,
                     trigger_prompt=flow.get("trigger_prompt"),
                     check_date=check_date,
+                    trigger_docs=flow.get("trigger_docs"),
                 ),
                 "recommendation": latest_signal.get("recommendation") or "",
             }
@@ -944,6 +963,7 @@ async def handle_realtime_wave_update(payload: dict):
                 check_date=check_date,
                 trigger_title=flow.get("trigger_title"),
                 trigger_recommendation=flow.get("trigger_recommendation"),
+                trigger_docs=flow.get("trigger_docs"),
             )
         await persist_condition_signal(
             flow=flow,
@@ -1431,6 +1451,7 @@ async def create_condition_flow(
         trigger_prompt=payload.trigger_prompt.strip(),
         trigger_title=payload.trigger_title.strip(),
         trigger_recommendation=payload.trigger_recommendation.strip(),
+        trigger_docs=payload.trigger_docs.strip(),
         created_by=f'{actor["username"]} ({actor["role"]})',
     )
 
@@ -1474,6 +1495,7 @@ async def update_condition_flow(
         trigger_prompt=payload.trigger_prompt.strip(),
         trigger_title=payload.trigger_title.strip(),
         trigger_recommendation=payload.trigger_recommendation.strip(),
+        trigger_docs=payload.trigger_docs.strip(),
         status=payload.status,
     )
 
@@ -1500,12 +1522,14 @@ async def update_condition_flow_trigger_prompt(
         if payload.trigger_recommendation is not None
         else None
     )
+    trigger_docs = payload.trigger_docs.strip() if payload.trigger_docs is not None else None
 
     await memory.update_condition_flow_trigger_prompt(
         flow_id=flow_id,
         trigger_prompt=payload.trigger_prompt.strip(),
         trigger_title=trigger_title,
         trigger_recommendation=trigger_recommendation,
+        trigger_docs=trigger_docs,
     )
 
     return {
@@ -1514,6 +1538,7 @@ async def update_condition_flow_trigger_prompt(
         "trigger_prompt": payload.trigger_prompt.strip(),
         "trigger_title": trigger_title if trigger_title is not None else flow.get("trigger_title", ""),
         "trigger_recommendation": trigger_recommendation if trigger_recommendation is not None else flow.get("trigger_recommendation", ""),
+        "trigger_docs": trigger_docs if trigger_docs is not None else flow.get("trigger_docs", ""),
     }
 
 @app.post("/condition-flows/{flow_id}/confirm")
@@ -1583,6 +1608,7 @@ async def demo_check_condition_flow(
         payload.trigger_prompt is not None
         or payload.trigger_title is not None
         or payload.trigger_recommendation is not None
+        or payload.trigger_docs is not None
     ):
         trigger_prompt = (
             payload.trigger_prompt.strip()
@@ -1599,17 +1625,24 @@ async def demo_check_condition_flow(
             if payload.trigger_recommendation is not None
             else flow.get("trigger_recommendation", "")
         )
+        trigger_docs = (
+            payload.trigger_docs.strip()
+            if payload.trigger_docs is not None
+            else flow.get("trigger_docs", "")
+        )
         await memory.update_condition_flow_trigger_prompt(
             flow_id=flow_id,
             trigger_prompt=trigger_prompt,
             trigger_title=trigger_title,
             trigger_recommendation=trigger_recommendation,
+            trigger_docs=trigger_docs,
         )
         flow = {
             **flow,
             "trigger_prompt": trigger_prompt,
             "trigger_title": trigger_title,
             "trigger_recommendation": trigger_recommendation,
+            "trigger_docs": trigger_docs,
         }
 
     context = dict(payload.context or {})
@@ -1663,6 +1696,7 @@ async def demo_check_condition_flow(
             check_date=context.get("date"),
             trigger_title=flow.get("trigger_title"),
             trigger_recommendation=flow.get("trigger_recommendation"),
+            trigger_docs=flow.get("trigger_docs"),
         )
         demo_message = signal_card["response"]
         if condition_keys:

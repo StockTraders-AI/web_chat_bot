@@ -2562,6 +2562,11 @@ select option {
   resize: vertical;
 }
 
+#step3PromptModal .builder-field textarea.step3-docs-prompt-textarea {
+  min-height: 150px;
+  max-height: 280px;
+}
+
 #step3PromptModal .builder-field textarea.step3-response-prompt-textarea {
   min-height: 170px;
   max-height: 320px;

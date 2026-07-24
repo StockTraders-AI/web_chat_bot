@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS condition_flows (
   trigger_prompt TEXT NOT NULL DEFAULT '',
   trigger_title TEXT NOT NULL DEFAULT '',
   trigger_recommendation TEXT NOT NULL DEFAULT '',
+  trigger_docs TEXT NOT NULL DEFAULT '',
   active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0, 1)),
   status TEXT NOT NULL DEFAULT 'draft'
     CHECK(status IN ('draft','confirmed','running','disabled')),
@@ -344,6 +345,13 @@ class MemoryStore:
 
             try:
                 await db.execute(
+                    "ALTER TABLE condition_flows ADD COLUMN trigger_docs TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass
+
+            try:
+                await db.execute(
                     "ALTER TABLE condition_signals ADD COLUMN recommendation TEXT NOT NULL DEFAULT ''"
                 )
             except Exception:
@@ -374,6 +382,7 @@ class MemoryStore:
                         trigger_prompt TEXT NOT NULL DEFAULT '',
                         trigger_title TEXT NOT NULL DEFAULT '',
                         trigger_recommendation TEXT NOT NULL DEFAULT '',
+                        trigger_docs TEXT NOT NULL DEFAULT '',
                         active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0, 1)),
                         status TEXT NOT NULL DEFAULT 'draft'
                             CHECK(status IN ('draft','confirmed','running','disabled')),
@@ -394,6 +403,7 @@ class MemoryStore:
                             trigger_prompt,
                             trigger_title,
                             trigger_recommendation,
+                            trigger_docs,
                             active,
                             status,
                             created_by,
@@ -1927,6 +1937,7 @@ class MemoryStore:
         trigger_prompt: str = "",
         trigger_title: str = "",
         trigger_recommendation: str = "",
+        trigger_docs: str = "",
         created_by: str | None = None,
     ):
         async with aiosqlite.connect(self.db_path) as db:
@@ -1939,11 +1950,12 @@ class MemoryStore:
                     trigger_prompt,
                     trigger_title,
                     trigger_recommendation,
+                    trigger_docs,
                     active,
                     status,
                     created_by
                 )
-                VALUES(?, ?, ?, ?, ?, ?, 0, 'draft', ?)
+                VALUES(?, ?, ?, ?, ?, ?, ?, 0, 'draft', ?)
                 """,
                 (
                     name,
@@ -1952,6 +1964,7 @@ class MemoryStore:
                     trigger_prompt,
                     trigger_title,
                     trigger_recommendation,
+                    trigger_docs,
                     created_by,
                 )
             )
@@ -1974,6 +1987,7 @@ class MemoryStore:
                     trigger_prompt,
                     trigger_title,
                     trigger_recommendation,
+                    trigger_docs,
                     active,
                     status,
                     created_by,
@@ -2004,6 +2018,7 @@ class MemoryStore:
                     trigger_prompt,
                     trigger_title,
                     trigger_recommendation,
+                    trigger_docs,
                     active,
                     status,
                     created_by,
@@ -2032,6 +2047,7 @@ class MemoryStore:
         trigger_prompt: str | None = None,
         trigger_title: str | None = None,
         trigger_recommendation: str | None = None,
+        trigger_docs: str | None = None,
         status: str = "draft",
     ):
         async with aiosqlite.connect(self.db_path) as db:
@@ -2045,6 +2061,7 @@ class MemoryStore:
                     trigger_prompt=COALESCE(?, trigger_prompt),
                     trigger_title=COALESCE(?, trigger_title),
                     trigger_recommendation=COALESCE(?, trigger_recommendation),
+                    trigger_docs=COALESCE(?, trigger_docs),
                     status=?,
                     updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
@@ -2056,6 +2073,7 @@ class MemoryStore:
                     trigger_prompt,
                     trigger_title,
                     trigger_recommendation,
+                    trigger_docs,
                     status,
                     flow_id,
                 )
@@ -2069,6 +2087,7 @@ class MemoryStore:
         trigger_prompt: str,
         trigger_title: str | None = None,
         trigger_recommendation: str | None = None,
+        trigger_docs: str | None = None,
     ):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -2078,6 +2097,7 @@ class MemoryStore:
                     trigger_prompt=?,
                     trigger_title=COALESCE(?, trigger_title),
                     trigger_recommendation=COALESCE(?, trigger_recommendation),
+                    trigger_docs=COALESCE(?, trigger_docs),
                     updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
                 """,
@@ -2085,6 +2105,7 @@ class MemoryStore:
                     trigger_prompt,
                     trigger_title,
                     trigger_recommendation,
+                    trigger_docs,
                     flow_id,
                 )
             )
