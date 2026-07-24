@@ -83,6 +83,14 @@ const conditionStep3El = document.getElementById("conditionStep3");
 const activeFlowFilterTypeEl = document.getElementById("activeFlowFilterType");
 const activeFlowSearchEl = document.getElementById("activeFlowSearch");
 const activeFlowListEl = document.getElementById("activeFlowList");
+const step3PromptModalEl = document.getElementById("step3PromptModal");
+const step3PromptModalCloseBtn = document.getElementById("step3PromptModalClose");
+const step3PromptCancelBtn = document.getElementById("step3PromptCancel");
+const step3PromptSaveBtn = document.getElementById("step3PromptSave");
+const step3PromptModalTitleEl = document.getElementById("step3PromptModalTitle");
+const step3PromptTitleEl = document.getElementById("step3PromptTitle");
+const step3PromptResponseEl = document.getElementById("step3PromptResponse");
+const step3PromptRecommendationEl = document.getElementById("step3PromptRecommendation");
 
 const conditionFilterTypeEl = document.getElementById("conditionFilterType");
 const addConditionTypeBtn = document.getElementById("addConditionTypeBtn");
@@ -151,6 +159,7 @@ let selectedConditions = [];
 let nextOperator = "AND";
 let editingConditionTemplateId = null;
 let checkingDemoFlowId = null;
+let editingStep3PromptFlowId = null;
 let demoCheckResults = {};
 let activeFlowCheckDates = {};
 let conditionPage = 1;
@@ -2498,56 +2507,84 @@ function isWaitbuySignalFlow(flow) {
   return normalized.includes("waitbuy") || normalized.includes("cho mua");
 }
 
+function step3PromptPreview(flow) {
+  const parts = isWaitbuySignalFlow(flow)
+    ? [flow.trigger_title, flow.trigger_prompt, flow.trigger_recommendation]
+    : [flow.trigger_prompt];
+  const text = parts
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .join(" | ");
+
+  if (!text) return "Chua co prompt";
+  return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+}
+
 function renderStep3SignalTextFields(flow) {
   if (!isWaitbuySignalFlow(flow)) {
     return `
-      <textarea
-        id="triggerPrompt-${flow.id}"
-        class="step3-trigger-prompt"
-        maxlength="500"
-        placeholder="Nhap prompt..."
-        onblur="updateActiveFlowTriggerPrompt(${flow.id}, this.value)"
-      >${escapeHtml(flow.trigger_prompt || "")}</textarea>
+      <div class="step3-prompt-summary">
+        <span>${escapeHtml(step3PromptPreview(flow))}</span>
+        <button type="button" onclick="openStep3PromptModal(${flow.id})">Sua prompt</button>
+      </div>
     `;
   }
 
   return `
-    <div class="step3-card-copy-fields">
-      <label>
-        <span>Prompt title</span>
-        <textarea
-          id="triggerTitle-${flow.id}"
-          class="step3-trigger-prompt step3-title-input"
-          maxlength="160"
-          placeholder="Prompt tao title..."
-          onblur="updateActiveFlowTriggerPrompt(${flow.id})"
-        >${escapeHtml(flow.trigger_title || "")}</textarea>
-      </label>
-
-      <label>
-        <span>Nhan dinh</span>
-        <textarea
-          id="triggerPrompt-${flow.id}"
-          class="step3-trigger-prompt"
-          maxlength="500"
-          placeholder="Prompt tao nhan dinh..."
-          onblur="updateActiveFlowTriggerPrompt(${flow.id}, this.value)"
-        >${escapeHtml(flow.trigger_prompt || "")}</textarea>
-      </label>
-
-      <label>
-        <span>Prompt recommendation</span>
-        <textarea
-          id="triggerRecommendation-${flow.id}"
-          class="step3-trigger-prompt step3-recommendation-input"
-          maxlength="240"
-          placeholder="Prompt tao recommendation..."
-          onblur="updateActiveFlowTriggerPrompt(${flow.id})"
-        >${escapeHtml(flow.trigger_recommendation || "")}</textarea>
-      </label>
+    <div class="step3-prompt-summary">
+      <span>${escapeHtml(step3PromptPreview(flow))}</span>
+      <button type="button" onclick="openStep3PromptModal(${flow.id})">Sua prompt</button>
     </div>
   `;
 }
+
+function openStep3PromptModal(id) {
+  const flow = conditionFlows.find((item) => Number(item.id) === Number(id));
+  if (!flow || !step3PromptModalEl) return;
+
+  editingStep3PromptFlowId = id;
+  if (step3PromptModalTitleEl) {
+    step3PromptModalTitleEl.textContent = `Prompt: ${repairDisplayText(flow.name || "")}`;
+  }
+  if (step3PromptTitleEl) {
+    step3PromptTitleEl.value = flow.trigger_title || "";
+    step3PromptTitleEl.closest("label")?.classList.toggle("hidden", !isWaitbuySignalFlow(flow));
+  }
+  if (step3PromptResponseEl) {
+    step3PromptResponseEl.value = flow.trigger_prompt || "";
+  }
+  if (step3PromptRecommendationEl) {
+    step3PromptRecommendationEl.value = flow.trigger_recommendation || "";
+    step3PromptRecommendationEl.closest("label")?.classList.toggle("hidden", !isWaitbuySignalFlow(flow));
+  }
+
+  step3PromptModalEl.hidden = false;
+  step3PromptModalEl.classList.remove("hidden");
+  setTimeout(() => step3PromptResponseEl?.focus(), 50);
+}
+
+function closeStep3PromptModal() {
+  if (!step3PromptModalEl) return;
+  step3PromptModalEl.hidden = true;
+  step3PromptModalEl.classList.add("hidden");
+  editingStep3PromptFlowId = null;
+}
+
+async function saveStep3PromptModal() {
+  if (!editingStep3PromptFlowId) return;
+  const id = editingStep3PromptFlowId;
+  const flow = conditionFlows.find((item) => Number(item.id) === Number(id));
+  if (!flow) return;
+
+  await updateActiveFlowTriggerPrompt(id, {
+    trigger_prompt: String(step3PromptResponseEl?.value || "").trim(),
+    trigger_title: String(step3PromptTitleEl?.value || "").trim(),
+    trigger_recommendation: String(step3PromptRecommendationEl?.value || "").trim(),
+  });
+  renderActiveFlows();
+  closeStep3PromptModal();
+}
+
 
 function renderConditionFlows() {
   if (!conditionFlowListEl) return;
@@ -2716,13 +2753,20 @@ async function updateActiveFlowTriggerPrompt(id, value) {
   if (!flow) return;
 
   const waitbuyFlow = isWaitbuySignalFlow(flow);
+  const isPatchObject = value && typeof value === "object";
   const promptEl = document.getElementById(`triggerPrompt-${id}`);
   const titleEl = document.getElementById(`triggerTitle-${id}`);
   const recommendationEl = document.getElementById(`triggerRecommendation-${id}`);
-  const prompt = String(value ?? promptEl?.value ?? flow.trigger_prompt ?? "").trim();
-  const triggerTitle = String(titleEl?.value ?? flow.trigger_title ?? "").trim();
+  const prompt = String(
+    isPatchObject ? value.trigger_prompt : value ?? promptEl?.value ?? flow.trigger_prompt ?? ""
+  ).trim();
+  const triggerTitle = String(
+    isPatchObject ? value.trigger_title : titleEl?.value ?? flow.trigger_title ?? ""
+  ).trim();
   const triggerRecommendation = String(
-    recommendationEl?.value ?? flow.trigger_recommendation ?? ""
+    isPatchObject
+      ? value.trigger_recommendation
+      : recommendationEl?.value ?? flow.trigger_recommendation ?? ""
   ).trim();
 
   const samePrompt = (flow.trigger_prompt || "") === prompt;
@@ -2731,12 +2775,6 @@ async function updateActiveFlowTriggerPrompt(id, value) {
     (flow.trigger_recommendation || "") === triggerRecommendation;
 
   if (samePrompt && (!waitbuyFlow || (sameTitle && sameRecommendation))) return;
-
-  flow.trigger_prompt = prompt;
-  if (waitbuyFlow) {
-    flow.trigger_title = triggerTitle;
-    flow.trigger_recommendation = triggerRecommendation;
-  }
 
   const body = {
     trigger_prompt: prompt,
@@ -2759,6 +2797,12 @@ async function updateActiveFlowTriggerPrompt(id, value) {
       showToast("Luu noi dung that bai", "error");
       await loadConditionFlows();
       return;
+    }
+
+    flow.trigger_prompt = prompt;
+    if (waitbuyFlow) {
+      flow.trigger_title = triggerTitle;
+      flow.trigger_recommendation = triggerRecommendation;
     }
   } catch {
     showToast("Khong goi duoc API luu noi dung", "error");
@@ -3627,6 +3671,13 @@ flowModalCloseBtn?.addEventListener("click", closeFlowModal);
 
 flowModalEl?.addEventListener("click", (e) => {
   if (e.target === flowModalEl) closeFlowModal();
+});
+
+step3PromptModalCloseBtn?.addEventListener("click", closeStep3PromptModal);
+step3PromptCancelBtn?.addEventListener("click", closeStep3PromptModal);
+step3PromptSaveBtn?.addEventListener("click", saveStep3PromptModal);
+step3PromptModalEl?.addEventListener("click", (e) => {
+  if (e.target === step3PromptModalEl) closeStep3PromptModal();
 });
 
 // dropdown mới

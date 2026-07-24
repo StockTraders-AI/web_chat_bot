@@ -5,7 +5,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from main import count_visible_signal_chars, fit_signal_text_by_visible_chars  # noqa: E402
+from main import (  # noqa: E402
+    count_visible_signal_chars,
+    fit_signal_text_by_visible_chars,
+    parse_signal_response_ai_content,
+)
 
 
 class SignalCardLengthTests(unittest.TestCase):
@@ -29,6 +33,16 @@ class SignalCardLengthTests(unittest.TestCase):
         fitted = fit_signal_text_by_visible_chars(text, target_visible_chars=10)
 
         self.assertEqual(count_visible_signal_chars(fitted), 10)
+
+    def test_response_parse_does_not_pad_short_ai_text(self):
+        response = parse_signal_response_ai_content(
+            '{"response":"Waitbuy is 126 and market cash flow is improving."}',
+            "fallback",
+        )
+
+        self.assertIn("126", response)
+        self.assertLess(count_visible_signal_chars(response), 105)
+        self.assertNotIn(" y ", f" {response} ".lower())
 
 
 if __name__ == "__main__":

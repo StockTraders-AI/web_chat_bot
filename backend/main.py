@@ -381,6 +381,7 @@ def fit_signal_text_by_visible_chars(
     value: Any,
     fallback: str = "",
     target_visible_chars: int = 100,
+    pad_short: bool = True,
 ) -> str:
     text = compact_signal_text(value, fallback, max_chars=max(1000, target_visible_chars * 4))
 
@@ -389,7 +390,7 @@ def fit_signal_text_by_visible_chars(
 
     text = text.rstrip(".!?;:, ")
     visible_count = count_visible_signal_chars(text)
-    if visible_count >= target_visible_chars:
+    if visible_count >= target_visible_chars or not pad_short:
         return truncate_to_visible_signal_chars(text, target_visible_chars)
 
     text = compact_signal_text(
@@ -454,6 +455,7 @@ def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
             parsed.get("response"),
             fallback["response"],
             target_visible_chars=105,
+            pad_short=False,
         ),
         "recommendation": fit_signal_text_by_visible_chars(
             parsed.get("recommendation"),
@@ -505,7 +507,7 @@ def build_demo_flow_ai_signal(
                 "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
                 "title, response, recommendation. "
                 "Follow the admin prompt from UI for tone, wording, and exclusions. "
-                "Required exact lengths excluding whitespace: title exactly 30 characters, response exactly 105 characters, recommendation exactly 50 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not return shorter content; expand naturally with market interpretation while respecting the admin prompt exclusions."
+                "Required exact lengths excluding whitespace: title exactly 30 characters, response exactly 105 characters, recommendation exactly 50 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not return shorter content; expand naturally with market interpretation while respecting the admin prompt exclusions. If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
             ),
         })
         resp = client.chat(
@@ -549,6 +551,7 @@ def parse_signal_response_ai_content(content: str, fallback_response: str) -> st
         value,
         fallback_response,
         target_visible_chars=105,
+        pad_short=False,
     )
 
 
@@ -583,7 +586,9 @@ def build_demo_flow_ai_response(
                 "Return only one valid JSON object, no markdown, with exactly one string field: "
                 "response. Follow the response prompt from UI for tone, wording, and exclusions. "
                 "Required exact length excluding whitespace: response exactly 105 characters. "
-                "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only."
+                "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
+                "If the data contains a current waitbuy value, mention that current value. "
+                "Do not mention the threshold when the admin prompt excludes it."
             ),
         })
         resp = client.chat(

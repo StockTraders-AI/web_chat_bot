@@ -450,6 +450,36 @@
         </div>
       </div>
 
+      <div class="flow-modal hidden" id="step3PromptModal" hidden>
+        <div class="flow-modal-dialog flow-modal-content step3-prompt-modal-content">
+          <button class="flow-modal-close" id="step3PromptModalClose" type="button">?</button>
+
+          <div class="flow-modal-head">
+            <h2 id="step3PromptModalTitle">Prompt card</h2>
+          </div>
+
+          <label class="condition-field builder-field">
+            <span>Prompt title</span>
+            <textarea id="step3PromptTitle" maxlength="500" placeholder="Prompt tao title..."></textarea>
+          </label>
+
+          <label class="condition-field builder-field">
+            <span>Prompt nh?n ??nh</span>
+            <textarea id="step3PromptResponse" maxlength="1000" placeholder="Prompt tao nhan dinh..."></textarea>
+          </label>
+
+          <label class="condition-field builder-field">
+            <span>Prompt recommendation</span>
+            <textarea id="step3PromptRecommendation" maxlength="500" placeholder="Prompt tao recommendation..."></textarea>
+          </label>
+
+          <div class="flow-footer condition-form-actions builder-actions">
+            <button class="condition-cancel-btn" type="button" id="step3PromptCancel">H?y</button>
+            <button class="condition-save-btn" type="button" id="step3PromptSave">L?u prompt</button>
+          </div>
+        </div>
+      </div>
+
       <section class="sales-target-admin hidden" id="salesTargetAdmin" hidden>
         <div class="account-admin-head">
           <div>

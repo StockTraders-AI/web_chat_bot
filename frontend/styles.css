@@ -2485,27 +2485,47 @@ select option {
   color: #7381a0;
 }
 
-#conditionStep3 .step3-card-copy-fields {
+#conditionStep3 .step3-prompt-summary {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
 }
 
-#conditionStep3 .step3-card-copy-fields label {
-  display: grid;
-  gap: 4px;
-  margin: 0;
+#conditionStep3 .step3-prompt-summary span {
+  min-width: 0;
+  color: #c7d3eb;
+  font-size: 12px;
+  line-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-#conditionStep3 .step3-card-copy-fields span {
-  color: #9fb0d4;
-  font-size: 11px;
-  font-weight: 800;
+#conditionStep3 .step3-prompt-summary button {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #2d79ff;
+  background: rgba(45, 121, 255, .12);
+  color: #dce8ff;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
 }
 
-#conditionStep3 .step3-card-copy-fields .step3-title-input,
-#conditionStep3 .step3-card-copy-fields .step3-recommendation-input {
-  height: 38px;
-  min-height: 38px;
+.step3-prompt-modal-content {
+  max-width: 860px;
+}
+
+#step3PromptModal .builder-field textarea {
+  min-height: 132px;
+  max-height: 260px;
+  resize: vertical;
+}
+
+#step3PromptModal .builder-field.hidden {
+  display: none;
 }
 
 #conditionStep3 .condition-actions {
