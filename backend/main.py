@@ -300,31 +300,95 @@ def compact_signal_text(value: Any, fallback: str = "", max_chars: int = 220) ->
     return text[:max_chars].rsplit(" ", 1)[0].strip()
 
 
-def compact_signal_text_by_visible_chars(
+SIGNAL_CARD_FILLER_SEGMENTS = (
+    "d\u00f2ng ti\u1ec1n c\u1ea3i thi\u1ec7n r\u00f5 h\u01a1n",
+    "t\u00edn hi\u1ec7u t\u00edch c\u1ef1c h\u01a1n",
+    "c\u1ea7n quan s\u00e1t th\u00eam",
+    "th\u1ecb tr\u01b0\u1eddng \u1ed5n \u0111\u1ecbnh h\u01a1n",
+    "gi\u1eef k\u1ef7 lu\u1eadt",
+    "\u0111\u00e1ng ch\u00fa \u00fd",
+    "c\u1ea3i thi\u1ec7n",
+    "t\u00edch c\u1ef1c",
+    "th\u1eadn tr\u1ecdng",
+    "r\u00f5 h\u01a1n",
+    "th\u00eam",
+    "m\u1ea1nh",
+    "h\u01a1n",
+    "r\u00f5",
+    "\u00fd",
+)
+
+
+def count_visible_signal_chars(value: Any) -> int:
+    return sum(1 for char in str(value or "") if not char.isspace())
+
+
+def truncate_to_visible_signal_chars(text: str, target_visible_chars: int) -> str:
+    if target_visible_chars <= 0:
+        return ""
+
+    visible_count = 0
+    output: list[str] = []
+
+    for char in text:
+        if not char.isspace():
+            if visible_count >= target_visible_chars:
+                break
+            visible_count += 1
+        output.append(char)
+
+    return " ".join("".join(output).split()).strip()
+
+
+def build_visible_signal_filler(gap: int) -> str:
+    if gap <= 0:
+        return ""
+
+    segment_lengths = [
+        (segment, count_visible_signal_chars(segment))
+        for segment in SIGNAL_CARD_FILLER_SEGMENTS
+    ]
+    best: dict[int, list[str]] = {0: []}
+
+    for amount in range(1, gap + 1):
+        candidate_best: list[str] | None = None
+        for segment, length in segment_lengths:
+            previous = best.get(amount - length)
+            if previous is None:
+                continue
+            candidate = previous + [segment]
+            if candidate_best is None or len(candidate) < len(candidate_best):
+                candidate_best = candidate
+        if candidate_best is not None:
+            best[amount] = candidate_best
+
+    segments = best.get(gap)
+    if not segments:
+        return "." * gap
+
+    return " " + " ".join(segments)
+
+
+def fit_signal_text_by_visible_chars(
     value: Any,
     fallback: str = "",
-    max_visible_chars: int = 100,
+    target_visible_chars: int = 100,
 ) -> str:
-    text = compact_signal_text(value, fallback, max_chars=max(1000, max_visible_chars * 4))
-    visible_count = 0
-    cut_index = len(text)
+    text = compact_signal_text(value, fallback, max_chars=max(1000, target_visible_chars * 4))
 
-    for index, char in enumerate(text):
-        if not char.isspace():
-            visible_count += 1
+    if count_visible_signal_chars(text) > target_visible_chars:
+        return truncate_to_visible_signal_chars(text, target_visible_chars)
 
-        if visible_count > max_visible_chars:
-            cut_index = index
-            break
+    text = text.rstrip(".!?;:, ")
+    visible_count = count_visible_signal_chars(text)
+    if visible_count >= target_visible_chars:
+        return truncate_to_visible_signal_chars(text, target_visible_chars)
 
-    if cut_index == len(text):
-        return text
-
-    clipped = text[:cut_index].rstrip()
-    if " " in clipped:
-        clipped = clipped.rsplit(" ", 1)[0].rstrip() or clipped
-
-    return clipped
+    text = compact_signal_text(
+        text + build_visible_signal_filler(target_visible_chars - visible_count),
+        max_chars=max(1000, target_visible_chars * 4),
+    )
+    return truncate_to_visible_signal_chars(text, target_visible_chars)
 
 
 def fallback_signal_card(
@@ -340,18 +404,18 @@ def fallback_signal_card(
         check_date=check_date,
     )
     return {
-        "title": compact_signal_text_by_visible_chars(
+        "title": fit_signal_text_by_visible_chars(
             flow_name,
             "Tin hieu thi truong",
-            max_visible_chars=30,
+            target_visible_chars=30,
         ),
-        "response": compact_signal_text_by_visible_chars(
+        "response": fit_signal_text_by_visible_chars(
             fallback_message,
-            max_visible_chars=105,
+            target_visible_chars=105,
         ),
-        "recommendation": compact_signal_text_by_visible_chars(
-            "Khuyến nghị: Theo dõi thêm, chỉ giải ngân thăm dò khi tín hiệu xác nhận.",
-            max_visible_chars=50,
+        "recommendation": fit_signal_text_by_visible_chars(
+            "Khuy\u1ebfn ngh\u1ecb: Theo d\u00f5i th\u00eam, ch\u1ec9 gi\u1ea3i ng\u00e2n th\u0103m d\u00f2 khi t\u00edn hi\u1ec7u x\u00e1c nh\u1eadn.",
+            target_visible_chars=50,
         ),
     }
 
@@ -373,20 +437,20 @@ def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
         parsed = {}
 
     return {
-        "title": compact_signal_text_by_visible_chars(
+        "title": fit_signal_text_by_visible_chars(
             parsed.get("title"),
             fallback["title"],
-            max_visible_chars=30,
+            target_visible_chars=30,
         ),
-        "response": compact_signal_text_by_visible_chars(
+        "response": fit_signal_text_by_visible_chars(
             parsed.get("response"),
             fallback["response"],
-            max_visible_chars=105,
+            target_visible_chars=105,
         ),
-        "recommendation": compact_signal_text_by_visible_chars(
+        "recommendation": fit_signal_text_by_visible_chars(
             parsed.get("recommendation"),
             fallback["recommendation"],
-            max_visible_chars=50,
+            target_visible_chars=50,
         ),
     }
 
@@ -421,7 +485,7 @@ def build_demo_flow_ai_signal(
                 "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
                 "title, response, recommendation. "
                 "Follow the admin prompt from UI for tone, wording, and exclusions. "
-                "Hard output limits excluding whitespace: title 30 characters, response 105 characters, recommendation 50 characters."
+                "Required exact lengths excluding whitespace: title exactly 30 characters, response exactly 105 characters, recommendation exactly 50 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not return shorter content; expand naturally with market interpretation while respecting the admin prompt exclusions."
             ),
         })
         resp = client.chat(
