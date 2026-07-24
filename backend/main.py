@@ -1,4 +1,5 @@
 import json, os
+from io import BytesIO
 from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import Cookie, FastAPI, Header, HTTPException, Request, Response
@@ -1501,6 +1502,46 @@ async def update_condition_flow(
 
     return {"ok": True}
 
+
+
+@app.post("/condition-docs/extract")
+async def extract_condition_docs_file(
+    request: Request,
+    filename: str = "",
+    authorization: Optional[str] = Header(default=None),
+    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
+):
+    await require_super_admin(authorization, session_cookie)
+
+    raw = await request.body()
+    if not raw:
+        raise HTTPException(status_code=400, detail="File docs rong")
+
+    if len(raw) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File docs toi da 8MB")
+
+    name = (filename or "").lower()
+    content_type = (request.headers.get("content-type") or "").lower()
+
+    if name.endswith(".pdf") or "application/pdf" in content_type:
+        try:
+            from pypdf import PdfReader
+        except Exception:
+            raise HTTPException(status_code=500, detail="Server chua cai pypdf de doc PDF")
+
+        try:
+            reader = PdfReader(BytesIO(raw))
+            text = "\n".join(page.extract_text() or "" for page in reader.pages)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Khong doc duoc noi dung PDF")
+    else:
+        text = raw.decode("utf-8", errors="ignore")
+
+    text = compact_signal_text(text, "", max_chars=8000)
+    if not text:
+        raise HTTPException(status_code=400, detail="Khong trich duoc noi dung file")
+
+    return {"ok": True, "text": text}
 
 @app.patch("/condition-flows/{flow_id}/trigger-prompt")
 async def update_condition_flow_trigger_prompt(

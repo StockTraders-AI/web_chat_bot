@@ -3702,16 +3702,33 @@ step3PromptDocsFileEl?.addEventListener("change", async () => {
   if (!file || !step3PromptDocsEl) return;
 
   try {
-    const text = await file.text();
+    const fileName = String(file.name || "").toLowerCase();
+    const isPdf = file.type === "application/pdf" || fileName.endsWith(".pdf");
     const limit = Number(step3PromptDocsEl.getAttribute("maxlength") || 8000);
+    let text = "";
+
+    if (isPdf) {
+      const res = await fetch(`/condition-docs/extract?filename=${encodeURIComponent(file.name || "docs.pdf")}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": file.type || "application/pdf" },
+        body: file,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || "Khong doc duoc file PDF");
+      text = String(data.text || "");
+    } else {
+      text = await file.text();
+    }
+
     step3PromptDocsEl.value = text.length > limit ? text.slice(0, limit) : text;
     if (text.length > limit) {
       showToast(`File dai qua, da cat con ${limit} ky tu`, "error");
     } else {
       showToast(`Da nap file ${file.name}`);
     }
-  } catch {
-    showToast("Khong doc duoc file docs", "error");
+  } catch (err) {
+    showToast(err?.message || "Khong doc duoc file docs", "error");
   } finally {
     step3PromptDocsFileEl.value = "";
   }
