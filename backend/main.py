@@ -381,7 +381,7 @@ def fit_signal_text_by_visible_chars(
     value: Any,
     fallback: str = "",
     target_visible_chars: int = 100,
-    pad_short: bool = True,
+    pad_short: bool = False,
 ) -> str:
     text = compact_signal_text(value, fallback, max_chars=max(1000, target_visible_chars * 4))
 
@@ -507,7 +507,7 @@ def build_demo_flow_ai_signal(
                 "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
                 "title, response, recommendation. "
                 "Follow the admin prompt from UI for tone, wording, and exclusions. "
-                "Required exact lengths excluding whitespace: title exactly 30 characters, response exactly 105 characters, recommendation exactly 50 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not return shorter content; expand naturally with market interpretation while respecting the admin prompt exclusions. If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
+                "Output length limits excluding whitespace: title at most 30 characters, response at most 105 characters, recommendation at most 50 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
             ),
         })
         resp = client.chat(
@@ -585,7 +585,7 @@ def build_demo_flow_ai_response(
             "content": (
                 "Return only one valid JSON object, no markdown, with exactly one string field: "
                 "response. Follow the response prompt from UI for tone, wording, and exclusions. "
-                "Required exact length excluding whitespace: response exactly 105 characters. "
+                "Output length limit excluding whitespace: response at most 105 characters. "
                 "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
                 "If the data contains a current waitbuy value, mention that current value. "
                 "Do not mention the threshold when the admin prompt excludes it."

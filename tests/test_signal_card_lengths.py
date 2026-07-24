@@ -13,7 +13,7 @@ from main import (  # noqa: E402
 
 
 class SignalCardLengthTests(unittest.TestCase):
-    def test_fit_extends_short_text_to_exact_visible_length(self):
+    def test_fit_keeps_short_text_without_padding_by_default(self):
         title = fit_signal_text_by_visible_chars("Ch\u1edd mua t\u0103ng", target_visible_chars=30)
         response = fit_signal_text_by_visible_chars(
             "Ch\u1edd mua hi\u1ec7n t\u1ea1i \u1edf m\u1ee9c 126",
@@ -24,11 +24,11 @@ class SignalCardLengthTests(unittest.TestCase):
             target_visible_chars=50,
         )
 
-        self.assertEqual(count_visible_signal_chars(title), 30)
-        self.assertEqual(count_visible_signal_chars(response), 105)
-        self.assertEqual(count_visible_signal_chars(recommendation), 50)
+        self.assertLess(count_visible_signal_chars(title), 30)
+        self.assertLess(count_visible_signal_chars(response), 105)
+        self.assertLess(count_visible_signal_chars(recommendation), 50)
 
-    def test_fit_truncates_long_text_to_exact_visible_length(self):
+    def test_fit_truncates_long_text_to_visible_limit(self):
         text = "abc def ghi jkl mno pqr stu vwx yz"
         fitted = fit_signal_text_by_visible_chars(text, target_visible_chars=10)
 
