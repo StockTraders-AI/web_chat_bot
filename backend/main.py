@@ -416,15 +416,15 @@ def fallback_signal_card(
         "title": fit_signal_text_by_visible_chars(
             flow_name,
             "Tin hieu thi truong",
-            target_visible_chars=30,
+            target_visible_chars=60,
         ),
         "response": fit_signal_text_by_visible_chars(
             fallback_message,
-            target_visible_chars=105,
+            target_visible_chars=200,
         ),
         "recommendation": fit_signal_text_by_visible_chars(
             "Khuy\u1ebfn ngh\u1ecb: Theo d\u00f5i th\u00eam, ch\u1ec9 gi\u1ea3i ng\u00e2n th\u0103m d\u00f2 khi t\u00edn hi\u1ec7u x\u00e1c nh\u1eadn.",
-            target_visible_chars=50,
+            target_visible_chars=100,
         ),
     }
 
@@ -449,18 +449,18 @@ def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
         "title": fit_signal_text_by_visible_chars(
             parsed.get("title"),
             fallback["title"],
-            target_visible_chars=30,
+            target_visible_chars=60,
         ),
         "response": fit_signal_text_by_visible_chars(
             parsed.get("response"),
             fallback["response"],
-            target_visible_chars=105,
+            target_visible_chars=200,
             pad_short=False,
         ),
         "recommendation": fit_signal_text_by_visible_chars(
             parsed.get("recommendation"),
             fallback["recommendation"],
-            target_visible_chars=50,
+            target_visible_chars=100,
         ),
     }
 
@@ -507,7 +507,7 @@ def build_demo_flow_ai_signal(
                 "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
                 "title, response, recommendation. "
                 "Follow the admin prompt from UI for tone, wording, and exclusions. "
-                "Output length limits excluding whitespace: title at most 30 characters, response at most 105 characters, recommendation at most 50 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
+                "Output length limits excluding whitespace: title at most 60 characters, response at most 200 characters, recommendation at most 100 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
             ),
         })
         resp = client.chat(
@@ -550,7 +550,7 @@ def parse_signal_response_ai_content(content: str, fallback_response: str) -> st
     return fit_signal_text_by_visible_chars(
         value,
         fallback_response,
-        target_visible_chars=105,
+        target_visible_chars=200,
         pad_short=False,
     )
 
@@ -585,7 +585,7 @@ def build_demo_flow_ai_response(
             "content": (
                 "Return only one valid JSON object, no markdown, with exactly one string field: "
                 "response. Follow the response prompt from UI for tone, wording, and exclusions. "
-                "Output length limit excluding whitespace: response at most 105 characters. "
+                "Output length limit excluding whitespace: response at most 200 characters. "
                 "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
                 "If the data contains a current waitbuy value, mention that current value. "
                 "Do not mention the threshold when the admin prompt excludes it."
