@@ -2514,12 +2514,12 @@ function renderStep3SignalTextFields(flow) {
   return `
     <div class="step3-card-copy-fields">
       <label>
-        <span>Title</span>
+        <span>Prompt title</span>
         <textarea
           id="triggerTitle-${flow.id}"
           class="step3-trigger-prompt step3-title-input"
           maxlength="160"
-          placeholder="Title tra ve API..."
+          placeholder="Prompt tao title..."
           onblur="updateActiveFlowTriggerPrompt(${flow.id})"
         >${escapeHtml(flow.trigger_title || "")}</textarea>
       </label>
@@ -2536,12 +2536,12 @@ function renderStep3SignalTextFields(flow) {
       </label>
 
       <label>
-        <span>Recommendation</span>
+        <span>Prompt recommendation</span>
         <textarea
           id="triggerRecommendation-${flow.id}"
           class="step3-trigger-prompt step3-recommendation-input"
           maxlength="240"
-          placeholder="Khuyen nghi tra ve API..."
+          placeholder="Prompt tao recommendation..."
           onblur="updateActiveFlowTriggerPrompt(${flow.id})"
         >${escapeHtml(flow.trigger_recommendation || "")}</textarea>
       </label>

@@ -477,31 +477,26 @@ def build_demo_flow_ai_signal(
         trigger_prompt=trigger_prompt,
         check_date=check_date,
     )
+    title_prompt = (trigger_title or "").strip()
+    response_prompt = (trigger_prompt or "").strip()
+    recommendation_prompt = (trigger_recommendation or "").strip()
 
-    def apply_overrides(card: dict) -> dict:
-        if trigger_title and trigger_title.strip():
-            card["title"] = fit_signal_text_by_visible_chars(
-                trigger_title,
-                fallback["title"],
-                target_visible_chars=30,
-            )
-        if trigger_recommendation and trigger_recommendation.strip():
-            card["recommendation"] = fit_signal_text_by_visible_chars(
-                trigger_recommendation,
-                fallback["recommendation"],
-                target_visible_chars=50,
-            )
-        return card
+    if not any([title_prompt, response_prompt, recommendation_prompt]):
+        return fallback
 
-    if not trigger_prompt or not trigger_prompt.strip():
-        return apply_overrides(fallback)
+    field_prompt = "\n".join([
+        "Generate a 3-field signal card from these UI prompts.",
+        f"Title prompt: {title_prompt or 'Create a concise Vietnamese market signal title.'}",
+        f"Response prompt: {response_prompt or 'Create a concise Vietnamese market interpretation.'}",
+        f"Recommendation prompt: {recommendation_prompt or 'Create a concise Vietnamese action recommendation.'}",
+    ])
 
     try:
         client = OpenAIClient()
         messages = build_demo_flow_ai_messages(
             flow_name=flow_name,
             condition_results=condition_results,
-            trigger_prompt=trigger_prompt,
+            trigger_prompt=field_prompt,
             check_date=check_date,
         )
         messages.append({
@@ -521,10 +516,87 @@ def build_demo_flow_ai_signal(
         )
         content = (resp.choices[0].message.content or "").strip()
 
-        return apply_overrides(parse_signal_card_ai_content(content, fallback))
+        return parse_signal_card_ai_content(content, fallback)
     except Exception as exc:
         print("DEMO_FLOW_AI_MESSAGE_ERROR:", exc)
-        return apply_overrides(fallback)
+        return fallback
+
+
+def parse_signal_response_ai_content(content: str, fallback_response: str) -> str:
+    raw = (content or "").strip()
+
+    if raw.startswith("```"):
+        raw = raw.strip("`").strip()
+        if raw.lower().startswith("json"):
+            raw = raw[4:].strip()
+
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        parsed = None
+
+    if isinstance(parsed, dict):
+        value = (
+            parsed.get("response")
+            or parsed.get("message")
+            or parsed.get("content")
+            or raw
+        )
+    else:
+        value = raw
+
+    return fit_signal_text_by_visible_chars(
+        value,
+        fallback_response,
+        target_visible_chars=105,
+    )
+
+
+def build_demo_flow_ai_response(
+    flow_name: str,
+    condition_results: list[dict],
+    trigger_prompt: str | None,
+    check_date: str | None,
+) -> str:
+    fallback = fallback_signal_card(
+        flow_name,
+        condition_results,
+        trigger_prompt=trigger_prompt,
+        check_date=check_date,
+    )["response"]
+    response_prompt = (trigger_prompt or "").strip()
+
+    if not response_prompt:
+        response_prompt = "Create a concise Vietnamese market interpretation from the matched condition data."
+
+    try:
+        client = OpenAIClient()
+        messages = build_demo_flow_ai_messages(
+            flow_name=flow_name,
+            condition_results=condition_results,
+            trigger_prompt=response_prompt,
+            check_date=check_date,
+        )
+        messages.append({
+            "role": "user",
+            "content": (
+                "Return only one valid JSON object, no markdown, with exactly one string field: "
+                "response. Follow the response prompt from UI for tone, wording, and exclusions. "
+                "Required exact length excluding whitespace: response exactly 105 characters. "
+                "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only."
+            ),
+        })
+        resp = client.chat(
+            model=DEFAULT_MODEL,
+            messages=messages,
+            tools=None,
+            tool_choice="auto",
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        return parse_signal_response_ai_content(content, fallback)
+    except Exception as exc:
+        print("DEMO_FLOW_AI_RESPONSE_ERROR:", exc)
+        return fallback
 
 def template_condition_key(template: dict) -> str:
     return " ".join([
@@ -836,19 +908,38 @@ async def handle_realtime_wave_update(payload: dict):
         if not matched:
             continue
 
+        latest_signal = None
+        if not state.get("should_publish"):
+            latest_signal = await memory.get_latest_condition_signal(
+                signal_key=signal_key,
+                flow_id=int(flow["id"]),
+            )
+
         delivery_key = (
             state.get("delivery_key")
             or f"{int(flow['id'])}:{signal_key}:{check_date or 'unknown'}:latest"
         )
 
-        signal_card = build_demo_flow_ai_signal(
-            flow["name"],
-            condition_results,
-            trigger_prompt=flow.get("trigger_prompt"),
-            check_date=check_date,
-            trigger_title=flow.get("trigger_title"),
-            trigger_recommendation=flow.get("trigger_recommendation"),
-        )
+        if latest_signal:
+            signal_card = {
+                "title": latest_signal.get("title") or signal_title(flow, condition_results),
+                "response": build_demo_flow_ai_response(
+                    flow["name"],
+                    condition_results,
+                    trigger_prompt=flow.get("trigger_prompt"),
+                    check_date=check_date,
+                ),
+                "recommendation": latest_signal.get("recommendation") or "",
+            }
+        else:
+            signal_card = build_demo_flow_ai_signal(
+                flow["name"],
+                condition_results,
+                trigger_prompt=flow.get("trigger_prompt"),
+                check_date=check_date,
+                trigger_title=flow.get("trigger_title"),
+                trigger_recommendation=flow.get("trigger_recommendation"),
+            )
         await persist_condition_signal(
             flow=flow,
             condition_keys=resolved_keys,
