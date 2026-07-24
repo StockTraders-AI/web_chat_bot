@@ -703,10 +703,10 @@ async def handle_realtime_wave_update(payload: dict):
         if not matched:
             continue
 
-        if not state["should_publish"]:
-            continue
-
-        delivery_key = state["delivery_key"]
+        delivery_key = (
+            state.get("delivery_key")
+            or f"{int(flow['id'])}:{signal_key}:{check_date or 'unknown'}:latest"
+        )
 
         signal_card = build_demo_flow_ai_signal(
             flow["name"],
