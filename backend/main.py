@@ -300,6 +300,33 @@ def compact_signal_text(value: Any, fallback: str = "", max_chars: int = 220) ->
     return text[:max_chars].rsplit(" ", 1)[0].strip()
 
 
+def compact_signal_text_by_visible_chars(
+    value: Any,
+    fallback: str = "",
+    max_visible_chars: int = 100,
+) -> str:
+    text = compact_signal_text(value, fallback, max_chars=max(1000, max_visible_chars * 4))
+    visible_count = 0
+    cut_index = len(text)
+
+    for index, char in enumerate(text):
+        if not char.isspace():
+            visible_count += 1
+
+        if visible_count > max_visible_chars:
+            cut_index = index
+            break
+
+    if cut_index == len(text):
+        return text
+
+    clipped = text[:cut_index].rstrip()
+    if " " in clipped:
+        clipped = clipped.rsplit(" ", 1)[0].rstrip() or clipped
+
+    return clipped
+
+
 def fallback_signal_card(
     flow_name: str,
     condition_results: list[dict],
@@ -313,9 +340,19 @@ def fallback_signal_card(
         check_date=check_date,
     )
     return {
-        "title": compact_signal_text(flow_name, "Tin hieu thi truong", max_chars=160),
-        "response": compact_signal_text(fallback_message, max_chars=1200),
-        "recommendation": "Khuyến nghị: Theo dõi thêm, chỉ giải ngân thăm dò khi tín hiệu xác nhận.",
+        "title": compact_signal_text_by_visible_chars(
+            flow_name,
+            "Tin hieu thi truong",
+            max_visible_chars=30,
+        ),
+        "response": compact_signal_text_by_visible_chars(
+            fallback_message,
+            max_visible_chars=105,
+        ),
+        "recommendation": compact_signal_text_by_visible_chars(
+            "Khuyến nghị: Theo dõi thêm, chỉ giải ngân thăm dò khi tín hiệu xác nhận.",
+            max_visible_chars=50,
+        ),
     }
 
 
@@ -336,12 +373,20 @@ def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
         parsed = {}
 
     return {
-        "title": compact_signal_text(parsed.get("title"), fallback["title"], max_chars=160),
-        "response": compact_signal_text(parsed.get("response"), fallback["response"], max_chars=1200),
-        "recommendation": compact_signal_text(
+        "title": compact_signal_text_by_visible_chars(
+            parsed.get("title"),
+            fallback["title"],
+            max_visible_chars=30,
+        ),
+        "response": compact_signal_text_by_visible_chars(
+            parsed.get("response"),
+            fallback["response"],
+            max_visible_chars=105,
+        ),
+        "recommendation": compact_signal_text_by_visible_chars(
             parsed.get("recommendation"),
             fallback["recommendation"],
-            max_chars=500,
+            max_visible_chars=50,
         ),
     }
 
@@ -375,9 +420,8 @@ def build_demo_flow_ai_signal(
             "content": (
                 "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
                 "title, response, recommendation. "
-                "Follow the admin prompt from UI for tone, length, wording, and exclusions. "
-                "Do not shorten the response unless the admin prompt asks for it. "
-                "If the admin prompt specifies approximate word counts, follow those counts as closely as possible."
+                "Follow the admin prompt from UI for tone, wording, and exclusions. "
+                "Hard output limits excluding whitespace: title 30 characters, response 105 characters, recommendation 50 characters."
             ),
         })
         resp = client.chat(
