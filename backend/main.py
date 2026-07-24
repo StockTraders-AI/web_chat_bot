@@ -141,6 +141,8 @@ class ConditionTestIn(BaseModel):
 class ConditionFlowDemoCheckIn(BaseModel):
     context: Dict[str, Any] = {}
     trigger_prompt: Optional[str] = None
+    trigger_title: Optional[str] = None
+    trigger_recommendation: Optional[str] = None
 
 
 class ConditionFlowActiveIn(BaseModel):
@@ -149,6 +151,8 @@ class ConditionFlowActiveIn(BaseModel):
 
 class ConditionFlowTriggerPromptIn(BaseModel):
     trigger_prompt: str = ""
+    trigger_title: Optional[str] = None
+    trigger_recommendation: Optional[str] = None
 
 
 class ConditionFlowIn(BaseModel):
@@ -156,6 +160,8 @@ class ConditionFlowIn(BaseModel):
     expression: str
     prompt_template: str
     trigger_prompt: str = ""
+    trigger_title: str = ""
+    trigger_recommendation: str = ""
     status: str = "draft"
 
 
@@ -164,6 +170,8 @@ class ConditionFlowUpdateIn(BaseModel):
     expression: str
     prompt_template: str
     trigger_prompt: str = ""
+    trigger_title: str = ""
+    trigger_recommendation: str = ""
     status: str = "draft"
 
 
@@ -460,6 +468,8 @@ def build_demo_flow_ai_signal(
     condition_results: list[dict],
     trigger_prompt: str | None,
     check_date: str | None,
+    trigger_title: str | None = None,
+    trigger_recommendation: str | None = None,
 ) -> dict:
     fallback = fallback_signal_card(
         flow_name,
@@ -468,8 +478,23 @@ def build_demo_flow_ai_signal(
         check_date=check_date,
     )
 
+    def apply_overrides(card: dict) -> dict:
+        if trigger_title and trigger_title.strip():
+            card["title"] = fit_signal_text_by_visible_chars(
+                trigger_title,
+                fallback["title"],
+                target_visible_chars=30,
+            )
+        if trigger_recommendation and trigger_recommendation.strip():
+            card["recommendation"] = fit_signal_text_by_visible_chars(
+                trigger_recommendation,
+                fallback["recommendation"],
+                target_visible_chars=50,
+            )
+        return card
+
     if not trigger_prompt or not trigger_prompt.strip():
-        return fallback
+        return apply_overrides(fallback)
 
     try:
         client = OpenAIClient()
@@ -496,10 +521,10 @@ def build_demo_flow_ai_signal(
         )
         content = (resp.choices[0].message.content or "").strip()
 
-        return parse_signal_card_ai_content(content, fallback)
+        return apply_overrides(parse_signal_card_ai_content(content, fallback))
     except Exception as exc:
         print("DEMO_FLOW_AI_MESSAGE_ERROR:", exc)
-        return fallback
+        return apply_overrides(fallback)
 
 def template_condition_key(template: dict) -> str:
     return " ".join([
@@ -821,6 +846,8 @@ async def handle_realtime_wave_update(payload: dict):
             condition_results,
             trigger_prompt=flow.get("trigger_prompt"),
             check_date=check_date,
+            trigger_title=flow.get("trigger_title"),
+            trigger_recommendation=flow.get("trigger_recommendation"),
         )
         await persist_condition_signal(
             flow=flow,
@@ -1306,6 +1333,8 @@ async def create_condition_flow(
         expression=flow_refs_expression(refs),
         prompt_template=payload.prompt_template.strip(),
         trigger_prompt=payload.trigger_prompt.strip(),
+        trigger_title=payload.trigger_title.strip(),
+        trigger_recommendation=payload.trigger_recommendation.strip(),
         created_by=f'{actor["username"]} ({actor["role"]})',
     )
 
@@ -1347,6 +1376,8 @@ async def update_condition_flow(
         expression=flow_refs_expression(refs),
         prompt_template=payload.prompt_template.strip(),
         trigger_prompt=payload.trigger_prompt.strip(),
+        trigger_title=payload.trigger_title.strip(),
+        trigger_recommendation=payload.trigger_recommendation.strip(),
         status=payload.status,
     )
 
@@ -1367,15 +1398,26 @@ async def update_condition_flow_trigger_prompt(
     if not flow:
         raise HTTPException(status_code=404, detail="Không tìm thấy mẫu kết hợp")
 
+    trigger_title = payload.trigger_title.strip() if payload.trigger_title is not None else None
+    trigger_recommendation = (
+        payload.trigger_recommendation.strip()
+        if payload.trigger_recommendation is not None
+        else None
+    )
+
     await memory.update_condition_flow_trigger_prompt(
         flow_id=flow_id,
         trigger_prompt=payload.trigger_prompt.strip(),
+        trigger_title=trigger_title,
+        trigger_recommendation=trigger_recommendation,
     )
 
     return {
         "ok": True,
         "id": flow_id,
         "trigger_prompt": payload.trigger_prompt.strip(),
+        "trigger_title": trigger_title if trigger_title is not None else flow.get("trigger_title", ""),
+        "trigger_recommendation": trigger_recommendation if trigger_recommendation is not None else flow.get("trigger_recommendation", ""),
     }
 
 @app.post("/condition-flows/{flow_id}/confirm")
@@ -1441,15 +1483,37 @@ async def demo_check_condition_flow(
     if flow["status"] != "confirmed":
         raise HTTPException(status_code=400, detail="Mẫu kết hợp chưa được xác nhận")
 
-    if payload.trigger_prompt is not None:
-        trigger_prompt = payload.trigger_prompt.strip()
+    if (
+        payload.trigger_prompt is not None
+        or payload.trigger_title is not None
+        or payload.trigger_recommendation is not None
+    ):
+        trigger_prompt = (
+            payload.trigger_prompt.strip()
+            if payload.trigger_prompt is not None
+            else flow.get("trigger_prompt", "")
+        )
+        trigger_title = (
+            payload.trigger_title.strip()
+            if payload.trigger_title is not None
+            else flow.get("trigger_title", "")
+        )
+        trigger_recommendation = (
+            payload.trigger_recommendation.strip()
+            if payload.trigger_recommendation is not None
+            else flow.get("trigger_recommendation", "")
+        )
         await memory.update_condition_flow_trigger_prompt(
             flow_id=flow_id,
             trigger_prompt=trigger_prompt,
+            trigger_title=trigger_title,
+            trigger_recommendation=trigger_recommendation,
         )
         flow = {
             **flow,
             "trigger_prompt": trigger_prompt,
+            "trigger_title": trigger_title,
+            "trigger_recommendation": trigger_recommendation,
         }
 
     context = dict(payload.context or {})
@@ -1501,6 +1565,8 @@ async def demo_check_condition_flow(
             condition_results,
             trigger_prompt=flow.get("trigger_prompt"),
             check_date=context.get("date"),
+            trigger_title=flow.get("trigger_title"),
+            trigger_recommendation=flow.get("trigger_recommendation"),
         )
         demo_message = signal_card["response"]
         if condition_keys:

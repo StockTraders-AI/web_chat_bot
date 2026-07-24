@@ -2382,6 +2382,8 @@ async function saveConditionFlow() {
     expression: flowExpressionEl.value.trim(),
     prompt_template: flowPromptTemplateEl.value.trim(),
     trigger_prompt: existingFlow?.trigger_prompt || "",
+    trigger_title: existingFlow?.trigger_title || "",
+    trigger_recommendation: existingFlow?.trigger_recommendation || "",
     status: "draft",
   };
 
@@ -2473,6 +2475,78 @@ function flowTypeLabel(flow) {
 
 function flowMatchesType(flow, typeFilter) {
   return !typeFilter || flowTypeKeys(flow).includes(typeFilter);
+}
+
+function normalizeConditionSearchText(value) {
+  return repairDisplayText(value)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function isWaitbuySignalFlow(flow) {
+  const parts = [flow?.name, flow?.expression, flow?.trigger_prompt];
+
+  flowConditionIds(flow).forEach((id) => {
+    const template = conditionTemplates.find((item) => Number(item.id) === Number(id));
+    if (template) {
+      parts.push(template.name, template.condition_logic, template.description);
+    }
+  });
+
+  const normalized = normalizeConditionSearchText(parts.filter(Boolean).join(" "));
+  return normalized.includes("waitbuy") || normalized.includes("cho mua");
+}
+
+function renderStep3SignalTextFields(flow) {
+  if (!isWaitbuySignalFlow(flow)) {
+    return `
+      <textarea
+        id="triggerPrompt-${flow.id}"
+        class="step3-trigger-prompt"
+        maxlength="500"
+        placeholder="Nhap prompt..."
+        onblur="updateActiveFlowTriggerPrompt(${flow.id}, this.value)"
+      >${escapeHtml(flow.trigger_prompt || "")}</textarea>
+    `;
+  }
+
+  return `
+    <div class="step3-card-copy-fields">
+      <label>
+        <span>Title</span>
+        <textarea
+          id="triggerTitle-${flow.id}"
+          class="step3-trigger-prompt step3-title-input"
+          maxlength="160"
+          placeholder="Title tra ve API..."
+          onblur="updateActiveFlowTriggerPrompt(${flow.id})"
+        >${escapeHtml(flow.trigger_title || "")}</textarea>
+      </label>
+
+      <label>
+        <span>Nhan dinh</span>
+        <textarea
+          id="triggerPrompt-${flow.id}"
+          class="step3-trigger-prompt"
+          maxlength="500"
+          placeholder="Prompt tao nhan dinh..."
+          onblur="updateActiveFlowTriggerPrompt(${flow.id}, this.value)"
+        >${escapeHtml(flow.trigger_prompt || "")}</textarea>
+      </label>
+
+      <label>
+        <span>Recommendation</span>
+        <textarea
+          id="triggerRecommendation-${flow.id}"
+          class="step3-trigger-prompt step3-recommendation-input"
+          maxlength="240"
+          placeholder="Khuyen nghi tra ve API..."
+          onblur="updateActiveFlowTriggerPrompt(${flow.id})"
+        >${escapeHtml(flow.trigger_recommendation || "")}</textarea>
+      </label>
+    </div>
+  `;
 }
 
 function renderConditionFlows() {
@@ -2598,13 +2672,7 @@ function renderActiveFlows() {
         </div>
 
         <div>
-          <textarea
-            id="triggerPrompt-${flow.id}"
-            class="step3-trigger-prompt"
-            maxlength="500"
-            placeholder="Nhập prompt..."
-            onblur="updateActiveFlowTriggerPrompt(${flow.id}, this.value)"
-          >${escapeHtml(flow.trigger_prompt || "")}</textarea>
+          ${renderStep3SignalTextFields(flow)}
         </div>
 
         <div>
@@ -2644,33 +2712,60 @@ function renderActiveFlows() {
 }
 
 async function updateActiveFlowTriggerPrompt(id, value) {
-  const prompt = String(value || "").trim();
   const flow = conditionFlows.find((item) => Number(item.id) === Number(id));
+  if (!flow) return;
 
-  if (!flow || (flow.trigger_prompt || "") === prompt) return;
+  const waitbuyFlow = isWaitbuySignalFlow(flow);
+  const promptEl = document.getElementById(`triggerPrompt-${id}`);
+  const titleEl = document.getElementById(`triggerTitle-${id}`);
+  const recommendationEl = document.getElementById(`triggerRecommendation-${id}`);
+  const prompt = String(value ?? promptEl?.value ?? flow.trigger_prompt ?? "").trim();
+  const triggerTitle = String(titleEl?.value ?? flow.trigger_title ?? "").trim();
+  const triggerRecommendation = String(
+    recommendationEl?.value ?? flow.trigger_recommendation ?? ""
+  ).trim();
+
+  const samePrompt = (flow.trigger_prompt || "") === prompt;
+  const sameTitle = (flow.trigger_title || "") === triggerTitle;
+  const sameRecommendation =
+    (flow.trigger_recommendation || "") === triggerRecommendation;
+
+  if (samePrompt && (!waitbuyFlow || (sameTitle && sameRecommendation))) return;
 
   flow.trigger_prompt = prompt;
+  if (waitbuyFlow) {
+    flow.trigger_title = triggerTitle;
+    flow.trigger_recommendation = triggerRecommendation;
+  }
+
+  const body = {
+    trigger_prompt: prompt,
+  };
+
+  if (waitbuyFlow) {
+    body.trigger_title = triggerTitle;
+    body.trigger_recommendation = triggerRecommendation;
+  }
 
   try {
     const res = await fetch(`/condition-flows/${id}/trigger-prompt`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({
-        trigger_prompt: prompt,
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!res.ok) {
-      showToast("Lưu prompt thất bại", "error");
+      showToast("Luu noi dung that bai", "error");
       await loadConditionFlows();
       return;
     }
   } catch {
-    showToast("Không gọi được API lưu prompt", "error");
+    showToast("Khong goi duoc API luu noi dung", "error");
     await loadConditionFlows();
   }
 }
+
 
 async function logRealtimeWaveDebug(flowId, checkDate, demoResult) {
   try {
@@ -2753,10 +2848,21 @@ function renderDemoCheckResult(result) {
 async function demoCheckConditionFlow(id) {
   const flow = conditionFlows.find((item) => Number(item.id) === Number(id));
   const promptEl = document.getElementById(`triggerPrompt-${id}`);
+  const titleEl = document.getElementById(`triggerTitle-${id}`);
+  const recommendationEl = document.getElementById(`triggerRecommendation-${id}`);
   const triggerPrompt = String(promptEl?.value ?? flow?.trigger_prompt ?? "").trim();
+  const triggerTitle = String(titleEl?.value ?? flow?.trigger_title ?? "").trim();
+  const triggerRecommendation = String(
+    recommendationEl?.value ?? flow?.trigger_recommendation ?? ""
+  ).trim();
+  const waitbuyFlow = isWaitbuySignalFlow(flow);
 
   if (flow) {
     flow.trigger_prompt = triggerPrompt;
+    if (waitbuyFlow) {
+      flow.trigger_title = triggerTitle;
+      flow.trigger_recommendation = triggerRecommendation;
+    }
   }
 
   checkingDemoFlowId = id;
@@ -2775,6 +2881,12 @@ async function demoCheckConditionFlow(id) {
           date: checkDate,
         },
         trigger_prompt: triggerPrompt,
+        ...(waitbuyFlow
+          ? {
+              trigger_title: triggerTitle,
+              trigger_recommendation: triggerRecommendation,
+            }
+          : {}),
       }),
     });
 

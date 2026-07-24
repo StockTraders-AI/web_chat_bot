@@ -103,6 +103,32 @@ class ConditionSignalStoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(state["matched"])
         self.assertEqual(state["transition_count"], 2)
 
+    async def test_condition_flow_signal_card_copy_fields_are_persisted(self):
+        flow_id = await self.store.create_condition_flow(
+            name="Cho mua tang",
+            expression="12",
+            prompt_template="prompt",
+            trigger_prompt="response prompt",
+            trigger_title="custom title",
+            trigger_recommendation="custom recommendation",
+        )
+
+        flow = await self.store.get_condition_flow(flow_id)
+        self.assertEqual(flow["trigger_title"], "custom title")
+        self.assertEqual(flow["trigger_recommendation"], "custom recommendation")
+
+        await self.store.update_condition_flow_trigger_prompt(
+            flow_id=flow_id,
+            trigger_prompt="updated response",
+            trigger_title="updated title",
+            trigger_recommendation="updated recommendation",
+        )
+
+        updated = await self.store.get_condition_flow(flow_id)
+        self.assertEqual(updated["trigger_prompt"], "updated response")
+        self.assertEqual(updated["trigger_title"], "updated title")
+        self.assertEqual(updated["trigger_recommendation"], "updated recommendation")
+
 
 if __name__ == "__main__":
     unittest.main()
