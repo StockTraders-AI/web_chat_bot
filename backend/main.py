@@ -784,6 +784,118 @@ async def persist_condition_signal(
     )
 
 
+def parse_public_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(str(value).strip().replace(",", "."))
+    except Exception:
+        return None
+
+
+async def build_public_historical_waitbuy_signal(
+    requested_signal_key: str | None,
+    requested_flow_id: int | None,
+    check_date: str,
+    waitbuy_value: float | None,
+) -> dict | None:
+    if not check_date or waitbuy_value is None:
+        return None
+
+    normalized_signal_key = normalize_public_signal_key(requested_signal_key) or "waitbuy_over_threshold"
+    if normalized_signal_key != "waitbuy_over_threshold":
+        return None
+
+    flows = await memory.list_condition_flows()
+    templates = await memory.list_condition_templates()
+    templates_by_id = {
+        int(template["id"]): template
+        for template in templates
+        if str(template.get("id", "")).isdigit()
+    }
+
+    for flow in flows:
+        if requested_flow_id is not None and int(flow.get("id") or 0) != int(requested_flow_id):
+            continue
+        if not is_active_condition_flow(flow):
+            continue
+
+        refs = resolve_flow_condition_refs(flow.get("expression") or "", templates)
+        if not refs:
+            continue
+
+        condition_keys: list[str] = []
+        condition_results: list[dict] = []
+        matches: dict[int, bool] = {}
+
+        for ref in refs:
+            template_id = int(ref["id"])
+            template = templates_by_id.get(template_id)
+            if not template:
+                result = {
+                    "ok": False,
+                    "matched": False,
+                    "message": "Khong tim thay dieu kien",
+                    "template_id": template_id,
+                }
+            else:
+                condition_key = template_condition_key(template)
+                resolved_key = resolve_condition_key(condition_key)
+                if resolved_key:
+                    condition_keys.append(resolved_key)
+                result = await run_condition(
+                    template_id=template_id,
+                    context={
+                        "date": check_date,
+                        "condition_key": condition_key,
+                        "waitbuy": waitbuy_value,
+                        "source": "stocktraders_web_history",
+                    },
+                )
+                result["template_id"] = template_id
+                result["template_name"] = template.get("name")
+
+            matches[template_id] = bool(result.get("matched"))
+            condition_results.append(result)
+
+        current_signal_key = signal_key_from_condition_keys(condition_keys)
+        if current_signal_key != normalized_signal_key:
+            continue
+
+        matched = evaluate_flow_expression(flow_refs_expression(refs), matches)
+        if not matched:
+            return None
+
+        signal_card = build_demo_flow_ai_signal(
+            flow.get("name") or "",
+            condition_results,
+            trigger_prompt=flow.get("trigger_prompt"),
+            check_date=check_date,
+            trigger_title=flow.get("trigger_title"),
+            trigger_recommendation=flow.get("trigger_recommendation"),
+            trigger_docs=combine_trigger_docs(flow.get("trigger_docs"), flow.get("trigger_docs_file_text")),
+        )
+        delivery_key = f"history:{flow['id']}:{current_signal_key}:{check_date}"
+        await persist_condition_signal(
+            flow=flow,
+            condition_keys=condition_keys,
+            condition_results=condition_results,
+            message=signal_card["response"],
+            check_date=check_date,
+            delivery_key=delivery_key,
+            source="stocktraders_web_history",
+            title=signal_card["title"],
+            recommendation=signal_card["recommendation"],
+        )
+        return await memory.get_latest_condition_signal(
+            signal_key=current_signal_key,
+            flow_id=int(flow["id"]),
+            check_date=check_date,
+        )
+
+    return None
+
+
 async def inspect_realtime_wave_flow(
     flow: dict,
     templates: list[dict] | None = None,
@@ -1854,17 +1966,29 @@ async def condition_realtime_wave_restart(
 async def public_latest_condition_signal(
     signal_key: Optional[str] = None,
     flow_id: Optional[int] = None,
+    check_date: Optional[str] = None,
+    date: Optional[str] = None,
+    waitbuy: Optional[str] = None,
 ):
     signal_key = normalize_public_signal_key(signal_key)
+    requested_check_date = (check_date or date or "").strip()
     signal = await memory.get_latest_condition_signal(
         signal_key=signal_key,
         flow_id=flow_id,
+        check_date=requested_check_date or None,
     )
+    if not signal and requested_check_date:
+        signal = await build_public_historical_waitbuy_signal(
+            requested_signal_key=signal_key,
+            requested_flow_id=flow_id,
+            check_date=requested_check_date,
+            waitbuy_value=parse_public_float(waitbuy),
+        )
     title = signal.get("title") if signal else None
     response = signal.get("message") if signal else None
     recommendation = signal.get("recommendation") if signal else None
 
-    if signal:
+    if signal and not requested_check_date:
         state = await memory.get_condition_signal_state(
             int(signal.get("flow_id")),
             signal.get("signal_key") or signal_key or "",
@@ -1887,6 +2011,7 @@ async def public_latest_condition_signal(
         "title": title,
         "response": response,
         "recommendation": recommendation,
+        "check_date": signal.get("check_date") if signal else None,
     }
 
 
@@ -1894,6 +2019,8 @@ async def public_latest_condition_signal(
 async def public_condition_signals(
     signal_key: Optional[str] = None,
     flow_id: Optional[int] = None,
+    check_date: Optional[str] = None,
+    date: Optional[str] = None,
     limit: int = 20,
 ):
     return {
@@ -1901,6 +2028,7 @@ async def public_condition_signals(
         "signals": await memory.list_condition_signals(
             signal_key=normalize_public_signal_key(signal_key),
             flow_id=flow_id,
+            check_date=(check_date or date or "").strip() or None,
             limit=limit,
         ),
     }

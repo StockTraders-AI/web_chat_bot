@@ -389,6 +389,34 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
             "message": f"Thieu date de kiem tra waitbuy > {threshold:g}",
         }
 
+    context_waitbuy = to_float(
+        context.get("waitbuy")
+        or context.get("waitBuy")
+        or context.get("wait_buy")
+        or context.get("cho_mua"),
+        default=None,
+    )
+
+    if context_waitbuy is not None:
+        matched = context_waitbuy > threshold
+        return {
+            "ok": True,
+            "matched": matched,
+            "condition_key": condition_key,
+            "condition": f"waitbuy > {threshold:g}",
+            "data": {
+                "date": str(date)[:10],
+                "waitbuy": context_waitbuy,
+                "threshold": threshold,
+                "source": context.get("source") or "context",
+            },
+            "message": (
+                f"Cho mua hien o muc {context_waitbuy:g}, vuot nguong {threshold:g}"
+                if matched
+                else "Khong dat dieu kien realtime wave"
+            ),
+        }
+
     raw = await ensure_wave_snapshot(date)
 
     if not raw:

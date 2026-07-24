@@ -2397,6 +2397,7 @@ class MemoryStore:
         self,
         signal_key: str | None = None,
         flow_id: int | None = None,
+        check_date: str | None = None,
         limit: int = 20,
     ):
         query = """
@@ -2428,6 +2429,10 @@ class MemoryStore:
             query += " AND flow_id=?"
             params.append(int(flow_id))
 
+        if check_date:
+            query += " AND check_date=?"
+            params.append(check_date)
+
         query += " ORDER BY updated_at DESC, id DESC LIMIT ?"
         params.append(max(1, min(int(limit or 20), 100)))
 
@@ -2442,10 +2447,12 @@ class MemoryStore:
         self,
         signal_key: str | None = None,
         flow_id: int | None = None,
+        check_date: str | None = None,
     ):
         signals = await self.list_condition_signals(
             signal_key=signal_key,
             flow_id=flow_id,
+            check_date=check_date,
             limit=1,
         )
         return signals[0] if signals else None
