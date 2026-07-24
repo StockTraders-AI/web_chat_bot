@@ -93,6 +93,7 @@ const step3PromptResponseEl = document.getElementById("step3PromptResponse");
 const step3PromptDocsEl = document.getElementById("step3PromptDocs");
 const step3PromptDocsImportBtn = document.getElementById("step3PromptDocsImport");
 const step3PromptDocsFileEl = document.getElementById("step3PromptDocsFile");
+const step3PromptDocsFileListEl = document.getElementById("step3PromptDocsFileList");
 const step3PromptRecommendationEl = document.getElementById("step3PromptRecommendation");
 
 const conditionFilterTypeEl = document.getElementById("conditionFilterType");
@@ -163,6 +164,8 @@ let nextOperator = "AND";
 let editingConditionTemplateId = null;
 let checkingDemoFlowId = null;
 let editingStep3PromptFlowId = null;
+let editingStep3DocsFileText = "";
+let editingStep3DocsFileNames = [];
 let demoCheckResults = {};
 let activeFlowCheckDates = {};
 let conditionPage = 1;
@@ -2397,6 +2400,8 @@ async function saveConditionFlow() {
     trigger_title: existingFlow?.trigger_title || "",
     trigger_recommendation: existingFlow?.trigger_recommendation || "",
     trigger_docs: existingFlow?.trigger_docs || "",
+    trigger_docs_file_text: existingFlow?.trigger_docs_file_text || "",
+    trigger_docs_file_names: existingFlow?.trigger_docs_file_names || "",
     status: "draft",
   };
 
@@ -2542,6 +2547,27 @@ function renderStep3SignalTextFields(flow) {
   `;
 }
 
+
+function parseStep3DocsFileNames(value) {
+  return String(value || "")
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function renderStep3DocsFileList() {
+  if (!step3PromptDocsFileListEl) return;
+
+  if (!editingStep3DocsFileNames.length) {
+    step3PromptDocsFileListEl.innerHTML = `<span class="step3-docs-empty">Chua nap file</span>`;
+    return;
+  }
+
+  step3PromptDocsFileListEl.innerHTML = editingStep3DocsFileNames.map((name) => `
+    <span class="step3-docs-file-chip">${escapeHtml(name)}</span>
+  `).join("");
+}
+
 function openStep3PromptModal(id) {
   const flow = conditionFlows.find((item) => Number(item.id) === Number(id));
   if (!flow || !step3PromptModalEl) return;
@@ -2554,6 +2580,10 @@ function openStep3PromptModal(id) {
     step3PromptTitleEl.value = flow.trigger_title || "";
     step3PromptTitleEl.closest("label")?.classList.toggle("hidden", !isWaitbuySignalFlow(flow));
   }
+  editingStep3DocsFileText = flow.trigger_docs_file_text || "";
+  editingStep3DocsFileNames = parseStep3DocsFileNames(flow.trigger_docs_file_names);
+  renderStep3DocsFileList();
+
   if (step3PromptDocsEl) {
     step3PromptDocsEl.value = flow.trigger_docs || "";
     step3PromptDocsEl.closest("label")?.classList.toggle("hidden", !isWaitbuySignalFlow(flow));
@@ -2578,6 +2608,9 @@ function closeStep3PromptModal() {
   step3PromptModalEl.hidden = true;
   step3PromptModalEl.classList.add("hidden");
   editingStep3PromptFlowId = null;
+  editingStep3DocsFileText = "";
+  editingStep3DocsFileNames = [];
+  renderStep3DocsFileList();
 }
 
 async function saveStep3PromptModal() {
@@ -2590,6 +2623,8 @@ async function saveStep3PromptModal() {
     trigger_prompt: String(step3PromptResponseEl?.value || "").trim(),
     trigger_title: String(step3PromptTitleEl?.value || "").trim(),
     trigger_docs: String(step3PromptDocsEl?.value || "").trim(),
+    trigger_docs_file_text: editingStep3DocsFileText.trim(),
+    trigger_docs_file_names: editingStep3DocsFileNames.join("\n"),
     trigger_recommendation: String(step3PromptRecommendationEl?.value || "").trim(),
   });
   renderActiveFlows();
@@ -2782,14 +2817,22 @@ async function updateActiveFlowTriggerPrompt(id, value) {
   const triggerDocs = String(
     isPatchObject ? value.trigger_docs : flow.trigger_docs ?? ""
   ).trim();
+  const triggerDocsFileText = String(
+    isPatchObject ? value.trigger_docs_file_text : flow.trigger_docs_file_text ?? ""
+  ).trim();
+  const triggerDocsFileNames = String(
+    isPatchObject ? value.trigger_docs_file_names : flow.trigger_docs_file_names ?? ""
+  ).trim();
 
   const samePrompt = (flow.trigger_prompt || "") === prompt;
   const sameTitle = (flow.trigger_title || "") === triggerTitle;
   const sameRecommendation =
     (flow.trigger_recommendation || "") === triggerRecommendation;
   const sameDocs = (flow.trigger_docs || "") === triggerDocs;
+  const sameDocsFileText = (flow.trigger_docs_file_text || "") === triggerDocsFileText;
+  const sameDocsFileNames = (flow.trigger_docs_file_names || "") === triggerDocsFileNames;
 
-  if (samePrompt && (!waitbuyFlow || (sameTitle && sameRecommendation && sameDocs))) return;
+  if (samePrompt && (!waitbuyFlow || (sameTitle && sameRecommendation && sameDocs && sameDocsFileText && sameDocsFileNames))) return;
 
   const body = {
     trigger_prompt: prompt,
@@ -2798,6 +2841,8 @@ async function updateActiveFlowTriggerPrompt(id, value) {
   if (waitbuyFlow) {
     body.trigger_title = triggerTitle;
     body.trigger_docs = triggerDocs;
+    body.trigger_docs_file_text = triggerDocsFileText;
+    body.trigger_docs_file_names = triggerDocsFileNames;
     body.trigger_recommendation = triggerRecommendation;
   }
 
@@ -2819,6 +2864,8 @@ async function updateActiveFlowTriggerPrompt(id, value) {
     if (waitbuyFlow) {
       flow.trigger_title = triggerTitle;
       flow.trigger_docs = triggerDocs;
+      flow.trigger_docs_file_text = triggerDocsFileText;
+      flow.trigger_docs_file_names = triggerDocsFileNames;
       flow.trigger_recommendation = triggerRecommendation;
     }
   } catch {
@@ -2917,6 +2964,8 @@ async function demoCheckConditionFlow(id) {
     recommendationEl?.value ?? flow?.trigger_recommendation ?? ""
   ).trim();
   const triggerDocs = String(flow?.trigger_docs ?? "").trim();
+  const triggerDocsFileText = String(flow?.trigger_docs_file_text ?? "").trim();
+  const triggerDocsFileNames = String(flow?.trigger_docs_file_names ?? "").trim();
   const waitbuyFlow = isWaitbuySignalFlow(flow);
 
   if (flow) {
@@ -2924,6 +2973,8 @@ async function demoCheckConditionFlow(id) {
     if (waitbuyFlow) {
       flow.trigger_title = triggerTitle;
       flow.trigger_docs = triggerDocs;
+      flow.trigger_docs_file_text = triggerDocsFileText;
+      flow.trigger_docs_file_names = triggerDocsFileNames;
       flow.trigger_recommendation = triggerRecommendation;
     }
   }
@@ -2948,6 +2999,8 @@ async function demoCheckConditionFlow(id) {
           ? {
               trigger_title: triggerTitle,
               trigger_docs: triggerDocs,
+              trigger_docs_file_text: triggerDocsFileText,
+              trigger_docs_file_names: triggerDocsFileNames,
               trigger_recommendation: triggerRecommendation,
             }
           : {}),
@@ -3699,12 +3752,11 @@ step3PromptSaveBtn?.addEventListener("click", saveStep3PromptModal);
 step3PromptDocsImportBtn?.addEventListener("click", () => step3PromptDocsFileEl?.click());
 step3PromptDocsFileEl?.addEventListener("change", async () => {
   const file = step3PromptDocsFileEl.files?.[0];
-  if (!file || !step3PromptDocsEl) return;
+  if (!file) return;
 
   try {
     const fileName = String(file.name || "").toLowerCase();
     const isPdf = file.type === "application/pdf" || fileName.endsWith(".pdf");
-    const limit = Number(step3PromptDocsEl.getAttribute("maxlength") || 8000);
     let text = "";
 
     if (isPdf) {
@@ -3721,12 +3773,15 @@ step3PromptDocsFileEl?.addEventListener("change", async () => {
       text = await file.text();
     }
 
-    step3PromptDocsEl.value = text.length > limit ? text.slice(0, limit) : text;
-    if (text.length > limit) {
-      showToast(`File dai qua, da cat con ${limit} ky tu`, "error");
-    } else {
-      showToast(`Da nap file ${file.name}`);
-    }
+    const cleanedText = text.trim();
+    if (!cleanedText) throw new Error("File khong co noi dung docs");
+
+    editingStep3DocsFileText = [editingStep3DocsFileText, `File: ${file.name}\n${cleanedText}`]
+      .filter(Boolean)
+      .join("\n\n");
+    editingStep3DocsFileNames = [...editingStep3DocsFileNames, file.name];
+    renderStep3DocsFileList();
+    showToast(`Da nap file ${file.name}`);
   } catch (err) {
     showToast(err?.message || "Khong doc duoc file docs", "error");
   } finally {

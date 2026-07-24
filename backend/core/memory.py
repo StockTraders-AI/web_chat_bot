@@ -198,6 +198,8 @@ CREATE TABLE IF NOT EXISTS condition_flows (
   trigger_title TEXT NOT NULL DEFAULT '',
   trigger_recommendation TEXT NOT NULL DEFAULT '',
   trigger_docs TEXT NOT NULL DEFAULT '',
+  trigger_docs_file_text TEXT NOT NULL DEFAULT '',
+  trigger_docs_file_names TEXT NOT NULL DEFAULT '',
   active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0, 1)),
   status TEXT NOT NULL DEFAULT 'draft'
     CHECK(status IN ('draft','confirmed','running','disabled')),
@@ -352,6 +354,20 @@ class MemoryStore:
 
             try:
                 await db.execute(
+                    "ALTER TABLE condition_flows ADD COLUMN trigger_docs_file_text TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass
+
+            try:
+                await db.execute(
+                    "ALTER TABLE condition_flows ADD COLUMN trigger_docs_file_names TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass
+
+            try:
+                await db.execute(
                     "ALTER TABLE condition_signals ADD COLUMN recommendation TEXT NOT NULL DEFAULT ''"
                 )
             except Exception:
@@ -383,6 +399,8 @@ class MemoryStore:
                         trigger_title TEXT NOT NULL DEFAULT '',
                         trigger_recommendation TEXT NOT NULL DEFAULT '',
                         trigger_docs TEXT NOT NULL DEFAULT '',
+                        trigger_docs_file_text TEXT NOT NULL DEFAULT '',
+                        trigger_docs_file_names TEXT NOT NULL DEFAULT '',
                         active INTEGER NOT NULL DEFAULT 0 CHECK(active IN (0, 1)),
                         status TEXT NOT NULL DEFAULT 'draft'
                             CHECK(status IN ('draft','confirmed','running','disabled')),
@@ -404,6 +422,8 @@ class MemoryStore:
                             trigger_title,
                             trigger_recommendation,
                             trigger_docs,
+                            trigger_docs_file_text,
+                            trigger_docs_file_names,
                             active,
                             status,
                             created_by,
@@ -1938,6 +1958,8 @@ class MemoryStore:
         trigger_title: str = "",
         trigger_recommendation: str = "",
         trigger_docs: str = "",
+        trigger_docs_file_text: str = "",
+        trigger_docs_file_names: str = "",
         created_by: str | None = None,
     ):
         async with aiosqlite.connect(self.db_path) as db:
@@ -1951,11 +1973,13 @@ class MemoryStore:
                     trigger_title,
                     trigger_recommendation,
                     trigger_docs,
+                    trigger_docs_file_text,
+                    trigger_docs_file_names,
                     active,
                     status,
                     created_by
                 )
-                VALUES(?, ?, ?, ?, ?, ?, ?, 0, 'draft', ?)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'draft', ?)
                 """,
                 (
                     name,
@@ -1965,6 +1989,8 @@ class MemoryStore:
                     trigger_title,
                     trigger_recommendation,
                     trigger_docs,
+                    trigger_docs_file_text,
+                    trigger_docs_file_names,
                     created_by,
                 )
             )
@@ -1988,6 +2014,8 @@ class MemoryStore:
                     trigger_title,
                     trigger_recommendation,
                     trigger_docs,
+                    trigger_docs_file_text,
+                    trigger_docs_file_names,
                     active,
                     status,
                     created_by,
@@ -2019,6 +2047,8 @@ class MemoryStore:
                     trigger_title,
                     trigger_recommendation,
                     trigger_docs,
+                    trigger_docs_file_text,
+                    trigger_docs_file_names,
                     active,
                     status,
                     created_by,
@@ -2048,6 +2078,8 @@ class MemoryStore:
         trigger_title: str | None = None,
         trigger_recommendation: str | None = None,
         trigger_docs: str | None = None,
+        trigger_docs_file_text: str | None = None,
+        trigger_docs_file_names: str | None = None,
         status: str = "draft",
     ):
         async with aiosqlite.connect(self.db_path) as db:
@@ -2062,6 +2094,8 @@ class MemoryStore:
                     trigger_title=COALESCE(?, trigger_title),
                     trigger_recommendation=COALESCE(?, trigger_recommendation),
                     trigger_docs=COALESCE(?, trigger_docs),
+                    trigger_docs_file_text=COALESCE(?, trigger_docs_file_text),
+                    trigger_docs_file_names=COALESCE(?, trigger_docs_file_names),
                     status=?,
                     updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
@@ -2074,6 +2108,8 @@ class MemoryStore:
                     trigger_title,
                     trigger_recommendation,
                     trigger_docs,
+                    trigger_docs_file_text,
+                    trigger_docs_file_names,
                     status,
                     flow_id,
                 )
@@ -2088,6 +2124,8 @@ class MemoryStore:
         trigger_title: str | None = None,
         trigger_recommendation: str | None = None,
         trigger_docs: str | None = None,
+        trigger_docs_file_text: str | None = None,
+        trigger_docs_file_names: str | None = None,
     ):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -2098,6 +2136,8 @@ class MemoryStore:
                     trigger_title=COALESCE(?, trigger_title),
                     trigger_recommendation=COALESCE(?, trigger_recommendation),
                     trigger_docs=COALESCE(?, trigger_docs),
+                    trigger_docs_file_text=COALESCE(?, trigger_docs_file_text),
+                    trigger_docs_file_names=COALESCE(?, trigger_docs_file_names),
                     updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
                 """,
@@ -2106,6 +2146,8 @@ class MemoryStore:
                     trigger_title,
                     trigger_recommendation,
                     trigger_docs,
+                    trigger_docs_file_text,
+                    trigger_docs_file_names,
                     flow_id,
                 )
             )

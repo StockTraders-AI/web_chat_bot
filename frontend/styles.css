@@ -2576,9 +2576,40 @@ select option {
   resize: vertical;
 }
 
+#step3PromptModal .step3-docs-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 34px;
+  margin-bottom: 8px;
+  padding: 7px 8px;
+  border: 1px dashed #314363;
+  border-radius: 8px;
+  background: rgba(11, 20, 36, .54);
+}
+
+#step3PromptModal .step3-docs-empty {
+  color: #7f8da9;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+#step3PromptModal .step3-docs-file-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(47, 127, 232, .14);
+  border: 1px solid rgba(47, 127, 232, .42);
+  color: #dce8ff;
+  font-size: 12px;
+  font-weight: 750;
+}
+
 #step3PromptModal .builder-field textarea.step3-docs-prompt-textarea {
-  min-height: 150px;
-  max-height: 280px;
+  min-height: 76px;
+  max-height: 180px;
 }
 
 #step3PromptModal .builder-field textarea.step3-response-prompt-textarea {
