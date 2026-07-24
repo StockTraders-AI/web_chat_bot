@@ -2515,13 +2515,65 @@ select option {
 }
 
 .step3-prompt-modal-content {
-  max-width: 860px;
+  width: min(620px, calc(100vw - 32px));
+  max-width: 620px;
+  padding: 20px 22px 0;
+  border-radius: 14px;
+}
+
+#step3PromptModal .flow-modal-close {
+  right: 12px;
+  top: 10px;
+  width: 30px;
+  height: 30px;
+  font-size: 22px;
+}
+
+#step3PromptModal .flow-modal-head {
+  margin: 2px 40px 14px 0;
+}
+
+#step3PromptModal .flow-modal-head h2 {
+  font-size: 18px;
+  font-weight: 850;
+  letter-spacing: 0;
+}
+
+#step3PromptModal .builder-field {
+  margin: 0 0 12px;
+}
+
+#step3PromptModal .builder-field span {
+  margin-bottom: 6px;
+  color: #b7c4df;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 #step3PromptModal .builder-field textarea {
-  min-height: 132px;
-  max-height: 260px;
+  width: 100%;
+  min-height: 88px;
+  max-height: 180px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 19px;
   resize: vertical;
+}
+
+#step3PromptModal .builder-actions {
+  margin: 14px -22px 0;
+  padding: 14px 22px;
+  gap: 10px;
+}
+
+#step3PromptModal .builder-actions button {
+  height: 38px;
+  min-width: 118px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 #step3PromptModal .builder-field.hidden {
