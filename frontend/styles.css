@@ -2550,6 +2550,20 @@ select option {
   font-weight: 750;
 }
 
+#step3PromptModal .step3-docs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#step3PromptModal .step3-docs-head .mini-file-btn {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
 #step3PromptModal .builder-field textarea {
   width: 100%;
   min-height: 88px;

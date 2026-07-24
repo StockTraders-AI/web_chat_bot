@@ -91,6 +91,8 @@ const step3PromptModalTitleEl = document.getElementById("step3PromptModalTitle")
 const step3PromptTitleEl = document.getElementById("step3PromptTitle");
 const step3PromptResponseEl = document.getElementById("step3PromptResponse");
 const step3PromptDocsEl = document.getElementById("step3PromptDocs");
+const step3PromptDocsImportBtn = document.getElementById("step3PromptDocsImport");
+const step3PromptDocsFileEl = document.getElementById("step3PromptDocsFile");
 const step3PromptRecommendationEl = document.getElementById("step3PromptRecommendation");
 
 const conditionFilterTypeEl = document.getElementById("conditionFilterType");
@@ -2564,6 +2566,8 @@ function openStep3PromptModal(id) {
     step3PromptRecommendationEl.closest("label")?.classList.toggle("hidden", !isWaitbuySignalFlow(flow));
   }
 
+  if (step3PromptDocsFileEl) step3PromptDocsFileEl.value = "";
+
   step3PromptModalEl.hidden = false;
   step3PromptModalEl.classList.remove("hidden");
   setTimeout(() => step3PromptResponseEl?.focus(), 50);
@@ -3692,6 +3696,26 @@ flowModalEl?.addEventListener("click", (e) => {
 step3PromptModalCloseBtn?.addEventListener("click", closeStep3PromptModal);
 step3PromptCancelBtn?.addEventListener("click", closeStep3PromptModal);
 step3PromptSaveBtn?.addEventListener("click", saveStep3PromptModal);
+step3PromptDocsImportBtn?.addEventListener("click", () => step3PromptDocsFileEl?.click());
+step3PromptDocsFileEl?.addEventListener("change", async () => {
+  const file = step3PromptDocsFileEl.files?.[0];
+  if (!file || !step3PromptDocsEl) return;
+
+  try {
+    const text = await file.text();
+    const limit = Number(step3PromptDocsEl.getAttribute("maxlength") || 8000);
+    step3PromptDocsEl.value = text.length > limit ? text.slice(0, limit) : text;
+    if (text.length > limit) {
+      showToast(`File dai qua, da cat con ${limit} ky tu`, "error");
+    } else {
+      showToast(`Da nap file ${file.name}`);
+    }
+  } catch {
+    showToast("Khong doc duoc file docs", "error");
+  } finally {
+    step3PromptDocsFileEl.value = "";
+  }
+});
 step3PromptModalEl?.addEventListener("click", (e) => {
   if (e.target === step3PromptModalEl) closeStep3PromptModal();
 });

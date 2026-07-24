@@ -489,7 +489,7 @@ def build_demo_flow_ai_signal(
     title_prompt = (trigger_title or "").strip()
     response_prompt = (trigger_prompt or "").strip()
     recommendation_prompt = (trigger_recommendation or "").strip()
-    docs_prompt = compact_signal_text(trigger_docs, "", max_chars=4000)
+    docs_prompt = compact_signal_text(trigger_docs, "", max_chars=8000)
 
     if not any([title_prompt, response_prompt, recommendation_prompt, docs_prompt]):
         return fallback
@@ -578,7 +578,7 @@ def build_demo_flow_ai_response(
         check_date=check_date,
     )["response"]
     response_prompt = (trigger_prompt or "").strip()
-    docs_prompt = compact_signal_text(trigger_docs, "", max_chars=4000)
+    docs_prompt = compact_signal_text(trigger_docs, "", max_chars=8000)
 
     if docs_prompt:
         response_prompt = "\n".join([
