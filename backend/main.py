@@ -16,6 +16,7 @@ from core.condition_engine import (
     resolve_condition_key,
     is_realtime_wave_condition_key,
     waitbuy_threshold_from_key,
+    buy_threshold_from_key,
     run_condition,
 )
 
@@ -503,11 +504,14 @@ def signal_card_length_too_short(card: dict | None) -> bool:
     )
 
 
-def condition_results_waitbuy(condition_results: list[dict]) -> float | None:
+def condition_results_wave_metric(condition_results: list[dict]) -> tuple[str, float | None]:
     for result in condition_results or []:
         data = result.get("data") if isinstance(result, dict) else None
         if not isinstance(data, dict):
             continue
+        buy = parse_public_float(data.get("buy") or data.get("mua"))
+        if buy is not None:
+            return "buy", buy
         waitbuy = parse_public_float(
             data.get("waitbuy")
             or data.get("waitBuy")
@@ -515,27 +519,28 @@ def condition_results_waitbuy(condition_results: list[dict]) -> float | None:
             or data.get("cho_mua")
         )
         if waitbuy is not None:
-            return waitbuy
-    return None
+            return "waitbuy", waitbuy
+    return "waitbuy", None
 
 
 def repair_short_signal_card(card: dict, flow_name: str, condition_results: list[dict]) -> dict:
-    waitbuy = condition_results_waitbuy(condition_results)
-    waitbuy_text = f"{waitbuy:g}" if waitbuy is not None else "cao"
+    metric, metric_value = condition_results_wave_metric(condition_results)
+    metric_text = f"{metric_value:g}" if metric_value is not None else "cao"
+    metric_label = "Mua" if metric == "buy" else "Ch\u1edd mua"
 
     title = card.get("title") or ""
     response = card.get("response") or card.get("message") or ""
     recommendation = card.get("recommendation") or ""
 
     if count_visible_signal_chars(title) < 20:
-        title = flow_name or "T\u00edn hi\u1ec7u Ch\u1edd mua t\u0103ng cao \u0111\u00e1ng ch\u00fa \u00fd"
+        title = flow_name or f"T\u00edn hi\u1ec7u {metric_label} t\u0103ng cao \u0111\u00e1ng ch\u00fa \u00fd"
     if count_visible_signal_chars(title) < 20:
-        title = "T\u00edn hi\u1ec7u Ch\u1edd mua t\u0103ng cao \u0111\u00e1ng ch\u00fa \u00fd"
+        title = f"T\u00edn hi\u1ec7u {metric_label} t\u0103ng cao \u0111\u00e1ng ch\u00fa \u00fd"
 
     if count_visible_signal_chars(response) < 90:
         response = (
-            f"Ch\u1edd mua hi\u1ec7n \u1edf m\u1ee9c {waitbuy_text}, cho th\u1ea5y l\u1ef1c b\u00e1n suy y\u1ebfu v\u00e0 d\u00f2ng ti\u1ec1n b\u1eaft \u0111\u1ea7u quay l\u1ea1i. "
-            "T\u00edn hi\u1ec7u n\u00e0y nghi\u00eang v\u1ec1 v\u00f9ng d\u00f2 \u0111\u00e1y s\u1edbm, nh\u01b0ng v\u1eabn c\u1ea7n th\u00eam x\u00e1c nh\u1eadn t\u1eeb di\u1ec5n bi\u1ebfn th\u1ecb tr\u01b0\u1eddng."
+            f"{metric_label} hi\u1ec7n \u1edf m\u1ee9c {metric_text}, cho th\u1ea5y l\u1ef1c c\u1ea7u c\u1ea3i thi\u1ec7n v\u00e0 d\u00f2ng ti\u1ec1n b\u1eaft \u0111\u1ea7u quay l\u1ea1i. "
+            "T\u00edn hi\u1ec7u n\u00e0y nghi\u00eang v\u1ec1 tr\u1ea1ng th\u00e1i t\u00edch c\u1ef1c h\u01a1n, nh\u01b0ng v\u1eabn c\u1ea7n th\u00eam x\u00e1c nh\u1eadn t\u1eeb di\u1ec5n bi\u1ebfn th\u1ecb tr\u01b0\u1eddng."
         )
 
     if count_visible_signal_chars(recommendation) < 35:
@@ -559,7 +564,7 @@ def build_signal_card_length_instruction(strict: bool = False) -> str:
         "Do not produce telegraphic one-clause text. Historical-date output must be as complete as current-date output. "
         "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
         "Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. "
-        "If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
+        "If the data contains a current waitbuy or buy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
     )
 
 
@@ -710,7 +715,7 @@ def build_demo_flow_ai_response(
                 "response. Follow the response prompt from UI for tone, wording, and exclusions. "
                 "Output length limit excluding whitespace: response at most 200 characters. "
                 "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
-                "If the data contains a current waitbuy value, mention that current value. "
+                "If the data contains a current waitbuy or buy value, mention that current value. "
                 "Do not mention the threshold when the admin prompt excludes it."
             ),
         })
@@ -834,6 +839,8 @@ def normalize_public_signal_key(signal_key: str | None) -> str | None:
         return signal_key
     if waitbuy_threshold_from_key(signal_key) is not None:
         return "waitbuy_over_threshold"
+    if buy_threshold_from_key(signal_key) is not None:
+        return "buy_over_threshold"
     return signal_key
 
 def signal_title(flow: dict, condition_results: list[dict]) -> str:
@@ -881,37 +888,53 @@ def parse_public_float(value: Any) -> float | None:
         return None
 
 
-def cached_signal_waitbuy_matches(signal: dict | None, waitbuy_value: float | None) -> bool:
-    if not signal or waitbuy_value is None:
+def signal_wave_metric(signal_key: str | None) -> str | None:
+    normalized = normalize_public_signal_key(signal_key)
+    if normalized == "waitbuy_over_threshold":
+        return "waitbuy"
+    if normalized == "buy_over_threshold":
+        return "buy"
+    return None
+
+
+def wave_metric_value_from_data(data: dict, metric: str) -> float | None:
+    if metric == "buy":
+        return parse_public_float(data.get("buy") or data.get("mua"))
+    return parse_public_float(
+        data.get("waitbuy")
+        or data.get("waitBuy")
+        or data.get("wait_buy")
+        or data.get("cho_mua")
+    )
+
+
+def cached_signal_wave_metric_matches(signal: dict | None, metric: str | None, value: float | None) -> bool:
+    if not signal or not metric or value is None:
         return False
 
     for result in signal.get("condition_results") or []:
         data = result.get("data") if isinstance(result, dict) else None
         if not isinstance(data, dict):
             continue
-        cached_waitbuy = parse_public_float(
-            data.get("waitbuy")
-            or data.get("waitBuy")
-            or data.get("wait_buy")
-            or data.get("cho_mua")
-        )
-        if cached_waitbuy is not None:
-            return abs(cached_waitbuy - waitbuy_value) < 0.000001
+        cached_value = wave_metric_value_from_data(data, metric)
+        if cached_value is not None:
+            return abs(cached_value - value) < 0.000001
 
     return False
 
 
-async def build_public_historical_waitbuy_signal(
+async def build_public_historical_wave_signal(
     requested_signal_key: str | None,
     requested_flow_id: int | None,
     check_date: str,
-    waitbuy_value: float | None,
+    metric_value: float | None,
 ) -> dict | None:
-    if not check_date or waitbuy_value is None:
+    if not check_date or metric_value is None:
         return None
 
     normalized_signal_key = normalize_public_signal_key(requested_signal_key) or "waitbuy_over_threshold"
-    if normalized_signal_key != "waitbuy_over_threshold":
+    metric = signal_wave_metric(normalized_signal_key)
+    if not metric:
         return None
 
     flows = await memory.list_condition_flows()
@@ -956,7 +979,7 @@ async def build_public_historical_waitbuy_signal(
                     context={
                         "date": check_date,
                         "condition_key": condition_key,
-                        "waitbuy": waitbuy_value,
+                        metric: metric_value,
                         "source": "stocktraders_web_history",
                     },
                 )
@@ -2077,10 +2100,12 @@ async def public_latest_condition_signal(
     check_date: Optional[str] = None,
     date: Optional[str] = None,
     waitbuy: Optional[str] = None,
+    buy: Optional[str] = None,
 ):
     signal_key = normalize_public_signal_key(signal_key)
     requested_check_date = (check_date or date or "").strip()
-    requested_waitbuy = parse_public_float(waitbuy)
+    requested_metric = signal_wave_metric(signal_key)
+    requested_metric_value = parse_public_float(buy if requested_metric == "buy" else waitbuy)
     signal = await memory.get_latest_condition_signal(
         signal_key=signal_key,
         flow_id=flow_id,
@@ -2089,13 +2114,16 @@ async def public_latest_condition_signal(
     if requested_check_date and (
         not signal
         or signal_card_length_too_short(signal)
-        or (requested_waitbuy is not None and not cached_signal_waitbuy_matches(signal, requested_waitbuy))
+        or (
+            requested_metric_value is not None
+            and not cached_signal_wave_metric_matches(signal, requested_metric, requested_metric_value)
+        )
     ):
-        signal = await build_public_historical_waitbuy_signal(
+        signal = await build_public_historical_wave_signal(
             requested_signal_key=signal_key,
             requested_flow_id=flow_id,
             check_date=requested_check_date,
-            waitbuy_value=requested_waitbuy,
+            metric_value=requested_metric_value,
         )
     title = signal.get("title") if signal else None
     response = signal.get("message") if signal else None

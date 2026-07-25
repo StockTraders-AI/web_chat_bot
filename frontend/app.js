@@ -2513,7 +2513,9 @@ function isWaitbuySignalFlow(flow) {
   });
 
   const normalized = normalizeConditionSearchText(parts.filter(Boolean).join(" "));
-  return normalized.includes("waitbuy") || normalized.includes("cho mua");
+  const isWaitbuy = normalized.includes("waitbuy") || normalized.includes("cho mua");
+  const isBuyThreshold = /(^|\s)mua\s*(>|>=|vuot|tren|lon hon|x|[0-9])/.test(normalized);
+  return isWaitbuy || isBuyThreshold;
 }
 
 function step3PromptPreview(flow) {

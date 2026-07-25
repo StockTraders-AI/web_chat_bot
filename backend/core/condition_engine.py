@@ -22,6 +22,8 @@ SUPPORTED_CONDITION_KEYS = {
 
 WAITBUY_THRESHOLD_CONDITION_KEY = "waitbuy_over_threshold"
 WAITBUY_THRESHOLD_LEGACY_KEY_PREFIX = "waitbuy_over_"
+BUY_THRESHOLD_CONDITION_KEY = "buy_over_threshold"
+BUY_THRESHOLD_LEGACY_KEY_PREFIX = "buy_over_"
 
 
 async def post_data_api(endpoint: str, params: dict | None = None):
@@ -213,6 +215,10 @@ def waitbuy_threshold_key(threshold: float) -> str:
     return WAITBUY_THRESHOLD_CONDITION_KEY
 
 
+def buy_threshold_key(threshold: float) -> str:
+    return BUY_THRESHOLD_CONDITION_KEY
+
+
 def waitbuy_threshold_from_key(condition_key: str) -> float | None:
     raw = str(condition_key or "").strip()
     if not raw.startswith(WAITBUY_THRESHOLD_LEGACY_KEY_PREFIX):
@@ -225,16 +231,41 @@ def waitbuy_threshold_from_key(condition_key: str) -> float | None:
     return parse_condition_number(suffix)
 
 
-def is_waitbuy_threshold_condition(condition_logic: str) -> bool:
-    text = normalize_logic_text(condition_logic)
-    if not re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua)\b", text):
-        return False
+def buy_threshold_from_key(condition_key: str) -> float | None:
+    raw = str(condition_key or "").strip()
+    if not raw.startswith(BUY_THRESHOLD_LEGACY_KEY_PREFIX):
+        return None
+
+    suffix = raw[len(BUY_THRESHOLD_LEGACY_KEY_PREFIX):]
+    if not re.fullmatch(r"\d+(?:p\d+)?", suffix):
+        return None
+
+    return parse_condition_number(suffix)
+
+
+def is_threshold_operator_condition(text: str) -> bool:
     return bool(
         re.search(
             r"(?:>=|=>|>|lon\s+hon(?:\s+hoac\s+bang)?|tren|vuot)\s*(?:\d+(?:\.\d+)?|x)\b",
             text,
         )
     )
+
+
+def is_waitbuy_threshold_condition(condition_logic: str) -> bool:
+    text = normalize_logic_text(condition_logic)
+    if not re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua)\b", text):
+        return False
+    return is_threshold_operator_condition(text)
+
+
+def is_buy_threshold_condition(condition_logic: str) -> bool:
+    text = normalize_logic_text(condition_logic)
+    if re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua)\b", text):
+        return False
+    if not re.search(r"\bmua\b", text):
+        return False
+    return is_threshold_operator_condition(text)
 
 
 def parse_waitbuy_threshold_condition(condition_logic: str) -> float | None:
@@ -253,8 +284,24 @@ def parse_waitbuy_threshold_condition(condition_logic: str) -> float | None:
     return parse_condition_number(match.group(1))
 
 
+def parse_buy_threshold_condition(condition_logic: str) -> float | None:
+    text = normalize_logic_text(condition_logic)
+    if not is_buy_threshold_condition(text):
+        return None
+
+    match = re.search(
+        r"(?:>=|=>|>|lon\s+hon(?:\s+hoac\s+bang)?|tren|vuot)\s*(\d+(?:\.\d+)?)",
+        text,
+    )
+
+    if not match:
+        return None
+
+    return parse_condition_number(match.group(1))
+
+
 def condition_context_threshold(context: dict, raw_condition: str) -> float | None:
-    for key in ("threshold", "waitbuy_threshold"):
+    for key in ("threshold", "waitbuy_threshold", "buy_threshold"):
         if key in context:
             threshold = parse_condition_number(context.get(key))
             if threshold is not None:
@@ -262,7 +309,7 @@ def condition_context_threshold(context: dict, raw_condition: str) -> float | No
 
     params = context.get("condition_params")
     if isinstance(params, dict):
-        for key in ("threshold", "waitbuy_threshold"):
+        for key in ("threshold", "waitbuy_threshold", "buy_threshold"):
             if key in params:
                 threshold = parse_condition_number(params.get(key))
                 if threshold is not None:
@@ -272,7 +319,11 @@ def condition_context_threshold(context: dict, raw_condition: str) -> float | No
     if threshold is not None:
         return threshold
 
-    return waitbuy_threshold_from_key(raw_condition)
+    threshold = parse_buy_threshold_condition(raw_condition)
+    if threshold is not None:
+        return threshold
+
+    return waitbuy_threshold_from_key(raw_condition) or buy_threshold_from_key(raw_condition)
 
 
 def is_waitbuy_threshold_key(condition_key: str) -> bool:
@@ -280,12 +331,24 @@ def is_waitbuy_threshold_key(condition_key: str) -> bool:
     return raw == WAITBUY_THRESHOLD_CONDITION_KEY or waitbuy_threshold_from_key(raw) is not None
 
 
+def is_buy_threshold_key(condition_key: str) -> bool:
+    raw = str(condition_key or "").strip()
+    return raw == BUY_THRESHOLD_CONDITION_KEY or buy_threshold_from_key(raw) is not None
+
+
 def is_supported_condition_key(condition_key: str) -> bool:
-    return condition_key in SUPPORTED_CONDITION_KEYS or is_waitbuy_threshold_key(condition_key)
+    return (
+        condition_key in SUPPORTED_CONDITION_KEYS
+        or is_waitbuy_threshold_key(condition_key)
+        or is_buy_threshold_key(condition_key)
+    )
 
 
 def is_realtime_wave_condition_key(condition_key: str) -> bool:
-    return str(condition_key or "").strip() == WAITBUY_THRESHOLD_CONDITION_KEY
+    return str(condition_key or "").strip() in {
+        WAITBUY_THRESHOLD_CONDITION_KEY,
+        BUY_THRESHOLD_CONDITION_KEY,
+    }
 
 def resolve_condition_key(condition_logic: str) -> str:
     raw = (condition_logic or "").strip()
@@ -295,6 +358,9 @@ def resolve_condition_key(condition_logic: str) -> str:
 
     if raw == WAITBUY_THRESHOLD_CONDITION_KEY or waitbuy_threshold_from_key(raw) is not None:
         return WAITBUY_THRESHOLD_CONDITION_KEY
+
+    if raw == BUY_THRESHOLD_CONDITION_KEY or buy_threshold_from_key(raw) is not None:
+        return BUY_THRESHOLD_CONDITION_KEY
 
     normalized = normalize_condition_text(raw)
 
@@ -359,6 +425,9 @@ def resolve_condition_key(condition_logic: str) -> str:
     if is_waitbuy_threshold_condition(raw):
         return WAITBUY_THRESHOLD_CONDITION_KEY
 
+    if is_buy_threshold_condition(raw):
+        return BUY_THRESHOLD_CONDITION_KEY
+
     return raw
 
 
@@ -378,40 +447,67 @@ def resolve_template_support(template: dict) -> dict:
     }
 
 
-async def condition_waitbuy_over_threshold(context: dict, threshold: float, condition_key: str):
+def wave_metric_value_from_row(row: dict, metric: str):
+    if metric == "waitbuy":
+        return to_float(
+            row.get("waitbuy")
+            or row.get("waitBuy")
+            or row.get("wait_buy")
+            or row.get("cho_mua"),
+            default=None,
+        )
+    if metric == "buy":
+        return to_float(row.get("buy") or row.get("mua"), default=None)
+    return None
+
+
+def wave_metric_value_from_context(context: dict, metric: str):
+    if metric == "waitbuy":
+        return to_float(
+            context.get("waitbuy")
+            or context.get("waitBuy")
+            or context.get("wait_buy")
+            or context.get("cho_mua"),
+            default=None,
+        )
+    if metric == "buy":
+        return to_float(context.get("buy") or context.get("mua"), default=None)
+    return None
+
+
+def wave_metric_label(metric: str) -> str:
+    return "Mua" if metric == "buy" else "Cho mua"
+
+
+async def condition_wave_metric_over_threshold(context: dict, threshold: float, condition_key: str, metric: str):
     date = context.get("date")
+    label = wave_metric_label(metric)
 
     if not date:
         return {
             "ok": False,
             "matched": False,
             "condition_key": condition_key,
-            "message": f"Thieu date de kiem tra waitbuy > {threshold:g}",
+            "message": f"Thieu date de kiem tra {metric} > {threshold:g}",
         }
 
-    context_waitbuy = to_float(
-        context.get("waitbuy")
-        or context.get("waitBuy")
-        or context.get("wait_buy")
-        or context.get("cho_mua"),
-        default=None,
-    )
+    context_value = wave_metric_value_from_context(context, metric)
 
-    if context_waitbuy is not None:
-        matched = context_waitbuy > threshold
+    if context_value is not None:
+        matched = context_value > threshold
         return {
             "ok": True,
             "matched": matched,
             "condition_key": condition_key,
-            "condition": f"waitbuy > {threshold:g}",
+            "condition": f"{metric} > {threshold:g}",
             "data": {
                 "date": str(date)[:10],
-                "waitbuy": context_waitbuy,
+                metric: context_value,
                 "threshold": threshold,
                 "source": context.get("source") or "context",
             },
             "message": (
-                f"Cho mua hien o muc {context_waitbuy:g}, vuot nguong {threshold:g}"
+                f"{label} hien o muc {context_value:g}, vuot nguong {threshold:g}"
                 if matched
                 else "Khong dat dieu kien realtime wave"
             ),
@@ -439,29 +535,22 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
             "ok": False,
             "matched": False,
             "condition_key": condition_key,
-            "message": "Realtime wave chua co du lieu waitbuy",
+            "message": f"Realtime wave chua co du lieu {metric}",
             "raw": raw,
         }
 
     latest = rows[-1]
-
-    waitbuy = to_float(
-        latest.get("waitbuy")
-        or latest.get("waitBuy")
-        or latest.get("wait_buy")
-        or latest.get("cho_mua")
-    )
-
-    matched = waitbuy > threshold
+    metric_value = wave_metric_value_from_row(latest, metric)
+    matched = metric_value > threshold if metric_value is not None else False
 
     return {
         "ok": True,
         "matched": matched,
         "condition_key": condition_key,
-        "condition": f"waitbuy > {threshold:g}",
+        "condition": f"{metric} > {threshold:g}",
         "data": {
             "date": latest.get("date") or latest.get("tradingDate") or date,
-            "waitbuy": waitbuy,
+            metric: metric_value,
             "threshold": threshold,
             "source": raw.get("_source"),
             "sent_at": raw.get("_sentAt"),
@@ -471,11 +560,29 @@ async def condition_waitbuy_over_threshold(context: dict, threshold: float, cond
             "used_fallback_latest": bool(raw.get("_usedFallbackLatest")),
         },
         "message": (
-            f"Cho mua hien o muc {waitbuy:g}, vuot nguong {threshold:g}"
+            f"{label} hien o muc {metric_value:g}, vuot nguong {threshold:g}"
             if matched
             else "Khong dat dieu kien realtime wave"
         ),
     }
+
+
+async def condition_waitbuy_over_threshold(context: dict, threshold: float, condition_key: str):
+    return await condition_wave_metric_over_threshold(
+        context,
+        threshold=threshold,
+        condition_key=condition_key,
+        metric="waitbuy",
+    )
+
+
+async def condition_buy_over_threshold(context: dict, threshold: float, condition_key: str):
+    return await condition_wave_metric_over_threshold(
+        context,
+        threshold=threshold,
+        condition_key=condition_key,
+        metric="buy",
+    )
 
 
 
@@ -1456,19 +1563,24 @@ async def run_condition(template_id: int, context: dict):
     raw_condition = context.get("condition_key")
     condition_key = resolve_condition_key(raw_condition)
 
-    if condition_key == WAITBUY_THRESHOLD_CONDITION_KEY:
-        waitbuy_threshold = condition_context_threshold(context, raw_condition or "")
-        if waitbuy_threshold is None:
+    if condition_key in {WAITBUY_THRESHOLD_CONDITION_KEY, BUY_THRESHOLD_CONDITION_KEY}:
+        threshold = condition_context_threshold(context, raw_condition or "")
+        if threshold is None:
             return {
                 "ok": False,
                 "matched": False,
                 "condition_key": condition_key,
-                "message": "Thieu nguong X cho dieu kien waitbuy > X",
+                "message": "Thieu nguong X cho dieu kien realtime wave > X",
             }
 
-        return await condition_waitbuy_over_threshold(
+        handler = (
+            condition_buy_over_threshold
+            if condition_key == BUY_THRESHOLD_CONDITION_KEY
+            else condition_waitbuy_over_threshold
+        )
+        return await handler(
             context,
-            threshold=waitbuy_threshold,
+            threshold=threshold,
             condition_key=condition_key,
         )
     handler = CONDITION_HANDLERS.get(condition_key)
