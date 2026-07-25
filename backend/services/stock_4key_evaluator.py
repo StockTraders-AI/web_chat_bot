@@ -181,6 +181,17 @@ def _pick_target_date(
     target = requested_date[:10]
     ticker_dates = {point.date for point in ticker_points}
     branch_dates = {point.date for point in branch_points}
+    if target in ticker_dates and target in branch_dates:
+        return target
+
+    if target == date.today().isoformat():
+        fallback_dates = sorted(
+            item for item in (ticker_dates & branch_dates)
+            if item and item <= target
+        )
+        if fallback_dates:
+            return fallback_dates[-1]
+
     if target not in ticker_dates:
         raise Stock4KeyError(f"Khong co du lieu SMDT cua ma ngay {target}")
     if target not in branch_dates:

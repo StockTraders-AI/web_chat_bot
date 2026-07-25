@@ -219,6 +219,11 @@ def clean_chat_output(text: str) -> str:
         lambda match: f"{float(match.group(1).replace(',', '.')):.1f}%",
         fixed,
     )
+    fixed = re.sub(
+        r"\b(20\d{2})-(\d{2})-(\d{2})\b",
+        lambda match: f"{match.group(3)}/{match.group(2)}/{match.group(1)}",
+        fixed,
+    )
     return fixed.strip()
 
 

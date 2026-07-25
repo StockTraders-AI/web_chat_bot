@@ -444,11 +444,11 @@ def fallback_signal_card(
         ),
         "response": fit_signal_text_by_visible_chars(
             fallback_message,
-            target_visible_chars=200,
+            target_visible_chars=150,
         ),
         "recommendation": fit_signal_text_by_visible_chars(
             "Khuy\u1ebfn ngh\u1ecb: Theo d\u00f5i th\u00eam, ch\u1ec9 gi\u1ea3i ng\u00e2n th\u0103m d\u00f2 khi t\u00edn hi\u1ec7u x\u00e1c nh\u1eadn.",
-            target_visible_chars=100,
+            target_visible_chars=70,
         ),
     }
 
@@ -478,13 +478,13 @@ def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
         "response": fit_signal_text_by_visible_chars(
             parsed.get("response"),
             fallback["response"],
-            target_visible_chars=200,
+            target_visible_chars=150,
             pad_short=False,
         ),
         "recommendation": fit_signal_text_by_visible_chars(
             parsed.get("recommendation"),
             fallback["recommendation"],
-            target_visible_chars=100,
+            target_visible_chars=70,
         ),
     }
 
@@ -549,8 +549,8 @@ def repair_short_signal_card(card: dict, flow_name: str, condition_results: list
 
     return {
         "title": fit_signal_text_by_visible_chars(title, target_visible_chars=60),
-        "response": fit_signal_text_by_visible_chars(response, target_visible_chars=200),
-        "recommendation": fit_signal_text_by_visible_chars(recommendation, target_visible_chars=100),
+        "response": fit_signal_text_by_visible_chars(response, target_visible_chars=150),
+        "recommendation": fit_signal_text_by_visible_chars(recommendation, target_visible_chars=70),
     }
 
 
@@ -561,7 +561,7 @@ def build_signal_card_length_instruction(strict: bool = False) -> str:
         + "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
         "title, response, recommendation. "
         "Follow the admin prompt from UI for tone, wording, and exclusions. "
-        "Length is counted excluding whitespace. Target title 20-60 characters, response 90-200 characters, recommendation 35-100 characters. "
+        "Length is counted excluding whitespace. Target title 20-60 characters, response 90-150 characters, recommendation 35-70 characters. "
         "Do not produce telegraphic one-clause text. Historical-date output must be as complete as current-date output. "
         "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
         "Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. "
@@ -670,7 +670,7 @@ def parse_signal_response_ai_content(content: str, fallback_response: str) -> st
     return fit_signal_text_by_visible_chars(
         value,
         fallback_response,
-        target_visible_chars=200,
+        target_visible_chars=150,
         pad_short=False,
     )
 
@@ -714,7 +714,7 @@ def build_demo_flow_ai_response(
             "content": (
                 "Return only one valid JSON object, no markdown, with exactly one string field: "
                 "response. Follow the response prompt from UI for tone, wording, and exclusions. "
-                "Output length limit excluding whitespace: response at most 200 characters. "
+                "Output length limit excluding whitespace: response at most 150 characters. "
                 "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
                 "If the data contains a current waitbuy or buy value, mention that current value. "
                 "Do not mention the threshold when the admin prompt excludes it."
