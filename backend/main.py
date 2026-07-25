@@ -1,4 +1,4 @@
-import json, os
+import json, os, re
 from io import BytesIO
 from datetime import datetime
 from dotenv import load_dotenv
@@ -355,21 +355,61 @@ def count_visible_signal_chars(value: Any) -> int:
     return sum(1 for char in str(value or "") if not char.isspace())
 
 
+SIGNAL_DANGLING_WORDS = {
+    "va", "voi", "tu", "vao", "de", "khi", "neu", "cho", "cua", "ve", "trong", "theo", "tai",
+    "và", "với", "từ", "vào", "để", "khi", "nếu", "cho", "của", "về", "trong", "theo", "tại",
+}
+
+
+def close_signal_sentence(text: str, target_visible_chars: int) -> str:
+    text = " ".join(str(text or "").split()).strip(" ,;:")
+    words = text.split()
+    while words and words[-1].strip(".,!?;:").lower() in SIGNAL_DANGLING_WORDS:
+        words.pop()
+    text = " ".join(words).strip(" ,;:")
+    if not text:
+        return ""
+    if text[-1] in ".!?":
+        return text
+    if count_visible_signal_chars(text + ".") <= target_visible_chars:
+        return text + "."
+    return text
+
+
 def truncate_to_visible_signal_chars(text: str, target_visible_chars: int) -> str:
     if target_visible_chars <= 0:
         return ""
 
+    source = " ".join(str(text or "").split()).strip()
+    if count_visible_signal_chars(source) <= target_visible_chars:
+        return close_signal_sentence(source, target_visible_chars)
+
     visible_count = 0
     output: list[str] = []
 
-    for char in text:
+    for char in source:
         if not char.isspace():
             if visible_count >= target_visible_chars:
                 break
             visible_count += 1
         output.append(char)
 
-    return " ".join("".join(output).split()).strip()
+    clipped = " ".join("".join(output).split()).strip()
+    min_visible = max(24, int(target_visible_chars * 0.45))
+
+    for pattern in (r"[.!?]", r"[,;:]"):
+        matches = list(re.finditer(pattern, clipped))
+        for match in reversed(matches):
+            candidate = clipped[:match.start() if pattern == r"[,;:]" else match.end()].strip()
+            if count_visible_signal_chars(candidate) >= min_visible:
+                return close_signal_sentence(candidate, target_visible_chars)
+
+    if " " in clipped:
+        candidate = clipped.rsplit(" ", 1)[0]
+        if count_visible_signal_chars(candidate) >= min_visible:
+            return close_signal_sentence(candidate, target_visible_chars)
+
+    return close_signal_sentence(clipped, target_visible_chars)
 
 
 def build_visible_signal_filler(gap: int) -> str:
@@ -562,7 +602,7 @@ def build_signal_card_length_instruction(strict: bool = False) -> str:
         "title, response, recommendation. "
         "Follow the admin prompt from UI for tone, wording, and exclusions. "
         "Length is counted excluding whitespace. Target title 20-60 characters, response 90-150 characters, recommendation 35-70 characters. "
-        "Do not produce telegraphic one-clause text. Historical-date output must be as complete as current-date output. "
+        "Do not produce telegraphic one-clause text. Each field must read as a complete sentence or complete phrase, never a dangling fragment. Historical-date output must be as complete as current-date output. "
         "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
         "Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. "
         "If the data contains a current waitbuy or buy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
