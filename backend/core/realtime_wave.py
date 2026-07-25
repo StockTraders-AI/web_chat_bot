@@ -47,11 +47,22 @@ REALTIME_WAVE_BOOTSTRAP_URL = os.getenv(
     "http://45.251.114.164:5173/api/stock-wave-current",
 ).strip()
 REALTIME_WAVE_BOOTSTRAP_TIMEOUT = float(os.getenv("REALTIME_WAVE_BOOTSTRAP_TIMEOUT", "5") or 5)
+STOCK_WAVE_HISTORY_URL = os.getenv(
+    "STOCK_WAVE_HISTORY_URL",
+    "https://stocktraders.vn/service/data/getStockWave",
+).strip()
+STOCK_WAVE_HISTORY_ACCOUNT = os.getenv("STOCK_WAVE_HISTORY_ACCOUNT", "thao.dtt").strip()
 _wave_cache = {
     "payload": None,
     "rows": [],
     "sent_at": "",
     "received_at": "",
+}
+_wave_history_cache = {
+    "cache_key": "",
+    "rows": [],
+    "received_at": "",
+    "last_error": "",
 }
 _socket_task: asyncio.Task | None = None
 _socket_client = None
@@ -63,6 +74,10 @@ _last_bootstrap_at = ""
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _today_key() -> str:
+    return datetime.now(timezone.utc).date().isoformat()
 
 
 def _row_date(row: dict) -> str:
@@ -94,13 +109,14 @@ def _extract_wave_rows(data) -> list[dict]:
         if isinstance(value, list):
             return [item for item in value if isinstance(item, dict)]
 
-    nested = data.get("data")
-    if isinstance(nested, list):
-        return [item for item in nested if isinstance(item, dict)]
-    if isinstance(nested, dict):
-        rows = _extract_wave_rows(nested)
-        if rows:
-            return rows
+    for nested_key in ("data", "StockWaveRequest", "stockWaves", "payload"):
+        nested = data.get(nested_key)
+        if isinstance(nested, list):
+            return [item for item in nested if isinstance(item, dict)]
+        if isinstance(nested, dict):
+            rows = _extract_wave_rows(nested)
+            if rows:
+                return rows
 
     if any(key in data for key in ("waitbuy", "waitBuy", "wait_buy", "cho_mua", "cm", "buy", "mua", "mu")):
         return [data]
@@ -113,6 +129,10 @@ def clear_wave_cache():
     _wave_cache["rows"] = []
     _wave_cache["sent_at"] = ""
     _wave_cache["received_at"] = ""
+    _wave_history_cache["cache_key"] = ""
+    _wave_history_cache["rows"] = []
+    _wave_history_cache["received_at"] = ""
+    _wave_history_cache["last_error"] = ""
 
 
 def update_wave_payload(payload) -> bool:
@@ -167,13 +187,86 @@ async def bootstrap_wave_snapshot() -> bool:
     return loaded
 
 
+async def bootstrap_wave_history_snapshot() -> bool:
+    if not STOCK_WAVE_HISTORY_URL:
+        return False
+
+    cache_key = _today_key()
+    if _wave_history_cache["rows"] and _wave_history_cache["cache_key"] == cache_key:
+        return True
+
+    try:
+        async with httpx.AsyncClient(timeout=REALTIME_WAVE_BOOTSTRAP_TIMEOUT) as client:
+            res = await client.post(
+                STOCK_WAVE_HISTORY_URL,
+                json={"StockWaveRequest": {"account": STOCK_WAVE_HISTORY_ACCOUNT}},
+            )
+            res.raise_for_status()
+            payload = res.json()
+    except Exception as exc:
+        _wave_history_cache["last_error"] = str(exc)
+        return False
+
+    rows = _extract_wave_rows(payload)
+    if not rows:
+        _wave_history_cache["last_error"] = "history payload has no wave rows"
+        return False
+
+    _wave_history_cache["cache_key"] = cache_key
+    _wave_history_cache["rows"] = rows
+    _wave_history_cache["received_at"] = _utc_now()
+    _wave_history_cache["last_error"] = ""
+    return True
+
+
+def history_wave_snapshot(date: str | None = None) -> dict | None:
+    rows = [row for row in _wave_history_cache["rows"] if isinstance(row, dict)]
+    if not rows:
+        return None
+
+    requested_date = str(date or "")[:10]
+    selected_rows = rows
+
+    if requested_date:
+        selected_rows = [row for row in rows if _row_date(row) == requested_date]
+        if not selected_rows:
+            return None
+
+    selected_rows = sorted(selected_rows, key=_row_date)
+    return {
+        "name": "ALL",
+        "waveDatas": selected_rows,
+        "_source": "stock_wave_history",
+        "_sentAt": "",
+        "_receivedAt": _wave_history_cache["received_at"],
+        "_requestedDate": requested_date,
+        "_fallbackDate": "",
+        "_usedFallbackLatest": False,
+    }
+
+
 async def ensure_wave_snapshot(date: str | None = None) -> dict | None:
+    requested_date = str(date or "")[:10]
     snapshot = latest_wave_snapshot(date)
-    if snapshot:
+    if snapshot and (not requested_date or not snapshot.get("_usedFallbackLatest")):
         return snapshot
 
+    if requested_date and await bootstrap_wave_history_snapshot():
+        history_snapshot = history_wave_snapshot(requested_date)
+        if history_snapshot:
+            return history_snapshot
+
     await bootstrap_wave_snapshot()
-    return latest_wave_snapshot(date)
+    snapshot = latest_wave_snapshot(date)
+    if snapshot and (not requested_date or not snapshot.get("_usedFallbackLatest")):
+        return snapshot
+
+    if requested_date and await bootstrap_wave_history_snapshot():
+        history_snapshot = history_wave_snapshot(requested_date)
+        if history_snapshot:
+            return history_snapshot
+
+    return snapshot
 
 
 def latest_wave_snapshot(date: str | None = None) -> dict | None:
@@ -228,6 +321,10 @@ def wave_status() -> dict:
         "bootstrap_url": REALTIME_WAVE_BOOTSTRAP_URL,
         "bootstrap_at": _last_bootstrap_at,
         "bootstrap_error": _last_bootstrap_error,
+        "history_url": STOCK_WAVE_HISTORY_URL,
+        "history_row_count": len(_wave_history_cache["rows"]),
+        "history_received_at": _wave_history_cache["received_at"],
+        "history_error": _wave_history_cache["last_error"],
         "url": _socket_connect_url(),
         "namespace": REALTIME_NAMESPACE,
     }
