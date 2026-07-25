@@ -2877,45 +2877,6 @@ async function updateActiveFlowTriggerPrompt(id, value) {
 }
 
 
-async function logRealtimeWaveDebug(flowId, checkDate, demoResult) {
-  try {
-    const params = new URLSearchParams({ debug: "1" });
-    if (checkDate) params.set("date", checkDate);
-
-    const res = await fetch(`/condition-realtime/wave/status?${params.toString()}`, {
-      credentials: "same-origin",
-    });
-    const wave = await res.json().catch(() => ({}));
-
-    const debug = wave?.debug || {};
-    console.log("CONDITION_DEMO_SOCKET_DATA", {
-      flow_id: flowId,
-      check_date: checkDate,
-      condition_results: demoResult?.results || [],
-      socket: {
-        connected: Boolean(wave?.connected),
-        row_count: Number(wave?.row_count || 0),
-        latest_date: wave?.latest_date || "",
-        sent_at: wave?.sent_at || "",
-        received_at: wave?.received_at || "",
-        last_error: wave?.last_error || "",
-      },
-      raw_sample_rows: debug.sample_rows || [],
-      raw_latest_rows: debug.latest_rows || [],
-      selected_snapshot_rows: debug.snapshot_rows || [],
-      snapshot: {
-        requested_date: debug.snapshot_requested_date || debug.requested_date || "",
-        fallback_date: debug.snapshot_fallback_date || "",
-        used_fallback_latest: Boolean(debug.snapshot_used_fallback_latest),
-        row_count: Number(debug.snapshot_row_count || 0),
-      },
-      demo_result: demoResult,
-      wave,
-    });
-  } catch (error) {
-    console.warn("CONDITION_DEMO_SOCKET_DATA_FAILED", error);
-  }
-}
 
 function renderDemoCheckResult(result) {
   if (!result) return "";
@@ -3016,7 +2977,6 @@ async function demoCheckConditionFlow(id) {
         matched: false,
         results: [],
       };
-      await logRealtimeWaveDebug(id, checkDate, data);
       showToast(data?.detail || "Check demo thất bại", "error");
       return;
     }
@@ -3026,7 +2986,6 @@ async function demoCheckConditionFlow(id) {
       check_date: data.check_date || checkDate,
     };
 
-    await logRealtimeWaveDebug(id, checkDate, demoCheckResults[id]);
 
     if (data.matched) {
       showToast(`Đã gửi demo cho ${data.delivered_count || 0} user`);

@@ -509,7 +509,7 @@ def condition_results_wave_metric(condition_results: list[dict]) -> tuple[str, f
         data = result.get("data") if isinstance(result, dict) else None
         if not isinstance(data, dict):
             continue
-        buy = parse_public_float(data.get("buy") or data.get("mua"))
+        buy = parse_public_float(data.get("buy") or data.get("mua") or data.get("mu"))
         if buy is not None:
             return "buy", buy
         waitbuy = parse_public_float(
@@ -517,6 +517,7 @@ def condition_results_wave_metric(condition_results: list[dict]) -> tuple[str, f
             or data.get("waitBuy")
             or data.get("wait_buy")
             or data.get("cho_mua")
+            or data.get("cm")
         )
         if waitbuy is not None:
             return "waitbuy", waitbuy
@@ -899,12 +900,13 @@ def signal_wave_metric(signal_key: str | None) -> str | None:
 
 def wave_metric_value_from_data(data: dict, metric: str) -> float | None:
     if metric == "buy":
-        return parse_public_float(data.get("buy") or data.get("mua"))
+        return parse_public_float(data.get("buy") or data.get("mua") or data.get("mu"))
     return parse_public_float(
         data.get("waitbuy")
         or data.get("waitBuy")
         or data.get("wait_buy")
         or data.get("cho_mua")
+        or data.get("cm")
     )
 
 

@@ -102,7 +102,7 @@ def _extract_wave_rows(data) -> list[dict]:
         if rows:
             return rows
 
-    if any(key in data for key in ("waitbuy", "waitBuy", "wait_buy", "cho_mua")):
+    if any(key in data for key in ("waitbuy", "waitBuy", "wait_buy", "cho_mua", "cm", "buy", "mua", "mu")):
         return [data]
 
     return []

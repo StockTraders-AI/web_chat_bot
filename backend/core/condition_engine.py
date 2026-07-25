@@ -254,14 +254,14 @@ def is_threshold_operator_condition(text: str) -> bool:
 
 def is_waitbuy_threshold_condition(condition_logic: str) -> bool:
     text = normalize_logic_text(condition_logic)
-    if not re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua)\b", text):
+    if not re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua|ch\W*\s*mua)\b", text):
         return False
     return is_threshold_operator_condition(text)
 
 
 def is_buy_threshold_condition(condition_logic: str) -> bool:
     text = normalize_logic_text(condition_logic)
-    if re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua)\b", text):
+    if re.search(r"\b(?:wait\s*buy|waitbuy|cho\s*mua|ch\W*\s*mua)\b", text):
         return False
     if not re.search(r"\bmua\b", text):
         return False
@@ -453,11 +453,12 @@ def wave_metric_value_from_row(row: dict, metric: str):
             row.get("waitbuy")
             or row.get("waitBuy")
             or row.get("wait_buy")
-            or row.get("cho_mua"),
+            or row.get("cho_mua")
+            or row.get("cm"),
             default=None,
         )
     if metric == "buy":
-        return to_float(row.get("buy") or row.get("mua"), default=None)
+        return to_float(row.get("buy") or row.get("mua") or row.get("mu"), default=None)
     return None
 
 
@@ -467,11 +468,12 @@ def wave_metric_value_from_context(context: dict, metric: str):
             context.get("waitbuy")
             or context.get("waitBuy")
             or context.get("wait_buy")
-            or context.get("cho_mua"),
+            or context.get("cho_mua")
+            or context.get("cm"),
             default=None,
         )
     if metric == "buy":
-        return to_float(context.get("buy") or context.get("mua"), default=None)
+        return to_float(context.get("buy") or context.get("mua") or context.get("mu"), default=None)
     return None
 
 
@@ -636,7 +638,8 @@ def scan_vnindex_waitbuy_reversal(
             row.get("waitbuy")
             or row.get("waitBuy")
             or row.get("wait_buy")
-            or row.get("cho_mua"),
+            or row.get("cho_mua")
+            or row.get("cm"),
             default=None,
         )
         if date and waitbuy is not None:
