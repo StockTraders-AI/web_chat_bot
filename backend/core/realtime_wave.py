@@ -3,7 +3,7 @@ import importlib
 import inspect
 import os
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from urllib.parse import urlsplit, urlunsplit
 
 try:
@@ -47,6 +47,10 @@ REALTIME_WAVE_BOOTSTRAP_URL = os.getenv(
     "http://45.251.114.164:5173/api/stock-wave-current",
 ).strip()
 REALTIME_WAVE_BOOTSTRAP_TIMEOUT = float(os.getenv("REALTIME_WAVE_BOOTSTRAP_TIMEOUT", "5") or 5)
+STOCK_WAVE_HISTORY_CACHE_URL = os.getenv(
+    "STOCK_WAVE_HISTORY_CACHE_URL",
+    "http://45.251.114.164:5173/api/stock-wave-history",
+).strip()
 STOCK_WAVE_HISTORY_URL = os.getenv(
     "STOCK_WAVE_HISTORY_URL",
     "https://stocktraders.vn/service/data/getStockWave",
@@ -80,6 +84,14 @@ def _today_key() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
+def _next_date_key(date: str | None) -> str:
+    raw = str(date or "")[:10]
+    try:
+        return (datetime.strptime(raw, "%Y-%m-%d").date() + timedelta(days=1)).isoformat()
+    except Exception:
+        return _today_key()
+
+
 def _row_date(row: dict) -> str:
     return str(
         row.get("date")
@@ -104,6 +116,7 @@ def _extract_wave_rows(data) -> list[dict]:
         "records",
         "result",
         "results",
+        "allRows",
     ):
         value = data.get(key)
         if isinstance(value, list):
@@ -187,36 +200,55 @@ async def bootstrap_wave_snapshot() -> bool:
     return loaded
 
 
-async def bootstrap_wave_history_snapshot() -> bool:
-    if not STOCK_WAVE_HISTORY_URL:
-        return False
-
-    cache_key = _today_key()
+async def bootstrap_wave_history_snapshot(date: str | None = None) -> bool:
+    cache_key = f"{_today_key()}:{str(date or '')[:10]}"
     if _wave_history_cache["rows"] and _wave_history_cache["cache_key"] == cache_key:
         return True
 
-    try:
-        async with httpx.AsyncClient(timeout=REALTIME_WAVE_BOOTSTRAP_TIMEOUT) as client:
-            res = await client.post(
-                STOCK_WAVE_HISTORY_URL,
-                json={"StockWaveRequest": {"account": STOCK_WAVE_HISTORY_ACCOUNT}},
-            )
-            res.raise_for_status()
-            payload = res.json()
-    except Exception as exc:
-        _wave_history_cache["last_error"] = str(exc)
-        return False
+    errors = []
 
-    rows = _extract_wave_rows(payload)
-    if not rows:
-        _wave_history_cache["last_error"] = "history payload has no wave rows"
-        return False
+    if STOCK_WAVE_HISTORY_CACHE_URL:
+        try:
+            async with httpx.AsyncClient(timeout=REALTIME_WAVE_BOOTSTRAP_TIMEOUT) as client:
+                res = await client.get(
+                    STOCK_WAVE_HISTORY_CACHE_URL,
+                    params={"before": _next_date_key(date)},
+                )
+                res.raise_for_status()
+                payload = res.json()
+            rows = _extract_wave_rows(payload)
+            if rows:
+                _wave_history_cache["cache_key"] = cache_key
+                _wave_history_cache["rows"] = rows
+                _wave_history_cache["received_at"] = _utc_now()
+                _wave_history_cache["last_error"] = ""
+                return True
+            errors.append("history cache payload has no wave rows")
+        except Exception as exc:
+            errors.append(f"history cache: {exc}")
 
-    _wave_history_cache["cache_key"] = cache_key
-    _wave_history_cache["rows"] = rows
-    _wave_history_cache["received_at"] = _utc_now()
-    _wave_history_cache["last_error"] = ""
-    return True
+    if STOCK_WAVE_HISTORY_URL:
+        try:
+            async with httpx.AsyncClient(timeout=REALTIME_WAVE_BOOTSTRAP_TIMEOUT) as client:
+                res = await client.post(
+                    STOCK_WAVE_HISTORY_URL,
+                    json={"StockWaveRequest": {"account": STOCK_WAVE_HISTORY_ACCOUNT}},
+                )
+                res.raise_for_status()
+                payload = res.json()
+            rows = _extract_wave_rows(payload)
+            if rows:
+                _wave_history_cache["cache_key"] = cache_key
+                _wave_history_cache["rows"] = rows
+                _wave_history_cache["received_at"] = _utc_now()
+                _wave_history_cache["last_error"] = ""
+                return True
+            errors.append("history upstream payload has no wave rows")
+        except Exception as exc:
+            errors.append(f"history upstream: {exc}")
+
+    _wave_history_cache["last_error"] = "; ".join(errors) or "history is disabled"
+    return False
 
 
 def history_wave_snapshot(date: str | None = None) -> dict | None:
@@ -251,7 +283,7 @@ async def ensure_wave_snapshot(date: str | None = None) -> dict | None:
     if snapshot and (not requested_date or not snapshot.get("_usedFallbackLatest")):
         return snapshot
 
-    if requested_date and await bootstrap_wave_history_snapshot():
+    if requested_date and await bootstrap_wave_history_snapshot(requested_date):
         history_snapshot = history_wave_snapshot(requested_date)
         if history_snapshot:
             return history_snapshot
@@ -261,7 +293,7 @@ async def ensure_wave_snapshot(date: str | None = None) -> dict | None:
     if snapshot and (not requested_date or not snapshot.get("_usedFallbackLatest")):
         return snapshot
 
-    if requested_date and await bootstrap_wave_history_snapshot():
+    if requested_date and await bootstrap_wave_history_snapshot(requested_date):
         history_snapshot = history_wave_snapshot(requested_date)
         if history_snapshot:
             return history_snapshot
@@ -321,6 +353,7 @@ def wave_status() -> dict:
         "bootstrap_url": REALTIME_WAVE_BOOTSTRAP_URL,
         "bootstrap_at": _last_bootstrap_at,
         "bootstrap_error": _last_bootstrap_error,
+        "history_cache_url": STOCK_WAVE_HISTORY_CACHE_URL,
         "history_url": STOCK_WAVE_HISTORY_URL,
         "history_row_count": len(_wave_history_cache["rows"]),
         "history_received_at": _wave_history_cache["received_at"],
