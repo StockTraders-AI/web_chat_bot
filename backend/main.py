@@ -488,6 +488,81 @@ def parse_signal_card_ai_content(content: str, fallback: dict) -> dict:
     }
 
 
+def signal_card_length_too_short(card: dict | None) -> bool:
+    if not card:
+        return True
+
+    title = card.get("title") or ""
+    response = card.get("response") or card.get("message") or ""
+    recommendation = card.get("recommendation") or ""
+
+    return (
+        count_visible_signal_chars(title) < 20
+        or count_visible_signal_chars(response) < 90
+        or count_visible_signal_chars(recommendation) < 35
+    )
+
+
+def condition_results_waitbuy(condition_results: list[dict]) -> float | None:
+    for result in condition_results or []:
+        data = result.get("data") if isinstance(result, dict) else None
+        if not isinstance(data, dict):
+            continue
+        waitbuy = parse_public_float(
+            data.get("waitbuy")
+            or data.get("waitBuy")
+            or data.get("wait_buy")
+            or data.get("cho_mua")
+        )
+        if waitbuy is not None:
+            return waitbuy
+    return None
+
+
+def repair_short_signal_card(card: dict, flow_name: str, condition_results: list[dict]) -> dict:
+    waitbuy = condition_results_waitbuy(condition_results)
+    waitbuy_text = f"{waitbuy:g}" if waitbuy is not None else "cao"
+
+    title = card.get("title") or ""
+    response = card.get("response") or card.get("message") or ""
+    recommendation = card.get("recommendation") or ""
+
+    if count_visible_signal_chars(title) < 20:
+        title = flow_name or "T\u00edn hi\u1ec7u Ch\u1edd mua t\u0103ng cao \u0111\u00e1ng ch\u00fa \u00fd"
+    if count_visible_signal_chars(title) < 20:
+        title = "T\u00edn hi\u1ec7u Ch\u1edd mua t\u0103ng cao \u0111\u00e1ng ch\u00fa \u00fd"
+
+    if count_visible_signal_chars(response) < 90:
+        response = (
+            f"Ch\u1edd mua hi\u1ec7n \u1edf m\u1ee9c {waitbuy_text}, cho th\u1ea5y l\u1ef1c b\u00e1n suy y\u1ebfu v\u00e0 d\u00f2ng ti\u1ec1n b\u1eaft \u0111\u1ea7u quay l\u1ea1i. "
+            "T\u00edn hi\u1ec7u n\u00e0y nghi\u00eang v\u1ec1 v\u00f9ng d\u00f2 \u0111\u00e1y s\u1edbm, nh\u01b0ng v\u1eabn c\u1ea7n th\u00eam x\u00e1c nh\u1eadn t\u1eeb di\u1ec5n bi\u1ebfn th\u1ecb tr\u01b0\u1eddng."
+        )
+
+    if count_visible_signal_chars(recommendation) < 35:
+        recommendation = "Xem x\u00e9t gi\u1ea3i ng\u00e2n th\u0103m d\u00f2, \u0111\u1ed3ng th\u1eddi ch\u1edd t\u00edn hi\u1ec7u x\u00e1c nh\u1eadn r\u00f5 h\u01a1n."
+
+    return {
+        "title": fit_signal_text_by_visible_chars(title, target_visible_chars=60),
+        "response": fit_signal_text_by_visible_chars(response, target_visible_chars=200),
+        "recommendation": fit_signal_text_by_visible_chars(recommendation, target_visible_chars=100),
+    }
+
+
+def build_signal_card_length_instruction(strict: bool = False) -> str:
+    prefix = "The previous output was too short. " if strict else ""
+    return (
+        prefix
+        + "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
+        "title, response, recommendation. "
+        "Follow the admin prompt from UI for tone, wording, and exclusions. "
+        "Length is counted excluding whitespace. Target title 20-60 characters, response 90-200 characters, recommendation 35-100 characters. "
+        "Do not produce telegraphic one-clause text. Historical-date output must be as complete as current-date output. "
+        "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
+        "Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. "
+        "If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
+    )
+
+
 def build_demo_flow_ai_signal(
     flow_name: str,
     condition_results: list[dict],
@@ -529,12 +604,7 @@ def build_demo_flow_ai_signal(
         )
         messages.append({
             "role": "user",
-            "content": (
-                "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
-                "title, response, recommendation. "
-                "Follow the admin prompt from UI for tone, wording, and exclusions. "
-                "Output length limits excluding whitespace: title at most 60 characters, response at most 200 characters, recommendation at most 100 characters. Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. If the data contains a current waitbuy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
-            ),
+            "content": build_signal_card_length_instruction(strict=False),
         })
         resp = client.chat(
             model=DEFAULT_MODEL,
@@ -543,8 +613,26 @@ def build_demo_flow_ai_signal(
             tool_choice="auto",
         )
         content = (resp.choices[0].message.content or "").strip()
+        signal_card = parse_signal_card_ai_content(content, fallback)
 
-        return parse_signal_card_ai_content(content, fallback)
+        if signal_card_length_too_short(signal_card):
+            retry_messages = messages + [
+                {"role": "assistant", "content": content},
+                {"role": "user", "content": build_signal_card_length_instruction(strict=True)},
+            ]
+            retry_resp = client.chat(
+                model=DEFAULT_MODEL,
+                messages=retry_messages,
+                tools=None,
+                tool_choice="auto",
+            )
+            retry_content = (retry_resp.choices[0].message.content or "").strip()
+            retry_card = parse_signal_card_ai_content(retry_content, fallback)
+            if not signal_card_length_too_short(retry_card):
+                return retry_card
+            return repair_short_signal_card(retry_card, flow_name, condition_results)
+
+        return signal_card
     except Exception as exc:
         print("DEMO_FLOW_AI_MESSAGE_ERROR:", exc)
         return fallback
@@ -791,6 +879,26 @@ def parse_public_float(value: Any) -> float | None:
         return float(str(value).strip().replace(",", "."))
     except Exception:
         return None
+
+
+def cached_signal_waitbuy_matches(signal: dict | None, waitbuy_value: float | None) -> bool:
+    if not signal or waitbuy_value is None:
+        return False
+
+    for result in signal.get("condition_results") or []:
+        data = result.get("data") if isinstance(result, dict) else None
+        if not isinstance(data, dict):
+            continue
+        cached_waitbuy = parse_public_float(
+            data.get("waitbuy")
+            or data.get("waitBuy")
+            or data.get("wait_buy")
+            or data.get("cho_mua")
+        )
+        if cached_waitbuy is not None:
+            return abs(cached_waitbuy - waitbuy_value) < 0.000001
+
+    return False
 
 
 async def build_public_historical_waitbuy_signal(
@@ -1972,17 +2080,22 @@ async def public_latest_condition_signal(
 ):
     signal_key = normalize_public_signal_key(signal_key)
     requested_check_date = (check_date or date or "").strip()
+    requested_waitbuy = parse_public_float(waitbuy)
     signal = await memory.get_latest_condition_signal(
         signal_key=signal_key,
         flow_id=flow_id,
         check_date=requested_check_date or None,
     )
-    if not signal and requested_check_date:
+    if requested_check_date and (
+        not signal
+        or signal_card_length_too_short(signal)
+        or (requested_waitbuy is not None and not cached_signal_waitbuy_matches(signal, requested_waitbuy))
+    ):
         signal = await build_public_historical_waitbuy_signal(
             requested_signal_key=signal_key,
             requested_flow_id=flow_id,
             check_date=requested_check_date,
-            waitbuy_value=parse_public_float(waitbuy),
+            waitbuy_value=requested_waitbuy,
         )
     title = signal.get("title") if signal else None
     response = signal.get("message") if signal else None
