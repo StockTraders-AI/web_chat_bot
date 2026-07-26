@@ -109,13 +109,36 @@ class APIExecutor:
         log("IMPLICIT CURRENT QUERY -> COERCE DATE:", date_value, "->", today)
         return coerced
 
+    def _is_no_data_payload(self, value: Any) -> bool:
+        if not isinstance(value, dict):
+            return False
+        text = " ".join(
+            str(value.get(key) or "")
+            for key in ("detail", "message", "text", "error")
+        ).lower()
+        return bool(text) and any(
+            marker in text
+            for marker in (
+                "no data",
+                "no matching",
+                "khong co du lieu",
+                "kh\u00f4ng c\u00f3 d\u1eef li\u1ec7u",
+                "chua co du lieu",
+                "ch\u01b0a c\u00f3 d\u1eef li\u1ec7u",
+            )
+        )
+
     def _is_effectively_empty(self, value: Any) -> bool:
         if value is None:
             return True
         if isinstance(value, list):
             return len(value) == 0
         if isinstance(value, dict):
-            if value.get("error") or value.get("unsupported_ticker"):
+            if value.get("unsupported_ticker"):
+                return False
+            if self._is_no_data_payload(value):
+                return True
+            if value.get("error"):
                 return False
             domain_keys = (
                 "data", "items", "records", "results", "result", "smdts", "cashFlows",
@@ -435,16 +458,22 @@ class APIExecutor:
                     log("STATUS AFTER PATH:", response.status_code)
 
             if not response.ok:
+                if self._should_retry_previous_dates(operation_id, args, data, user_text):
+                    fallback_response, fallback_data = self._execute_previous_date_fallback(url, method, args, data)
+                    if fallback_response is not None:
+                        response = fallback_response
+                        data = fallback_data
 
-                log("❌ HTTP ERROR:", response.status_code)
+                if not response.ok:
+                    log("HTTP ERROR:", response.status_code)
 
-                return {
-                    "error": "HTTP error",
-                    "status_code": response.status_code,
-                    "text": response.text[:500]
-                }
+                    return {
+                        "error": "HTTP error",
+                        "status_code": response.status_code,
+                        "text": response.text[:500]
+                    }
 
-            data = self._safe_parse_json(response)
+            data = self._safe_parse_json(response) if not isinstance(data, (dict, list)) else data
 
             if self._should_retry_cashflow_without_date(operation_id, args, data, user_text):
                 fallback_response, fallback_data = self._execute_cashflow_without_date_fallback(url, method, args, data)
