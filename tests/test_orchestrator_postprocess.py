@@ -1,4 +1,6 @@
 import json
+from datetime import datetime
+from types import SimpleNamespace
 import sys
 import unittest
 from pathlib import Path
@@ -16,6 +18,9 @@ from core.orchestrator import (
     latest_stock_4key_payload,
     recent_user_questions_from_messages,
     build_recent_user_questions_context,
+    build_contextual_user_text,
+    build_resolved_contextual_question,
+    latest_lookup_date_in_text,
     should_force_rules,
     is_stock_related,
     _find_branch_drop_payload,
@@ -80,6 +85,22 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("09/04/2025", context)
         self.assertIn("thieu ngay", context)
 
+    def test_resolved_contextual_question_carries_date_for_wave_confirmation(self):
+        resolved = build_resolved_contextual_question(
+            "co xac nhan chan song khong?",
+            ["cho mua ngay 9/4/2025 bao nhieu?"],
+        )
+
+        self.assertEqual(resolved, "Ngay 09/04/2025, co xac nhan chan song khong?")
+
+    def test_resolved_contextual_question_does_not_carry_date_for_definition(self):
+        resolved = build_resolved_contextual_question(
+            "song lon la gi?",
+            ["cho mua ngay 9/4/2025 bao nhieu?"],
+        )
+
+        self.assertEqual(resolved, "song lon la gi?")
+
     async def test_chat_stream_returns_supported_case_description_before_rag(self):
         class FakeMemory:
             def __init__(self):
@@ -132,6 +153,70 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Song lon la mo ta do admin cau hinh.", prompt)
         self.assertIn("Khong nhac den admin", prompt)
 
+    def test_latest_lookup_date_prefers_nearest_recent_question(self):
+        context_text = build_contextual_user_text(
+            "co xac nhan chan song khong?",
+            [
+                "cho mua ngay 01/04/2025 bao nhieu?",
+                "cho mua ngay 09/04/2025 bao nhieu?",
+            ],
+        )
+
+        self.assertEqual(latest_lookup_date_in_text(context_text), "2025-04-09")
+
+    def test_get_analyze_wave_tool_uses_date_from_recent_question_context(self):
+        class FakeOA:
+            def chat(self, **kwargs):
+                today = datetime.now().strftime("%Y-%m-%d")
+                message = SimpleNamespace(
+                    content="",
+                    tool_calls=[SimpleNamespace(
+                        id="tc1",
+                        function=SimpleNamespace(
+                            name="getAnalyzeWave",
+                            arguments=json.dumps({"date": today}),
+                        ),
+                    )],
+                )
+                return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+        class FakeExecutor:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, operation_id, args, doc_name=None, user_text=None):
+                self.calls.append({
+                    "operation_id": operation_id,
+                    "args": dict(args),
+                    "doc_name": doc_name,
+                    "user_text": user_text,
+                })
+                return {"message": "ok"}
+
+        executor = FakeExecutor()
+        orch = Orchestrator.__new__(Orchestrator)
+        orch.oa = FakeOA()
+        orch.executor = executor
+        orch.registry = SimpleNamespace(tools=[{
+            "type": "function",
+            "function": {"name": "getAnalyzeWave", "parameters": {}},
+        }])
+        context_text = build_contextual_user_text(
+            "co xac nhan chan song khong?",
+            ["cho mua ngay 09/04/2025 bao nhieu?"],
+        )
+
+        _, final_text = orch._run_tool_loop(
+            "gpt-4o",
+            [{"role": "system", "content": ""}, {"role": "user", "content": context_text}],
+            enable_tools=True,
+            current_doc="doc",
+            user_text=context_text,
+        )
+
+        self.assertEqual(final_text, "ok")
+        self.assertEqual(executor.calls[0]["args"]["date"], "2025-04-09")
+
     async def test_build_base_messages_injects_matching_case_description(self):
         class FakeMemory:
             async def recent_messages(self, user_id):
@@ -166,10 +251,15 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         )
 
         system_text = messages[0]["content"]
+        user_text = messages[-1]["content"]
         self.assertIn("CASE PROMPT DO ADMIN THIET LAP", system_text)
         self.assertIn("Song lon la prompt rieng admin muon AI dung de tra loi.", system_text)
         self.assertIn("LICH SU 3 CAU HOI USER GAN NHAT", system_text)
         self.assertIn("09/04/2025", system_text)
+        self.assertIn("LICH SU 3 CAU HOI USER GAN NHAT", user_text)
+        self.assertIn("09/04/2025", user_text)
+        self.assertIn("CAU HOI HIEN TAI", user_text)
+        self.assertNotIn("CAU HOI DA HIEU THEO NGU CANH", user_text)
         self.assertFalse(enable_tools)
         self.assertEqual(sources, [])
         self.assertEqual(allowed_apis, [])

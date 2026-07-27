@@ -743,12 +743,83 @@ def build_recent_user_questions_context(questions: List[str]) -> str:
     return "\n".join(lines)
 
 
+def format_vn_lookup_date(date_value: str) -> str:
+    try:
+        return datetime.strptime(date_value, "%Y-%m-%d").strftime("%d/%m/%Y")
+    except Exception:
+        return date_value
+
+
+def build_resolved_contextual_question(user_text: str, recent_questions: List[str]) -> str:
+    current = str(user_text or "").strip()
+    if not current or is_definition_query(current):
+        return current
+    if has_explicit_calendar_date_text(current) and _normalize_waitbuy_lookup_date(current):
+        return current
+
+    context_text = "\n".join(str(q or "") for q in recent_questions or [])
+    carried_date = latest_lookup_date_in_text(context_text)
+    if not carried_date:
+        return current
+
+    normalized_current = normalize_search_text(current)
+    needs_carried_date = any(
+        phrase in normalized_current
+        for phrase in (
+            "xac nhan chan song",
+            "chan song",
+            "cho mua",
+            "cho ban",
+            "co xac nhan",
+            "co khong",
+        )
+    )
+    if not needs_carried_date:
+        return current
+
+    return f"Ngay {format_vn_lookup_date(carried_date)}, {current}"
+
+
 def build_contextual_user_text(user_text: str, recent_questions: List[str]) -> str:
     context = build_recent_user_questions_context(recent_questions)
     current = str(user_text or "").strip()
     if not context:
         return current
-    return context + "\n\nCAU HOI HIEN TAI:\n" + current
+    resolved = build_resolved_contextual_question(current, recent_questions)
+    if resolved == current:
+        return context + "\n\nCAU HOI HIEN TAI:\n" + current
+    return (
+        context
+        + "\n\nCAU HOI DA HIEU THEO NGU CANH:\n"
+        + resolved
+        + "\n\nCAU HOI GOC:\n"
+        + current
+    )
+
+
+def has_explicit_calendar_date_text(text: str) -> bool:
+    normalized = normalize_search_text(text)
+    if not normalized:
+        return False
+    return bool(
+        re.search(r"\b20\d{2}[-/]\d{1,2}([-/]\d{1,2})?\b", normalized)
+        or re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", normalized)
+        or re.search(r"\bngay\s+\d{1,2}\b", normalized)
+        or re.search(r"\bthang\s+\d{1,2}\b", normalized)
+        or re.search(r"\bnam\s+20\d{2}\b", normalized)
+    )
+
+
+def latest_lookup_date_in_text(text: str) -> Optional[str]:
+    latest_date = None
+    for line in str(text or "").splitlines():
+        if not has_explicit_calendar_date_text(line):
+            continue
+        date_value = _normalize_waitbuy_lookup_date(line)
+        if date_value:
+            latest_date = date_value
+    return latest_date
+
 
 
 def is_stock_related(text: str) -> bool:
@@ -1240,6 +1311,7 @@ class Orchestrator:
             raw_user_text,
             limit=3,
         )
+        contextual_user_text = build_contextual_user_text(raw_user_text, recent_user_questions)
         history = []
 
         # ======================================
@@ -1389,7 +1461,7 @@ class Orchestrator:
         # Current user message
         messages.append({
             "role": "user",
-            "content": raw_user_text
+            "content": contextual_user_text
         })
 
         enable_tools = (query_source == "RULES" and stock_related)
@@ -1492,6 +1564,15 @@ class Orchestrator:
                     args = json.loads(tc.function.arguments or "{}")
                 except Exception:
                     args = {}
+
+                if op_name == "getAnalyzeWave":
+                    carried_date = latest_lookup_date_in_text(user_text)
+                    if carried_date and not _normalize_waitbuy_lookup_date(str(args.get("date") or "")):
+                        args = dict(args)
+                        args["date"] = carried_date
+                    elif carried_date and str(args.get("date") or "") == datetime.now().strftime("%Y-%m-%d"):
+                        args = dict(args)
+                        args["date"] = carried_date
 
                 result = self.executor.call(op_name, args, doc_name=current_doc, user_text=user_text)
 
@@ -1754,6 +1835,9 @@ Yêu cầu:
             user_text,
             limit=3,
         )
+        contextual_user_text = build_contextual_user_text(user_text, recent_user_questions)
+        has_user_lookup_date = has_explicit_calendar_date_text(user_text) and _normalize_waitbuy_lookup_date(user_text)
+        tool_policy_user_text = user_text if has_user_lookup_date else contextual_user_text
 
         if find_disallowed_tickers(user_text):
             final_text = "Mã được hỏi không nằm trong danh sách mã được hệ thống hỗ trợ."
@@ -1869,7 +1953,7 @@ Yêu cầu:
             enable_tools=enable_tools,
             allowed_apis=allowed_apis,
             current_doc=current_doc,
-            user_text=user_text,
+            user_text=tool_policy_user_text,
         )
         final_text = ensure_stock_4key_section(final_text, loop_messages)
         final_text = enforce_main_branch_terms(final_text)
