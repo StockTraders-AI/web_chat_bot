@@ -2172,31 +2172,177 @@ def unique_signal_keys(keys: list[str | None]) -> list[str]:
     return output
 
 
-def do_song_advice_signal_keys(payload: DoSongAdviceIn) -> list[str]:
+def do_song_engine_signal_keys(payload: DoSongAdviceIn) -> list[str]:
     engine = payload.engine or {}
-    wave = payload.wave or {}
-    ma_trang_thai = str(engine.get("maTrangThai") or "")
-    keys = list(payload.signal_keys or [])
+    keys = ["do_song_engine"]
+    ma_trang_thai = str(engine.get("maTrangThai") or "").strip().lower()
+    if ma_trang_thai:
+        keys.append(f"do_song_state_{ma_trang_thai}")
 
-    if ma_trang_thai in {"S3", "S4"}:
-        keys.append("buy_over_threshold")
-    if ma_trang_thai in {"S1", "S2", "S4"}:
-        keys.append("waitbuy_over_threshold")
-
-    buy_value = parse_public_float(wave.get("mua") or wave.get("buy") or wave.get("mu"))
-    waitbuy_value = parse_public_float(wave.get("choMua") or wave.get("waitbuy") or wave.get("cm"))
-    if buy_value is not None and buy_value >= 25:
-        keys.append("buy_over_threshold")
-    if waitbuy_value is not None and waitbuy_value > 0:
-        keys.append("waitbuy_over_threshold")
+    pha = normalize_chat_text(str(engine.get("pha") or ""))
+    phase_map = {
+        "dieu chinh": "dieu_chinh",
+        "tich luy": "tich_luy",
+        "chan song": "chan_song",
+        "song tang": "song_tang",
+        "phan phoi": "phan_phoi",
+    }
+    if pha in phase_map:
+        keys.append(f"do_song_phase_{phase_map[pha]}")
 
     return unique_signal_keys(keys)
 
 
-async def find_do_song_prompt_flow(signal_keys: list[str]) -> dict | None:
-    if not signal_keys:
-        return None
+def do_song_entry_signal_keys(payload: DoSongAdviceIn) -> list[str]:
+    state = str((payload.engine or {}).get("maTrangThai") or "").strip().lower()
+    if state == "s3":
+        return ["buy_over_threshold"]
+    if state == "s2":
+        return ["waitbuy_over_threshold"]
+    return []
 
+
+def do_song_advice_signal_keys(payload: DoSongAdviceIn) -> list[str]:
+    payload_keys = [
+        key
+        for key in unique_signal_keys(payload.signal_keys or [])
+        if key not in {"buy_over_threshold", "waitbuy_over_threshold"}
+    ]
+    return unique_signal_keys([
+        *do_song_entry_signal_keys(payload),
+        *payload_keys,
+        *do_song_engine_signal_keys(payload),
+    ])
+
+
+def resolve_do_song_condition_key(condition_logic: str) -> str:
+    raw = str(condition_logic or "").strip()
+    normalized = normalize_chat_text(raw)
+    compact = normalized.replace(" ", "_")
+
+    if compact in {
+        "do_song_engine",
+        "do_song_state_s0", "do_song_state_s1", "do_song_state_s2", "do_song_state_s3", "do_song_state_s4",
+        "do_song_state_s5", "do_song_state_s6", "do_song_state_s7", "do_song_state_sn",
+        "do_song_phase_dieu_chinh", "do_song_phase_tich_luy", "do_song_phase_chan_song",
+        "do_song_phase_song_tang", "do_song_phase_phan_phoi",
+    }:
+        return compact
+
+    for state in ("s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "sn"):
+        if "do song" in normalized and state in normalized:
+            return f"do_song_state_{state}"
+        if "ma trang thai" in normalized and state in normalized:
+            return f"do_song_state_{state}"
+
+    phase_aliases = {
+        "dieu chinh": "dieu_chinh",
+        "tich luy": "tich_luy",
+        "chan song": "chan_song",
+        "song tang": "song_tang",
+        "phan phoi": "phan_phoi",
+    }
+    for label, key in phase_aliases.items():
+        if ("do song" in normalized or "pha" in normalized) and label in normalized:
+            return f"do_song_phase_{key}"
+
+    if "do song" in normalized or "dosong" in normalized:
+        return "do_song_engine"
+
+    return ""
+
+
+def do_song_condition_result(condition_key: str, payload: DoSongAdviceIn, template: dict | None = None) -> dict:
+    current_keys = do_song_engine_signal_keys(payload)
+    matched = condition_key in current_keys
+    engine = payload.engine or {}
+    return {
+        "ok": True,
+        "matched": matched,
+        "condition_key": condition_key,
+        "condition": condition_key,
+        "data": {
+            "date": payload.check_date,
+            "maTrangThai": engine.get("maTrangThai"),
+            "pha": engine.get("pha"),
+            "tieuDe": engine.get("tieuDe"),
+        },
+        "message": "Do song engine condition matched" if matched else "Do song engine condition not matched",
+        "template_id": template.get("id") if template else None,
+        "template_name": template.get("name") if template else None,
+    }
+
+
+def do_song_condition_context(payload: DoSongAdviceIn, condition_key: str) -> dict:
+    wave = payload.wave or {}
+    return {
+        "date": payload.check_date,
+        "condition_key": condition_key,
+        "waitbuy": wave.get("choMua") or wave.get("waitbuy") or wave.get("cm"),
+        "buy": wave.get("mua") or wave.get("buy") or wave.get("mu"),
+        "waitsell": wave.get("choBan") or wave.get("waitsell") or wave.get("cb"),
+        "sell": wave.get("ban") or wave.get("sell") or wave.get("ba"),
+        "source": "do_song_engine",
+    }
+
+
+async def evaluate_do_song_prompt_flow(flow: dict, templates: list[dict], templates_by_id: dict[int, dict], payload: DoSongAdviceIn) -> tuple[bool, list[str]]:
+    refs = resolve_flow_condition_refs(flow.get("expression") or "", templates)
+    if not refs:
+        return False, []
+
+    condition_results = []
+    matches = {}
+    resolved_keys = []
+
+    for ref in refs:
+        template_id = int(ref["id"])
+        template = templates_by_id.get(template_id)
+        if not template:
+            matches[template_id] = False
+            continue
+
+        condition_logic = template_condition_key(template)
+        resolved = resolve_condition_key(condition_logic) or resolve_do_song_condition_key(condition_logic)
+        if not resolved:
+            matches[template_id] = False
+            continue
+
+        resolved_keys.append(resolved)
+        entry_keys = do_song_entry_signal_keys(payload)
+        if resolved in {"buy_over_threshold", "waitbuy_over_threshold"} and resolved not in entry_keys:
+            result = {
+                "ok": True,
+                "matched": False,
+                "condition_key": resolved,
+                "condition": condition_logic,
+                "data": {
+                    "date": payload.check_date,
+                    "maTrangThai": (payload.engine or {}).get("maTrangThai"),
+                    "pha": (payload.engine or {}).get("pha"),
+                },
+                "message": "Entry condition is only active on its matching Do Song state",
+                "template_id": template_id,
+                "template_name": template.get("name"),
+            }
+        elif resolved.startswith("do_song_"):
+            result = do_song_condition_result(resolved, payload, template)
+        else:
+            result = await run_condition(
+                template_id=template_id,
+                context=do_song_condition_context(payload, condition_logic),
+            )
+            result["template_id"] = template_id
+            result["template_name"] = template.get("name")
+
+        matches[template_id] = bool(result.get("matched"))
+        condition_results.append(result)
+
+    return evaluate_flow_expression(flow_refs_expression(refs), matches), resolved_keys
+
+
+async def find_do_song_prompt_flow(payload: DoSongAdviceIn, signal_keys: list[str]) -> dict | None:
+    priority_keys = do_song_advice_signal_keys(payload)
     flows = await memory.list_condition_flows()
     templates = await memory.list_condition_templates()
     templates_by_id = {
@@ -2204,29 +2350,29 @@ async def find_do_song_prompt_flow(signal_keys: list[str]) -> dict | None:
         for template in templates
         if str(template.get("id", "")).isdigit()
     }
+    matched_candidates: list[tuple[int, int, dict]] = []
 
-    for desired_key in signal_keys:
-        for flow in flows:
-            if not is_active_condition_flow(flow):
-                continue
-            refs = resolve_flow_condition_refs(flow.get("expression") or "", templates)
-            if not refs:
-                continue
-            resolved_keys = []
-            for ref in refs:
-                template = templates_by_id.get(int(ref["id"]))
-                if not template:
-                    continue
-                resolved = resolve_condition_key(template_condition_key(template))
-                if resolved:
-                    resolved_keys.append(resolved)
-            if not resolved_keys:
-                continue
-            flow_signal_key = signal_key_from_condition_keys(resolved_keys)
+    for flow in flows:
+        if not is_active_condition_flow(flow):
+            continue
+
+        matched, resolved_keys = await evaluate_do_song_prompt_flow(flow, templates, templates_by_id, payload)
+        if not matched or not resolved_keys:
+            continue
+
+        flow_signal_key = signal_key_from_condition_keys(resolved_keys)
+        priority = len(priority_keys)
+        for index, desired_key in enumerate(priority_keys):
             if desired_key == flow_signal_key or desired_key in resolved_keys:
-                return flow
+                priority = index
+                break
+        matched_candidates.append((priority, int(flow.get("id") or 0), flow))
 
-    return None
+    if not matched_candidates:
+        return None
+
+    matched_candidates.sort(key=lambda item: (item[0], item[1]))
+    return matched_candidates[0][2]
 
 
 def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, signal_keys: list[str]) -> str:
@@ -2277,7 +2423,7 @@ def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, sign
 async def public_do_song_advice(payload: DoSongAdviceIn):
     fallback = do_song_advice_fallback(payload)
     signal_keys = do_song_advice_signal_keys(payload)
-    flow = await find_do_song_prompt_flow(signal_keys)
+    flow = await find_do_song_prompt_flow(payload, signal_keys)
     engine = payload.engine or {}
 
     try:
