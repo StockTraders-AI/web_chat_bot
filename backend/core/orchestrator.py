@@ -736,48 +736,11 @@ def build_recent_user_questions_context(questions: List[str]) -> str:
         return ""
 
     lines = [
-        "LICH SU 3 CAU HOI USER GAN NHAT - DUNG LAM NGU CANH:",
-        "Neu cau hoi hien tai thieu ngay, ma co phieu, nganh, chu de, hoac dung dai tu nhu 'no', 'do', 'phien do', hay suy ra tu cac cau hoi gan nhat nay.",
+        "LICH SU 3 CAU HOI USER GAN NHAT - CHI DUNG THAM KHAO NGU CANH:",
+        "Khong tu sua cau hoi hien tai, khong tu doi thuat ngu/chi so nhu SMDT va dong tien. Chi dung lich su khi cau hoi hien tai noi ro dang hoi tiep cung ngay, ma, nganh, hoac chu de.",
     ]
     lines.extend(f"{index}. {question}" for index, question in enumerate(clean_questions, start=1))
     return "\n".join(lines)
-
-
-def format_vn_lookup_date(date_value: str) -> str:
-    try:
-        return datetime.strptime(date_value, "%Y-%m-%d").strftime("%d/%m/%Y")
-    except Exception:
-        return date_value
-
-
-def build_resolved_contextual_question(user_text: str, recent_questions: List[str]) -> str:
-    current = str(user_text or "").strip()
-    if not current or is_definition_query(current):
-        return current
-    if has_explicit_calendar_date_text(current) and _normalize_waitbuy_lookup_date(current):
-        return current
-
-    context_text = "\n".join(str(q or "") for q in recent_questions or [])
-    carried_date = latest_lookup_date_in_text(context_text)
-    if not carried_date:
-        return current
-
-    normalized_current = normalize_search_text(current)
-    needs_carried_date = any(
-        phrase in normalized_current
-        for phrase in (
-            "xac nhan chan song",
-            "chan song",
-            "cho mua",
-            "cho ban",
-            "co xac nhan",
-            "co khong",
-        )
-    )
-    if not needs_carried_date:
-        return current
-
-    return f"Ngay {format_vn_lookup_date(carried_date)}, {current}"
 
 
 def build_contextual_user_text(user_text: str, recent_questions: List[str]) -> str:
@@ -785,16 +748,7 @@ def build_contextual_user_text(user_text: str, recent_questions: List[str]) -> s
     current = str(user_text or "").strip()
     if not context:
         return current
-    resolved = build_resolved_contextual_question(current, recent_questions)
-    if resolved == current:
-        return context + "\n\nCAU HOI HIEN TAI:\n" + current
-    return (
-        context
-        + "\n\nCAU HOI DA HIEU THEO NGU CANH:\n"
-        + resolved
-        + "\n\nCAU HOI GOC:\n"
-        + current
-    )
+    return context + "\n\nCAU HOI HIEN TAI - GIU NGUYEN VAN BAN USER:\n" + current
 
 
 def has_explicit_calendar_date_text(text: str) -> bool:

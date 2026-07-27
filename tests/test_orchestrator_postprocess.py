@@ -19,7 +19,6 @@ from core.orchestrator import (
     recent_user_questions_from_messages,
     build_recent_user_questions_context,
     build_contextual_user_text,
-    build_resolved_contextual_question,
     latest_lookup_date_in_text,
     should_force_rules,
     is_stock_related,
@@ -83,23 +82,7 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         context = build_recent_user_questions_context(["cho mua ngay 09/04/2025 bao nhieu?"])
 
         self.assertIn("09/04/2025", context)
-        self.assertIn("thieu ngay", context)
-
-    def test_resolved_contextual_question_carries_date_for_wave_confirmation(self):
-        resolved = build_resolved_contextual_question(
-            "co xac nhan chan song khong?",
-            ["cho mua ngay 9/4/2025 bao nhieu?"],
-        )
-
-        self.assertEqual(resolved, "Ngay 09/04/2025, co xac nhan chan song khong?")
-
-    def test_resolved_contextual_question_does_not_carry_date_for_definition(self):
-        resolved = build_resolved_contextual_question(
-            "song lon la gi?",
-            ["cho mua ngay 9/4/2025 bao nhieu?"],
-        )
-
-        self.assertEqual(resolved, "song lon la gi?")
+        self.assertIn("Khong tu sua cau hoi", context)
 
     async def test_chat_stream_returns_supported_case_description_before_rag(self):
         class FakeMemory:
@@ -258,7 +241,8 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("09/04/2025", system_text)
         self.assertIn("LICH SU 3 CAU HOI USER GAN NHAT", user_text)
         self.assertIn("09/04/2025", user_text)
-        self.assertIn("CAU HOI HIEN TAI", user_text)
+        self.assertIn("CAU HOI HIEN TAI - GIU NGUYEN VAN BAN USER", user_text)
+        self.assertIn("Dinh nghia song lon la gi?", user_text)
         self.assertNotIn("CAU HOI DA HIEU THEO NGU CANH", user_text)
         self.assertFalse(enable_tools)
         self.assertEqual(sources, [])
