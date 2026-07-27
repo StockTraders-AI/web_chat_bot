@@ -208,6 +208,13 @@ class SalesDiscoveryTargetIn(BaseModel):
 class SalesDiscoveryTargetReorderIn(BaseModel):
     direction: str
 
+
+class DoSongAdviceIn(BaseModel):
+    check_date: str = ""
+    signal_keys: list[str] = []
+    wave: Dict[str, Any] = {}
+    engine: Dict[str, Any] = {}
+
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
@@ -2132,6 +2139,178 @@ async def condition_realtime_wave_restart(
         "ok": True,
         "before": before,
         "after": after,
+    }
+
+
+def do_song_advice_fallback(payload: DoSongAdviceIn) -> dict:
+    engine = payload.engine or {}
+    return {
+        "title": fit_signal_text_by_visible_chars(
+            engine.get("tieuDe"),
+            "Do song market advice",
+            target_visible_chars=60,
+        ),
+        "response": fit_signal_text_by_visible_chars(
+            engine.get("dienGiai"),
+            "Market money flow needs more confirmation before a new state is clear.",
+            target_visible_chars=150,
+        ),
+        "recommendation": fit_signal_text_by_visible_chars(
+            engine.get("hanhDong"),
+            "Keep portfolio discipline and wait for a clearer signal.",
+            target_visible_chars=70,
+        ),
+    }
+
+
+def unique_signal_keys(keys: list[str | None]) -> list[str]:
+    output = []
+    for key in keys:
+        normalized = normalize_public_signal_key(key)
+        if normalized and normalized not in output:
+            output.append(normalized)
+    return output
+
+
+def do_song_advice_signal_keys(payload: DoSongAdviceIn) -> list[str]:
+    engine = payload.engine or {}
+    wave = payload.wave or {}
+    ma_trang_thai = str(engine.get("maTrangThai") or "")
+    keys = list(payload.signal_keys or [])
+
+    if ma_trang_thai in {"S3", "S4"}:
+        keys.append("buy_over_threshold")
+    if ma_trang_thai in {"S1", "S2", "S4"}:
+        keys.append("waitbuy_over_threshold")
+
+    buy_value = parse_public_float(wave.get("mua") or wave.get("buy") or wave.get("mu"))
+    waitbuy_value = parse_public_float(wave.get("choMua") or wave.get("waitbuy") or wave.get("cm"))
+    if buy_value is not None and buy_value >= 25:
+        keys.append("buy_over_threshold")
+    if waitbuy_value is not None and waitbuy_value > 0:
+        keys.append("waitbuy_over_threshold")
+
+    return unique_signal_keys(keys)
+
+
+async def find_do_song_prompt_flow(signal_keys: list[str]) -> dict | None:
+    if not signal_keys:
+        return None
+
+    flows = await memory.list_condition_flows()
+    templates = await memory.list_condition_templates()
+    templates_by_id = {
+        int(template["id"]): template
+        for template in templates
+        if str(template.get("id", "")).isdigit()
+    }
+
+    for desired_key in signal_keys:
+        for flow in flows:
+            if not is_active_condition_flow(flow):
+                continue
+            refs = resolve_flow_condition_refs(flow.get("expression") or "", templates)
+            if not refs:
+                continue
+            resolved_keys = []
+            for ref in refs:
+                template = templates_by_id.get(int(ref["id"]))
+                if not template:
+                    continue
+                resolved = resolve_condition_key(template_condition_key(template))
+                if resolved:
+                    resolved_keys.append(resolved)
+            if not resolved_keys:
+                continue
+            flow_signal_key = signal_key_from_condition_keys(resolved_keys)
+            if desired_key == flow_signal_key or desired_key in resolved_keys:
+                return flow
+
+    return None
+
+
+def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, signal_keys: list[str]) -> str:
+    engine = payload.engine or {}
+    wave = payload.wave or {}
+    title_prompt = str((flow or {}).get("trigger_title") or "Rewrite engine.tieuDe into the title field.").strip()
+    response_prompt = str((flow or {}).get("trigger_prompt") or "Rewrite engine.dienGiai into the response field.").strip()
+    recommendation_prompt = str((flow or {}).get("trigger_recommendation") or "Rewrite engine.hanhDong into the recommendation field.").strip()
+    docs_prompt = combine_trigger_docs((flow or {}).get("trigger_docs"), (flow or {}).get("trigger_docs_file_text")) if flow else ""
+
+    return "\n".join([
+        "Return one valid JSON object only, no markdown, with exactly 3 string fields: title, response, recommendation.",
+        "The Do Song engine output is the source of truth. Do not change maTrangThai, pha, or the core meaning.",
+        "Field mapping must be followed:",
+        "- title = rewrite engine.tieuDe using the title prompt and docs.",
+        "- response = rewrite engine.dienGiai using the response prompt and docs.",
+        "- recommendation = rewrite engine.hanhDong using the recommendation prompt and docs.",
+        "Do not copy prompts or docs verbatim; use them only for tone, vocabulary, and StockTradersAI context.",
+        build_signal_card_length_instruction(strict=False),
+        "Selected step-3 prompts and docs:",
+        json.dumps({
+            "flow_id": (flow or {}).get("id"),
+            "flow_name": (flow or {}).get("name"),
+            "signal_keys": signal_keys,
+            "title_prompt": title_prompt,
+            "response_prompt": response_prompt,
+            "recommendation_prompt": recommendation_prompt,
+            "docs": compact_signal_text(docs_prompt, "", max_chars=8000),
+        }, ensure_ascii=False),
+        "Do Song engine context:",
+        json.dumps({
+            "check_date": payload.check_date,
+            "wave": wave,
+            "engine": {
+                "maTrangThai": engine.get("maTrangThai"),
+                "pha": engine.get("pha"),
+                "tieuDe": engine.get("tieuDe"),
+                "dienGiai": engine.get("dienGiai"),
+                "hanhDong": engine.get("hanhDong"),
+                "tinCay": engine.get("tinCay"),
+                "dacTrung": engine.get("dacTrung"),
+            },
+        }, ensure_ascii=False),
+    ])
+
+
+@app.post("/public/do-song-advice")
+async def public_do_song_advice(payload: DoSongAdviceIn):
+    fallback = do_song_advice_fallback(payload)
+    signal_keys = do_song_advice_signal_keys(payload)
+    flow = await find_do_song_prompt_flow(signal_keys)
+    engine = payload.engine or {}
+
+    try:
+        client = OpenAIClient()
+        resp = client.chat(
+            model=DEFAULT_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are StockTraders AI. Write concise Vietnamese market advice based strictly on the provided Do Song engine output.",
+                },
+                {"role": "user", "content": build_do_song_advice_prompt(payload, flow, signal_keys)},
+            ],
+            tools=None,
+            tool_choice="auto",
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        card = parse_signal_card_ai_content(content, fallback)
+    except Exception as exc:
+        print("DO_SONG_ADVICE_ERROR:", exc)
+        card = fallback
+
+    return {
+        "ok": True,
+        "title": card.get("title"),
+        "response": card.get("response"),
+        "recommendation": card.get("recommendation"),
+        "check_date": payload.check_date or None,
+        "source": "do_song_engine",
+        "flow_id": flow.get("id") if flow else None,
+        "signal_keys": signal_keys,
+        "maTrangThai": engine.get("maTrangThai"),
+        "pha": engine.get("pha"),
     }
 
 
