@@ -703,6 +703,54 @@ def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def recent_user_questions_from_messages(
+    messages: List[Dict[str, Any]],
+    current_user_text: str,
+    limit: int = 3,
+) -> List[str]:
+    questions: List[str] = []
+    skipped_current = False
+    current_norm = " ".join(str(current_user_text or "").split())
+
+    for message in reversed(messages or []):
+        if message.get("role") != "user":
+            continue
+        content = " ".join(str(message.get("content") or "").split()).strip()
+        if not content:
+            continue
+        if not skipped_current and current_norm and content == current_norm:
+            skipped_current = True
+            continue
+        questions.append(content)
+        if len(questions) >= limit:
+            break
+
+    questions.reverse()
+    return questions
+
+
+def build_recent_user_questions_context(questions: List[str]) -> str:
+    clean_questions = [" ".join(str(q or "").split()).strip() for q in questions or []]
+    clean_questions = [q for q in clean_questions if q]
+    if not clean_questions:
+        return ""
+
+    lines = [
+        "LICH SU 3 CAU HOI USER GAN NHAT - DUNG LAM NGU CANH:",
+        "Neu cau hoi hien tai thieu ngay, ma co phieu, nganh, chu de, hoac dung dai tu nhu 'no', 'do', 'phien do', hay suy ra tu cac cau hoi gan nhat nay.",
+    ]
+    lines.extend(f"{index}. {question}" for index, question in enumerate(clean_questions, start=1))
+    return "\n".join(lines)
+
+
+def build_contextual_user_text(user_text: str, recent_questions: List[str]) -> str:
+    context = build_recent_user_questions_context(recent_questions)
+    current = str(user_text or "").strip()
+    if not context:
+        return current
+    return context + "\n\nCAU HOI HIEN TAI:\n" + current
+
+
 def is_stock_related(text: str) -> bool:
     t = (text or "").lower()
     normalized = normalize_search_text(text)
@@ -1159,14 +1207,19 @@ class Orchestrator:
 
         return raw
 
-    async def _find_matching_case_idea(self, user_text: str) -> Optional[Dict[str, Any]]:
+    async def _find_matching_case_idea(
+        self,
+        user_text: str,
+        recent_user_questions: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
         try:
             case_ideas = await self.memory.list_case_ideas()
         except Exception as exc:
             print("CASE_IDEA_MATCH_ERROR:", exc)
             return None
 
-        return find_matching_case_idea(user_text, case_ideas)
+        match_text = build_contextual_user_text(user_text, recent_user_questions or [])
+        return find_matching_case_idea(match_text, case_ideas)
 
     async def build_base_messages(
         self,
@@ -1182,32 +1235,12 @@ class Orchestrator:
 
         print("QUERY SOURCE:", query_source)
         history_all = await self.memory.recent_messages(user_id)
-
-        def is_semantically_related(current: str, previous: str) -> bool:
-            if not previous:
-                return False
-
-            cur_words = set(current.lower().split())
-            prev_words = set(previous.lower().split())
-
-            stop = {"là","bao","nhiêu","có","không","k","gì","sao","thì","vậy"}
-            cur_words -= stop
-            prev_words -= stop
-
-            overlap = cur_words.intersection(prev_words)
-
-            return len(overlap) >= 2
-
-
+        recent_user_questions = recent_user_questions_from_messages(
+            history_all,
+            raw_user_text,
+            limit=3,
+        )
         history = []
-
-        if history_all:
-            recent_candidates = history_all[-3:]
-
-            for h in reversed(recent_candidates):
-                if is_semantically_related(raw_user_text, h["content"]):
-                    history = history_all[-3:] 
-                    break
 
         # ======================================
         # STOCK RELATED DETECTION
@@ -1265,6 +1298,10 @@ class Orchestrator:
             system_parts.append(f"Today is {today_str}")
         else:
             system_parts.append(f"Ngày hiện tại là {today_str}")
+
+        recent_user_context = build_recent_user_questions_context(recent_user_questions)
+        if recent_user_context:
+            system_parts.append(recent_user_context)
 
         sources = []
 
@@ -1324,7 +1361,7 @@ class Orchestrator:
                     "KHUNG PHÂN TÍCH NỘI BỘ STOCKTRADERS AI:\n" + refs
                 )
 
-        matched_case_idea = await self._find_matching_case_idea(raw_user_text)
+        matched_case_idea = await self._find_matching_case_idea(raw_user_text, recent_user_questions)
         if matched_case_idea:
             print("CASE IDEA MATCH:", matched_case_idea.get("id"), matched_case_idea.get("name"))
             system_parts.append(build_case_idea_prompt(matched_case_idea))
@@ -1712,6 +1749,11 @@ Yêu cầu:
             return {"sources": sources, "usage": current_token_usage()}
 
         await self.memory.add(user_id, "user", user_text)
+        recent_user_questions = recent_user_questions_from_messages(
+            await self.memory.recent_messages(user_id),
+            user_text,
+            limit=3,
+        )
 
         if find_disallowed_tickers(user_text):
             final_text = "Mã được hỏi không nằm trong danh sách mã được hệ thống hỗ trợ."
@@ -1723,7 +1765,7 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        matched_case_idea = await self._find_matching_case_idea(user_text)
+        matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
         if matched_case_idea:
             final_text = clean_chat_output(
                 sanitize_response_text(str(matched_case_idea.get("description") or "").strip())

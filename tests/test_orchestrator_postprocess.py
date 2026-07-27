@@ -14,6 +14,8 @@ from core.orchestrator import (
     format_branch_drop_answer,
     format_stock_4key_answer,
     latest_stock_4key_payload,
+    recent_user_questions_from_messages,
+    build_recent_user_questions_context,
     should_force_rules,
     is_stock_related,
     _find_branch_drop_payload,
@@ -57,6 +59,27 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(matched)
 
+    def test_recent_user_questions_keeps_three_previous_user_turns(self):
+        messages = [
+            {"role": "user", "content": "cau 1"},
+            {"role": "assistant", "content": "tra loi 1"},
+            {"role": "user", "content": "cau 2"},
+            {"role": "user", "content": "cau 3"},
+            {"role": "assistant", "content": "tra loi 3"},
+            {"role": "user", "content": "cau 4"},
+            {"role": "user", "content": "cau hien tai"},
+        ]
+
+        questions = recent_user_questions_from_messages(messages, "cau hien tai", limit=3)
+
+        self.assertEqual(questions, ["cau 2", "cau 3", "cau 4"])
+
+    def test_recent_user_questions_context_mentions_date_carryover_rule(self):
+        context = build_recent_user_questions_context(["cho mua ngay 09/04/2025 bao nhieu?"])
+
+        self.assertIn("09/04/2025", context)
+        self.assertIn("thieu ngay", context)
+
     async def test_chat_stream_returns_supported_case_description_before_rag(self):
         class FakeMemory:
             def __init__(self):
@@ -64,6 +87,13 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
 
             async def add(self, user_id, role, content):
                 self.messages.append({"user_id": user_id, "role": role, "content": content})
+
+            async def recent_messages(self, user_id):
+                return [
+                    {"role": item["role"], "content": item["content"]}
+                    for item in self.messages
+                    if item["user_id"] == user_id
+                ]
 
             async def list_case_ideas(self):
                 return [{
@@ -105,7 +135,11 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
     async def test_build_base_messages_injects_matching_case_description(self):
         class FakeMemory:
             async def recent_messages(self, user_id):
-                return []
+                return [
+                    {"role": "user", "content": "cho mua ngay 09/04/2025 bao nhieu?"},
+                    {"role": "assistant", "content": "Phien 09/04/2025 co 231 co phieu cho mua."},
+                    {"role": "user", "content": "Dinh nghia song lon la gi?"},
+                ]
 
             async def list_case_ideas(self):
                 return [{
@@ -134,6 +168,8 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         system_text = messages[0]["content"]
         self.assertIn("CASE PROMPT DO ADMIN THIET LAP", system_text)
         self.assertIn("Song lon la prompt rieng admin muon AI dung de tra loi.", system_text)
+        self.assertIn("LICH SU 3 CAU HOI USER GAN NHAT", system_text)
+        self.assertIn("09/04/2025", system_text)
         self.assertFalse(enable_tools)
         self.assertEqual(sources, [])
         self.assertEqual(allowed_apis, [])
