@@ -28,12 +28,14 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
                 "name": "Phan tich co phieu",
                 "indicators": "SMDT ma",
                 "description": "Mo ta phan tich co phieu.",
+                "status": "supported",
             },
             {
                 "id": 2,
                 "name": "Dinh nghia song lon",
                 "indicators": "song lon, chan song lon",
                 "description": "Song lon la trang thai thi truong co dong tien xac nhan manh.",
+                "status": "supported",
             },
         ]
 
@@ -42,11 +44,25 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(matched)
         self.assertEqual(matched["id"], 2)
 
+    def test_waiting_case_does_not_match_until_checked_green(self):
+        cases = [{
+            "id": 2,
+            "name": "Dinh nghia song lon",
+            "indicators": "song lon",
+            "description": "Song lon la prompt rieng admin muon AI dung de tra loi.",
+            "status": "waiting",
+        }]
+
+        matched = find_matching_case_idea("song lon la gi", cases)
+
+        self.assertIsNone(matched)
+
     def test_case_prompt_contains_admin_description(self):
         prompt = build_case_idea_prompt({
             "name": "Dinh nghia song lon",
             "indicators": "song lon",
             "description": "Song lon la mo ta do admin cau hinh.",
+            "status": "supported",
         })
 
         self.assertIn("Mo ta/prompt cua case", prompt)
@@ -64,6 +80,7 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
                     "name": "Dinh nghia song lon",
                     "indicators": "song lon, chan song lon",
                     "description": "Song lon la prompt rieng admin muon AI dung de tra loi.",
+                    "status": "supported",
                 }]
 
         class FakeRag:

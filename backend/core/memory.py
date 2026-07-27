@@ -1477,17 +1477,23 @@ class MemoryStore:
             )
             await db.commit()
 
-    async def set_case_idea_supported(self, case_id: int):
+    async def set_case_idea_status(self, case_id: int, status: str):
+        if status not in {"waiting", "supported"}:
+            raise ValueError("Invalid case idea status")
+
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
                 """
                 UPDATE case_ideas
-                SET status='supported', updated_at=CURRENT_TIMESTAMP
+                SET status=?, updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
                 """,
-                (case_id,),
+                (status, case_id),
             )
             await db.commit()
+
+    async def set_case_idea_supported(self, case_id: int):
+        await self.set_case_idea_status(case_id, "supported")
 
     async def delete_case_idea(self, case_id: int):
         async with aiosqlite.connect(self.db_path) as db:

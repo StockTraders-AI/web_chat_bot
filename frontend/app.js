@@ -1078,9 +1078,8 @@ function renderCaseIdeas() {
           <button
             type="button"
             class="${supported ? "flow-confirmed" : "flow-unconfirmed"}"
-            title="${supported ? "Dev đã hỗ trợ" : "Chờ dev hỗ trợ"}"
+            title="${supported ? "Đang bật prompt case - bấm để tắt" : "Chưa bật prompt case - bấm để bật"}"
             onclick="confirmCaseIdea(${item.id})"
-            ${supported ? "disabled" : ""}
           >✓</button>
           <button type="button" title="Xóa" onclick="deleteCaseIdea(${item.id})">×</button>
         </div>
@@ -1140,21 +1139,27 @@ async function saveCaseIdea() {
 }
 
 async function confirmCaseIdea(id) {
-  const ok = confirm("Đánh dấu case này là dev đã hỗ trợ?");
+  const item = caseIdeas.find((caseIdea) => Number(caseIdea.id) === Number(id));
+  const supported = item?.status === "supported";
+  const message = supported
+    ? "Tắt case này để AI không dùng mô tả làm prompt nữa?"
+    : "Bật case này để AI dùng mô tả làm prompt trả lời?";
+  const ok = confirm(message);
   if (!ok) return;
 
   const res = await fetch(`/case-ideas/${id}/confirm`, {
     method: "POST",
     credentials: "same-origin",
   });
+  const data = await res.json().catch(() => ({}));
 
   if (!res.ok) {
-    showToast("Xác nhận case thất bại", "error");
+    showToast(data?.detail || "Cập nhật trạng thái case thất bại", "error");
     return;
   }
 
   await loadCaseIdeas();
-  showToast("Đã đánh dấu case được hỗ trợ");
+  showToast(data.status === "supported" ? "Đã bật prompt case" : "Đã tắt prompt case");
 }
 
 async function deleteCaseIdea(id) {

@@ -2625,9 +2625,10 @@ async def confirm_case_idea(
     if not case:
         raise HTTPException(status_code=404, detail="Không tìm thấy case")
 
-    await memory.set_case_idea_supported(case_id)
+    next_status = "waiting" if case.get("status") == "supported" else "supported"
+    await memory.set_case_idea_status(case_id, next_status)
 
-    return {"ok": True}
+    return {"ok": True, "status": next_status}
 
 
 @app.delete("/case-ideas/{case_id}")

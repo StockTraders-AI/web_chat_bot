@@ -613,6 +613,9 @@ def split_case_idea_indicators(text: str) -> List[str]:
 
 
 def score_case_idea_match(user_text: str, case_idea: Dict[str, Any]) -> int:
+    if str(case_idea.get("status") or "") != "supported":
+        return 0
+
     description = str(case_idea.get("description") or "").strip()
     if not description:
         return 0
