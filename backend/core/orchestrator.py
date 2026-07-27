@@ -587,6 +587,118 @@ def is_definition_query(text: str) -> bool:
         return False
     return not any(phrase in normalized for phrase in DATA_INTENT_PHRASES)
 
+CASE_IDEA_STOPWORDS = {
+    "anh", "chi", "ban", "toi", "em", "minh", "hay", "noi", "ro", "hoi", "ve",
+    "la", "gi", "nghia", "dinh", "khai", "niem", "hieu", "the", "nao", "giai",
+    "thich", "phan", "tich", "case", "mot", "cac", "nhung", "trong", "cho",
+    "duoc", "khong", "ko", "k", "va", "hoac", "cua", "stocktraders", "ai",
+}
+
+CASE_IDEA_MIN_SCORE = 45
+
+
+def case_idea_tokens(text: str) -> List[str]:
+    normalized = normalize_search_text(text)
+    tokens = re.findall(r"[a-z0-9]+", normalized)
+    return [
+        token
+        for token in tokens
+        if len(token) > 1 and token not in CASE_IDEA_STOPWORDS
+    ]
+
+
+def split_case_idea_indicators(text: str) -> List[str]:
+    parts = re.split(r"[,;\n/|]+", text or "")
+    return [part.strip() for part in parts if part.strip()]
+
+
+def score_case_idea_match(user_text: str, case_idea: Dict[str, Any]) -> int:
+    description = str(case_idea.get("description") or "").strip()
+    if not description:
+        return 0
+
+    user_norm = normalize_search_text(user_text)
+    if not user_norm:
+        return 0
+
+    user_token_set = set(case_idea_tokens(user_text))
+    score = 0
+
+    name = str(case_idea.get("name") or "").strip()
+    name_norm = normalize_search_text(name)
+    name_tokens = case_idea_tokens(name)
+    name_token_set = set(name_tokens)
+
+    if name_norm and name_norm in user_norm:
+        score += 80
+
+    name_key_phrase = " ".join(name_tokens)
+    if name_key_phrase and name_key_phrase in user_norm:
+        score += 60
+
+    if name_token_set:
+        overlap = name_token_set.intersection(user_token_set)
+        if overlap == name_token_set:
+            score += 50 + len(overlap) * 2
+        elif len(overlap) >= min(2, len(name_token_set)):
+            score += 25 + len(overlap) * 2
+
+    for indicator in split_case_idea_indicators(str(case_idea.get("indicators") or "")):
+        indicator_norm = normalize_search_text(indicator)
+        indicator_tokens = set(case_idea_tokens(indicator))
+        if not indicator_norm or not indicator_tokens:
+            continue
+        if indicator_norm in user_norm:
+            score += 40
+        elif indicator_tokens.issubset(user_token_set):
+            score += 25
+
+    desc_tokens = set(case_idea_tokens(description))
+    desc_overlap = desc_tokens.intersection(user_token_set)
+    if len(desc_overlap) >= 2:
+        score += min(20, len(desc_overlap) * 3)
+
+    return score
+
+
+def find_matching_case_idea(user_text: str, case_ideas: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    best_case: Optional[Dict[str, Any]] = None
+    best_score = 0
+
+    for case_idea in case_ideas or []:
+        score = score_case_idea_match(user_text, case_idea)
+        if score > best_score:
+            best_score = score
+            best_case = case_idea
+
+    if best_case and best_score >= CASE_IDEA_MIN_SCORE:
+        return best_case
+
+    return None
+
+
+def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
+    name = str(case_idea.get("name") or "").strip()
+    indicators = str(case_idea.get("indicators") or "").strip()
+    description = str(case_idea.get("description") or "").strip()
+
+    parts = [
+        "CASE PROMPT DO ADMIN THIET LAP - UU TIEN CHO CAU HOI HIEN TAI:",
+        f"Ten case: {name}",
+    ]
+    if indicators:
+        parts.append(f"Tu khoa/chi so nhan dien: {indicators}")
+    parts.extend([
+        "Mo ta/prompt cua case:",
+        description,
+        "Quy tac bat buoc khi case nay khop:",
+        "- Lay mo ta/prompt cua case lam ngu canh chinh de tra loi cau hoi user.",
+        "- Duoc viet lai cho tu nhien, ngan gon, de hieu; khong copy may moc neu khong can.",
+        "- Khong nhac den admin, case, prompt noi bo, database hay man hinh thiet lap.",
+        "- Khong bia them ngoai mo ta case neu cau hoi la dinh nghia/giai thich.",
+    ])
+    return "\n".join(parts)
+
 
 def is_stock_related(text: str) -> bool:
     t = (text or "").lower()
@@ -1044,6 +1156,15 @@ class Orchestrator:
 
         return raw
 
+    async def _find_matching_case_idea(self, user_text: str) -> Optional[Dict[str, Any]]:
+        try:
+            case_ideas = await self.memory.list_case_ideas()
+        except Exception as exc:
+            print("CASE_IDEA_MATCH_ERROR:", exc)
+            return None
+
+        return find_matching_case_idea(user_text, case_ideas)
+
     async def build_base_messages(
         self,
         user_id: str,
@@ -1199,6 +1320,11 @@ class Orchestrator:
                 system_parts.append(
                     "KHUNG PHÂN TÍCH NỘI BỘ STOCKTRADERS AI:\n" + refs
                 )
+
+        matched_case_idea = await self._find_matching_case_idea(raw_user_text)
+        if matched_case_idea:
+            print("CASE IDEA MATCH:", matched_case_idea.get("id"), matched_case_idea.get("name"))
+            system_parts.append(build_case_idea_prompt(matched_case_idea))
 
         system_text = "\n\n".join(system_parts)
 

@@ -612,7 +612,8 @@ def build_signal_card_length_instruction(strict: bool = False) -> str:
         "Do not produce telegraphic one-clause text. Each field must read as a complete sentence or complete phrase, never a dangling fragment. Historical-date output must be as complete as current-date output. "
         "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
         "Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. "
-        "If the data contains a current waitbuy or buy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it."
+        "If the data contains a current waitbuy or buy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it. "
+        "Terminology rule: waitbuy/Cho mua/Ch? mua is a signal level, not a number of tickers; write Cho mua/Ch? mua ??t m?c X or ? m?c X, never X m? or X c? phi?u for waitbuy."
     )
 
 
@@ -2391,6 +2392,7 @@ def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, sign
         "- response = rewrite engine.dienGiai using the response prompt and docs.",
         "- recommendation = rewrite engine.hanhDong using the recommendation prompt and docs.",
         "Do not copy prompts or docs verbatim; use them only for tone, vocabulary, and StockTradersAI context.",
+        "Terminology rule: Cho mua/Ch? mua is a signal level, not ticker count. Say Ch? mua ??t m?c X or Ch? mua ? m?c X; never say X m? or X c? phi?u for Ch? mua.",
         build_signal_card_length_instruction(strict=False),
         "Selected step-3 prompts and docs:",
         json.dumps({

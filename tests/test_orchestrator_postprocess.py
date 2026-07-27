@@ -6,7 +6,88 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from core.orchestrator import ensure_stock_4key_section, format_branch_drop_answer, format_stock_4key_answer, latest_stock_4key_payload, should_force_rules, is_stock_related, _find_branch_drop_payload
+from core.orchestrator import (
+    Orchestrator,
+    build_case_idea_prompt,
+    ensure_stock_4key_section,
+    find_matching_case_idea,
+    format_branch_drop_answer,
+    format_stock_4key_answer,
+    latest_stock_4key_payload,
+    should_force_rules,
+    is_stock_related,
+    _find_branch_drop_payload,
+)
+
+
+class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
+    def test_definition_song_lon_question_matches_case_name(self):
+        cases = [
+            {
+                "id": 1,
+                "name": "Phan tich co phieu",
+                "indicators": "SMDT ma",
+                "description": "Mo ta phan tich co phieu.",
+            },
+            {
+                "id": 2,
+                "name": "Dinh nghia song lon",
+                "indicators": "song lon, chan song lon",
+                "description": "Song lon la trang thai thi truong co dong tien xac nhan manh.",
+            },
+        ]
+
+        matched = find_matching_case_idea("song lon la gi", cases)
+
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched["id"], 2)
+
+    def test_case_prompt_contains_admin_description(self):
+        prompt = build_case_idea_prompt({
+            "name": "Dinh nghia song lon",
+            "indicators": "song lon",
+            "description": "Song lon la mo ta do admin cau hinh.",
+        })
+
+        self.assertIn("Mo ta/prompt cua case", prompt)
+        self.assertIn("Song lon la mo ta do admin cau hinh.", prompt)
+        self.assertIn("Khong nhac den admin", prompt)
+
+    async def test_build_base_messages_injects_matching_case_description(self):
+        class FakeMemory:
+            async def recent_messages(self, user_id):
+                return []
+
+            async def list_case_ideas(self):
+                return [{
+                    "id": 2,
+                    "name": "Dinh nghia song lon",
+                    "indicators": "song lon, chan song lon",
+                    "description": "Song lon la prompt rieng admin muon AI dung de tra loi.",
+                }]
+
+        class FakeRag:
+            def retrieve_best_book(self, query, top_k=3):
+                return {"doc_name": None, "score": 0, "chunks": []}
+
+        orch = Orchestrator.__new__(Orchestrator)
+        orch.memory = FakeMemory()
+        orch.rag = FakeRag()
+        orch.classify_query_source = lambda user_text: "BOOKS"
+
+        messages, sources, enable_tools, allowed_apis, current_doc = await orch.build_base_messages(
+            user_id="u1",
+            user_text="Dinh nghia song lon la gi?",
+            language="vi",
+        )
+
+        system_text = messages[0]["content"]
+        self.assertIn("CASE PROMPT DO ADMIN THIET LAP", system_text)
+        self.assertIn("Song lon la prompt rieng admin muon AI dung de tra loi.", system_text)
+        self.assertFalse(enable_tools)
+        self.assertEqual(sources, [])
+        self.assertEqual(allowed_apis, [])
+        self.assertIsNone(current_doc)
 
 
 class OrchestratorPostprocessTests(unittest.TestCase):
