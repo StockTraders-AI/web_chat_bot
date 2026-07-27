@@ -1723,6 +1723,21 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
+        matched_case_idea = await self._find_matching_case_idea(user_text)
+        if matched_case_idea:
+            final_text = clean_chat_output(
+                sanitize_response_text(str(matched_case_idea.get("description") or "").strip())
+            )
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
+
         if is_branch_cashflow_query(user_text):
             final_text = self._answer_branch_cashflow(user_text)
             final_text = clean_chat_output(sanitize_response_text(final_text))

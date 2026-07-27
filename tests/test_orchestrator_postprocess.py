@@ -57,6 +57,39 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(matched)
 
+    async def test_chat_stream_returns_supported_case_description_before_rag(self):
+        class FakeMemory:
+            def __init__(self):
+                self.messages = []
+
+            async def add(self, user_id, role, content):
+                self.messages.append({"user_id": user_id, "role": role, "content": content})
+
+            async def list_case_ideas(self):
+                return [{
+                    "id": 2,
+                    "name": "Dinh nghia song lon",
+                    "indicators": "song lon",
+                    "description": "Song lon la abcdef",
+                    "status": "supported",
+                }]
+
+        orch = Orchestrator.__new__(Orchestrator)
+        orch.memory = FakeMemory()
+
+        chunks = []
+        async for event, data in orch._chat_stream_unlocked(
+            user_id="u1",
+            user_text="song lon la gi",
+            language="vi",
+            selected_model="gpt-4o",
+        ):
+            chunks.append((event, data))
+
+        answer = "".join(data.get("text", "") for event, data in chunks if event == "delta")
+        self.assertEqual(answer, "Song lon la abcdef")
+        self.assertEqual(chunks[-1][0], "done")
+
     def test_case_prompt_contains_admin_description(self):
         prompt = build_case_idea_prompt({
             "name": "Dinh nghia song lon",
