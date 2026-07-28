@@ -2518,25 +2518,28 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
     engine = do_song_effective_prompt_engine(payload)
     disabled_state = do_song_disabled_state(payload)
 
-    try:
-        client = OpenAIClient()
-        resp = client.chat(
-            model=DEFAULT_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "B\u1ea1n l\u00e0 StockTraders AI. Ch\u1ec9 vi\u1ebft n\u1ed9i dung ti\u1ebfng Vi\u1ec7t ng\u1eafn g\u1ecdn, d\u1ef1a s\u00e1t d\u1eef li\u1ec7u h\u1ec7 th\u1ed1ng \u0110\u1ed3 S\u00f3ng \u0111\u01b0\u1ee3c cung c\u1ea5p. Tuy\u1ec7t \u0111\u1ed1i kh\u00f4ng d\u00f9ng ti\u1ebfng Anh trong title, response, recommendation.",
-                },
-                {"role": "user", "content": build_do_song_advice_prompt(payload, flow, signal_keys)},
-            ],
-            tools=None,
-            tool_choice="auto",
-        )
-        content = (resp.choices[0].message.content or "").strip()
-        card = sanitize_do_song_card(parse_signal_card_ai_content(content, fallback))
-    except Exception as exc:
-        print("DO_SONG_ADVICE_ERROR:", exc)
+    if not flow:
         card = sanitize_do_song_card(fallback)
+    else:
+        try:
+            client = OpenAIClient()
+            resp = client.chat(
+                model=DEFAULT_MODEL,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "B\u1ea1n l\u00e0 StockTraders AI. Ch\u1ec9 vi\u1ebft n\u1ed9i dung ti\u1ebfng Vi\u1ec7t ng\u1eafn g\u1ecdn, d\u1ef1a s\u00e1t d\u1eef li\u1ec7u h\u1ec7 th\u1ed1ng \u0110\u1ed3 S\u00f3ng \u0111\u01b0\u1ee3c cung c\u1ea5p. Tuy\u1ec7t \u0111\u1ed1i kh\u00f4ng d\u00f9ng ti\u1ebfng Anh trong title, response, recommendation.",
+                    },
+                    {"role": "user", "content": build_do_song_advice_prompt(payload, flow, signal_keys)},
+                ],
+                tools=None,
+                tool_choice="auto",
+            )
+            content = (resp.choices[0].message.content or "").strip()
+            card = sanitize_do_song_card(parse_signal_card_ai_content(content, fallback))
+        except Exception as exc:
+            print("DO_SONG_ADVICE_ERROR:", exc)
+            card = sanitize_do_song_card(fallback)
 
     return {
         "ok": True,
