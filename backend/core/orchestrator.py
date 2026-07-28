@@ -765,9 +765,50 @@ def build_recent_user_questions_context(questions: List[str]) -> str:
     return "\n".join(lines)
 
 
+def should_use_recent_question_context(user_text: str) -> bool:
+    normalized = normalize_search_text(user_text)
+    if not normalized or is_definition_query(user_text):
+        return False
+
+    # These are already self-contained enough; adding history can pull the
+    # question into the wrong topic, for example SMDT being answered as song lon.
+    if has_explicit_calendar_date_text(user_text):
+        return False
+    if any(phrase in normalized for phrase in ("hom nay", "hien nay", "hien tai", "bay gio", "gan nhat")):
+        return False
+    if has_real_ticker(user_text):
+        return False
+
+    tokens = re.findall(r"[a-z0-9]+", normalized)
+    short_question = len(tokens) <= 9
+    asks_confirmation = "xac nhan" in normalized and any(word in normalized for word in ("khong", "chua", "chua", "co"))
+    wave_follow_up = any(
+        phrase in normalized
+        for phrase in (
+            "chan song",
+            "song nay",
+            "song do",
+            "song lon",
+            "song hoi",
+            "phien nay",
+            "phien do",
+            "ngay do",
+            "hom do",
+            "cai nay",
+            "vay thi",
+            "thi sao",
+        )
+    )
+
+    return short_question and (asks_confirmation or wave_follow_up)
+
+
 def build_contextual_user_text(user_text: str, recent_questions: List[str]) -> str:
-    context = build_recent_user_questions_context(recent_questions)
     current = str(user_text or "").strip()
+    if not should_use_recent_question_context(current):
+        return current
+
+    context = build_recent_user_questions_context(recent_questions)
     if not context:
         return current
     return context + "\n\nCAU HOI HIEN TAI - GIU NGUYEN VAN BAN USER:\n" + current
@@ -1265,8 +1306,7 @@ class Orchestrator:
             print("CASE_IDEA_MATCH_ERROR:", exc)
             return None
 
-        match_text = build_contextual_user_text(user_text, recent_user_questions or [])
-        return find_matching_case_idea(match_text, case_ideas)
+        return find_matching_case_idea(user_text, case_ideas)
 
     async def build_base_messages(
         self,
@@ -1409,7 +1449,9 @@ class Orchestrator:
                     "KHUNG PHÂN TÍCH NỘI BỘ STOCKTRADERS AI:\n" + refs
                 )
 
-        matched_case_idea = await self._find_matching_case_idea(raw_user_text, recent_user_questions)
+        matched_case_idea = None
+        if not should_force_rules(raw_user_text):
+            matched_case_idea = await self._find_matching_case_idea(raw_user_text, recent_user_questions)
         if matched_case_idea:
             print("CASE IDEA MATCH:", matched_case_idea.get("id"), matched_case_idea.get("name"))
             system_parts.append(build_case_idea_prompt(matched_case_idea))
@@ -1878,7 +1920,9 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
+        matched_case_idea = None
+        if not should_force_rules(user_text):
+            matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
         if matched_case_idea:
             final_text = clean_chat_output(
                 sanitize_response_text(self._answer_case_idea(matched_case_idea, user_text, model))
