@@ -2490,7 +2490,7 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
             messages=[
                 {
                     "role": "system",
-                    "content": "You are StockTraders AI. Write concise Vietnamese market advice based strictly on the provided Do Song engine output.",
+                    "content": "You are StockTraders AI. Write concise Vietnamese market advice based strictly on the provided Do Song engine output. In the visible fields title, response, and recommendation, use Vietnamese only and do not use English words such as engine, market, raw, disabled, signal, status, entry, confirmation, waitbuy, or buy.",
                 },
                 {"role": "user", "content": build_do_song_advice_prompt(payload, flow, signal_keys)},
             ],
