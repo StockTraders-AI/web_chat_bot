@@ -604,17 +604,18 @@ def repair_short_signal_card(card: dict, flow_name: str, condition_results: list
 
 
 def build_signal_card_length_instruction(strict: bool = False) -> str:
-    prefix = "K\u1ebft qu\u1ea3 tr\u01b0\u1edbc qu\u00e1 ng\u1eafn. " if strict else ""
+    prefix = "The previous output was too short. " if strict else ""
     return (
         prefix
-        + "Ch\u1ec9 tr\u1ea3 v\u1ec1 m\u1ed9t object JSON h\u1ee3p l\u1ec7, kh\u00f4ng markdown, \u0111\u00fang 3 field string: "
+        + "Return only one valid JSON object, no markdown, with exactly 3 string fields: "
         "title, response, recommendation. "
-        "N\u1ed9i dung trong ba field ph\u1ea3i l\u00e0 ti\u1ebfng Vi\u1ec7t, kh\u00f4ng d\u00f9ng ti\u1ebfng Anh. "
-        "B\u00e1m theo h\u01b0\u1edbng d\u1eabn t\u1eeb giao di\u1ec7n v\u1ec1 gi\u1ecdng v\u0103n, c\u00e1ch d\u00f9ng t\u1eeb v\u00e0 c\u00e1c \u0111i\u1ec1u c\u1ea7n tr\u00e1nh. "
-        "\u0110\u1ed9 d\u00e0i t\u00ednh kh\u00f4ng g\u1ed3m kho\u1ea3ng tr\u1eafng: ti\u00eau \u0111\u1ec1 20-60 k\u00fd t\u1ef1, nh\u1eadn \u0111\u1ecbnh 90-150 k\u00fd t\u1ef1, khuy\u1ebfn ngh\u1ecb 35-70 k\u00fd t\u1ef1. "
-        "Kh\u00f4ng vi\u1ebft c\u1ee5t l\u1ee7n; m\u1ed7i field ph\u1ea3i l\u00e0 m\u1ed9t c\u00e2u ho\u1eb7c c\u1ee5m t\u1eeb ho\u00e0n ch\u1ec9nh. D\u1eef li\u1ec7u l\u1ecbch s\u1eed ph\u1ea3i vi\u1ebft \u0111\u1ea7y \u0111\u1ee7 nh\u01b0 d\u1eef li\u1ec7u hi\u1ec7n t\u1ea1i. "
-        "Ch\u1ec9 d\u00f9ng s\u1ed1 li\u1ec7u c\u00f3 trong d\u1eef li\u1ec7u \u0111\u1ea7u v\u00e0o. N\u1ebfu h\u01b0\u1edbng d\u1eabn y\u00eau c\u1ea7u kh\u00f4ng nh\u1eafc ng\u01b0\u1ee1ng ho\u1eb7c kh\u00f4ng so s\u00e1nh, ph\u1ea3i tu\u00e2n th\u1ee7. "
-        "N\u1ebfu nh\u1eafc Ch\u1edd mua, ph\u1ea3i vi\u1ebft l\u00e0 Ch\u1edd mua \u0111\u1ea1t m\u1ee9c X ho\u1eb7c Ch\u1edd mua \u1edf m\u1ee9c X, kh\u00f4ng vi\u1ebft X m\u00e3 hay X c\u1ed5 phi\u1ebfu. "
+        "Follow the admin prompt from UI for tone, wording, and exclusions. "
+        "Length is counted excluding whitespace. Target title 20-60 characters, response 90-150 characters, recommendation 35-70 characters. "
+        "Do not produce telegraphic one-clause text. Each field must read as a complete sentence or complete phrase, never a dangling fragment. Historical-date output must be as complete as current-date output. "
+        "Count every Vietnamese letter, number, and punctuation mark; ignore spaces only. "
+        "Do not copy phrases from the UI prompts just to fill length; treat them as guidance for meaning, tone, and exclusions. "
+        "If the data contains a current waitbuy or buy value, the response must mention that current value and must not mention the threshold when the admin prompt excludes it. "
+        "Terminology rule: waitbuy/Cho mua/Ch? mua is a signal level, not a number of tickers; write Cho mua/Ch? mua ??t m?c X or ? m?c X, never X m? or X c? phi?u for waitbuy."
     )
 
 
@@ -642,11 +643,11 @@ def build_demo_flow_ai_signal(
         return fallback
 
     field_prompt = "\n".join([
-        "T\u1ea1o card t\u00edn hi\u1ec7u g\u1ed3m 3 tr\u01b0\u1eddng t\u1eeb h\u01b0\u1edbng d\u1eabn tr\u00ean giao di\u1ec7n.",
-        f"H\u01b0\u1edbng d\u1eabn ti\u00eau \u0111\u1ec1: {title_prompt or 'Vi\u1ebft ti\u00eau \u0111\u1ec1 t\u00edn hi\u1ec7u th\u1ecb tr\u01b0\u1eddng ng\u1eafn g\u1ecdn b\u1eb1ng ti\u1ebfng Vi\u1ec7t.'}",
-        f"H\u01b0\u1edbng d\u1eabn nh\u1eadn \u0111\u1ecbnh: {response_prompt or 'Vi\u1ebft nh\u1eadn \u0111\u1ecbnh th\u1ecb tr\u01b0\u1eddng ng\u1eafn g\u1ecdn b\u1eb1ng ti\u1ebfng Vi\u1ec7t.'}",
-        f"H\u01b0\u1edbng d\u1eabn khuy\u1ebfn ngh\u1ecb: {recommendation_prompt or 'Vi\u1ebft khuy\u1ebfn ngh\u1ecb h\u00e0nh \u0111\u1ed9ng ng\u1eafn g\u1ecdn b\u1eb1ng ti\u1ebfng Vi\u1ec7t.'}",
-        f"T\u00e0i li\u1ec7u tham chi\u1ebfu StockTradersAI: {docs_prompt}" if docs_prompt else "Kh\u00f4ng c\u00f3 t\u00e0i li\u1ec7u tham chi\u1ebfu StockTradersAI",
+        "Generate a 3-field signal card from these UI prompts.",
+        f"Title prompt: {title_prompt or 'Create a concise Vietnamese market signal title.'}",
+        f"Response prompt: {response_prompt or 'Create a concise Vietnamese market interpretation.'}",
+        f"Recommendation prompt: {recommendation_prompt or 'Create a concise Vietnamese action recommendation.'}",
+        f"StockTradersAI reference docs: {docs_prompt}" if docs_prompt else "StockTradersAI reference docs: none",
     ])
 
     try:
@@ -2165,40 +2166,6 @@ def do_song_advice_fallback(payload: DoSongAdviceIn) -> dict:
     }
 
 
-def sanitize_do_song_visible_text(value: Any) -> str:
-    text = str(value or "").strip()
-    replacements = [
-        (r"\bDo\s*Song\b", "\u0110\u1ed3 S\u00f3ng"),
-        (r"\bengine\b", "h\u1ec7 th\u1ed1ng"),
-        (r"\bmarket\b", "th\u1ecb tr\u01b0\u1eddng"),
-        (r"\bwaitbuy\b", "Ch\u1edd mua"),
-        (r"\bbuy\b", "Mua"),
-        (r"\braw\b", "d\u1eef li\u1ec7u g\u1ed1c"),
-        (r"\bdisabled\b", "t\u1ea1m t\u00e1ch"),
-        (r"\bstatus\b", "tr\u1ea1ng th\u00e1i"),
-        (r"\bsignal\b", "t\u00edn hi\u1ec7u"),
-        (r"\bconfirmation\b", "x\u00e1c nh\u1eadn"),
-        (r"\bentry\b", "\u0111i\u1ec3m v\u00e0o"),
-        (r"\bneutral\b", "trung t\u00ednh"),
-        (r"\btitle\b", "ti\u00eau \u0111\u1ec1"),
-        (r"\bresponse\b", "nh\u1eadn \u0111\u1ecbnh"),
-        (r"\brecommendation\b", "khuy\u1ebfn ngh\u1ecb"),
-        (r"\bfield\b", "tr\u01b0\u1eddng"),
-    ]
-    for pattern, replacement in replacements:
-        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-    return text
-
-
-def sanitize_do_song_card(card: dict) -> dict:
-    return {
-        **card,
-        "title": sanitize_do_song_visible_text(card.get("title")),
-        "response": sanitize_do_song_visible_text(card.get("response")),
-        "recommendation": sanitize_do_song_visible_text(card.get("recommendation")),
-    }
-
-
 def unique_signal_keys(keys: list[str | None]) -> list[str]:
     output = []
     for key in keys:
@@ -2463,38 +2430,37 @@ async def find_do_song_prompt_flow(payload: DoSongAdviceIn, signal_keys: list[st
 def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, signal_keys: list[str]) -> str:
     engine = do_song_effective_prompt_engine(payload)
     wave = payload.wave or {}
-    title_prompt = str((flow or {}).get("trigger_title") or "Vi\u1ebft l\u1ea1i ti\u00eau \u0111\u1ec1 t\u1eeb tieuDe.").strip()
-    response_prompt = str((flow or {}).get("trigger_prompt") or "Vi\u1ebft l\u1ea1i nh\u1eadn \u0111\u1ecbnh t\u1eeb dienGiai.").strip()
-    recommendation_prompt = str((flow or {}).get("trigger_recommendation") or "Vi\u1ebft l\u1ea1i khuy\u1ebfn ngh\u1ecb t\u1eeb hanhDong.").strip()
+    title_prompt = str((flow or {}).get("trigger_title") or "Rewrite engine.tieuDe into the title field.").strip()
+    response_prompt = str((flow or {}).get("trigger_prompt") or "Rewrite engine.dienGiai into the response field.").strip()
+    recommendation_prompt = str((flow or {}).get("trigger_recommendation") or "Rewrite engine.hanhDong into the recommendation field.").strip()
     docs_prompt = combine_trigger_docs((flow or {}).get("trigger_docs"), (flow or {}).get("trigger_docs_file_text")) if flow else ""
 
     return "\n".join([
-        "Ch\u1ec9 tr\u1ea3 v\u1ec1 m\u1ed9t object JSON h\u1ee3p l\u1ec7, kh\u00f4ng markdown, \u0111\u00fang 3 field string: title, response, recommendation.",
-        "N\u1ed9i dung trong title, response, recommendation ph\u1ea3i l\u00e0 ti\u1ebfng Vi\u1ec7t; tuy\u1ec7t \u0111\u1ed1i kh\u00f4ng d\u00f9ng ti\u1ebfng Anh ho\u1eb7c thu\u1eadt ng\u1eef ti\u1ebfng Anh.",
-        "D\u1eef li\u1ec7u h\u1ec7 th\u1ed1ng \u0110\u1ed3 S\u00f3ng l\u00e0 ngu\u1ed3n ch\u00ednh. Kh\u00f4ng \u0111\u1ed5i m\u00e3 tr\u1ea1ng th\u00e1i, pha ho\u1eb7c \u00fd ngh\u0129a c\u1ed1t l\u00f5i.",
-        "C\u00e1ch vi\u1ebft 3 ph\u1ea7n:",
-        "- title = vi\u1ebft l\u1ea1i tieuDe theo h\u01b0\u1edbng d\u1eabn ti\u00eau \u0111\u1ec1 v\u00e0 t\u00e0i li\u1ec7u n\u1ea1p v\u00e0o.",
-        "- response = vi\u1ebft l\u1ea1i dienGiai theo h\u01b0\u1edbng d\u1eabn nh\u1eadn \u0111\u1ecbnh v\u00e0 t\u00e0i li\u1ec7u n\u1ea1p v\u00e0o.",
-        "- recommendation = vi\u1ebft l\u1ea1i hanhDong theo h\u01b0\u1edbng d\u1eabn khuy\u1ebfn ngh\u1ecb v\u00e0 t\u00e0i li\u1ec7u n\u1ea1p v\u00e0o.",
-        "Kh\u00f4ng ch\u00e9p nguy\u00ean v\u0103n h\u01b0\u1edbng d\u1eabn ho\u1eb7c t\u00e0i li\u1ec7u; ch\u1ec9 d\u00f9ng l\u00e0m gi\u1ecdng v\u0103n, t\u1eeb v\u1ef1ng v\u00e0 ng\u1eef c\u1ea3nh StockTradersAI.",
-        "Quy t\u1eafc thu\u1eadt ng\u1eef: Ch\u1edd mua l\u00e0 m\u1ee9c t\u00edn hi\u1ec7u, kh\u00f4ng ph\u1ea3i s\u1ed1 m\u00e3. Vi\u1ebft Ch\u1edd mua \u0111\u1ea1t m\u1ee9c X ho\u1eb7c Ch\u1edd mua \u1edf m\u1ee9c X; kh\u00f4ng vi\u1ebft X m\u00e3 hay X c\u1ed5 phi\u1ebfu cho Ch\u1edd mua.",
-        "Quy t\u1eafc t\u1ea1m th\u1eddi: S2/S3 \u0111\u00e3 t\u00e1ch kh\u1ecfi nh\u00f3m \u0110\u1ed3 S\u00f3ng. N\u1ebfu d\u1eef li\u1ec7u c\u00f3 lyDoTamTach, kh\u00f4ng l\u1ea5y Ch\u1edd mua/Mua l\u00e0 t\u00edn hi\u1ec7u ch\u00ednh; h\u00e3y vi\u1ebft theo tr\u1ea1ng th\u00e1i h\u1ec7 th\u1ed1ng g\u1ea7n nh\u1ea5t ho\u1eb7c trung t\u00ednh.",
+        "Return one valid JSON object only, no markdown, with exactly 3 string fields: title, response, recommendation.",
+        "The Do Song engine output is the source of truth. Do not change maTrangThai, pha, or the core meaning.",
+        "Field mapping must be followed:",
+        "- title = rewrite engine.tieuDe using the title prompt and docs.",
+        "- response = rewrite engine.dienGiai using the response prompt and docs.",
+        "- recommendation = rewrite engine.hanhDong using the recommendation prompt and docs.",
+        "Do not copy prompts or docs verbatim; use them only for tone, vocabulary, and StockTradersAI context.",
+        "Terminology rule: Cho mua/Ch? mua is a signal level, not ticker count. Say Ch? mua ??t m?c X or Ch? mua ? m?c X; never say X m? or X c? phi?u for Ch? mua.",
+        "Temporary rule: raw S2/S3 are disabled in Do Song engine. If disabledReason is s2_s3_engine_conditions_disabled, do not use waitbuy/buy as the main signal and do not write an S2/S3 entry-confirmation view; write a neutral do_song_engine view only.",
         build_signal_card_length_instruction(strict=False),
-        "H\u01b0\u1edbng d\u1eabn v\u00e0 t\u00e0i li\u1ec7u b\u01b0\u1edbc 3:",
+        "Selected step-3 prompts and docs:",
         json.dumps({
             "flow_id": (flow or {}).get("id"),
             "flow_name": (flow or {}).get("name"),
-            "ma_tin_hieu_noi_bo": "khong_duoc_nhac_trong_noi_dung",
-            "huong_dan_tieu_de": title_prompt,
-            "huong_dan_nhan_dinh": response_prompt,
-            "huong_dan_khuyen_nghi": recommendation_prompt,
-            "tai_lieu": compact_signal_text(docs_prompt, "", max_chars=8000),
+            "signal_keys": signal_keys,
+            "title_prompt": title_prompt,
+            "response_prompt": response_prompt,
+            "recommendation_prompt": recommendation_prompt,
+            "docs": compact_signal_text(docs_prompt, "", max_chars=8000),
         }, ensure_ascii=False),
-        "D\u1eef li\u1ec7u h\u1ec7 th\u1ed1ng \u0110\u1ed3 S\u00f3ng:",
+        "Do Song engine context:",
         json.dumps({
             "check_date": payload.check_date,
             "wave": wave,
-            "du_lieu": {
+            "engine": {
                 "maTrangThai": engine.get("maTrangThai"),
                 "pha": engine.get("pha"),
                 "tieuDe": engine.get("tieuDe"),
@@ -2502,12 +2468,11 @@ def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, sign
                 "hanhDong": engine.get("hanhDong"),
                 "tinCay": engine.get("tinCay"),
                 "dacTrung": engine.get("dacTrung"),
-                "lyDoDieuChinh": engine.get("overrideReason"),
-                "lyDoTamTach": engine.get("disabledReason"),
+                "overrideReason": engine.get("overrideReason"),
+                "disabledReason": engine.get("disabledReason"),
             },
         }, ensure_ascii=False),
     ])
-
 
 @app.post("/public/do-song-advice")
 async def public_do_song_advice(payload: DoSongAdviceIn):
@@ -2518,28 +2483,25 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
     engine = do_song_effective_prompt_engine(payload)
     disabled_state = do_song_disabled_state(payload)
 
-    if not flow:
-        card = sanitize_do_song_card(fallback)
-    else:
-        try:
-            client = OpenAIClient()
-            resp = client.chat(
-                model=DEFAULT_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "B\u1ea1n l\u00e0 StockTraders AI. Ch\u1ec9 vi\u1ebft n\u1ed9i dung ti\u1ebfng Vi\u1ec7t ng\u1eafn g\u1ecdn, d\u1ef1a s\u00e1t d\u1eef li\u1ec7u h\u1ec7 th\u1ed1ng \u0110\u1ed3 S\u00f3ng \u0111\u01b0\u1ee3c cung c\u1ea5p. Tuy\u1ec7t \u0111\u1ed1i kh\u00f4ng d\u00f9ng ti\u1ebfng Anh trong title, response, recommendation.",
-                    },
-                    {"role": "user", "content": build_do_song_advice_prompt(payload, flow, signal_keys)},
-                ],
-                tools=None,
-                tool_choice="auto",
-            )
-            content = (resp.choices[0].message.content or "").strip()
-            card = sanitize_do_song_card(parse_signal_card_ai_content(content, fallback))
-        except Exception as exc:
-            print("DO_SONG_ADVICE_ERROR:", exc)
-            card = sanitize_do_song_card(fallback)
+    try:
+        client = OpenAIClient()
+        resp = client.chat(
+            model=DEFAULT_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are StockTraders AI. Write concise Vietnamese market advice based strictly on the provided Do Song engine output.",
+                },
+                {"role": "user", "content": build_do_song_advice_prompt(payload, flow, signal_keys)},
+            ],
+            tools=None,
+            tool_choice="auto",
+        )
+        content = (resp.choices[0].message.content or "").strip()
+        card = parse_signal_card_ai_content(content, fallback)
+    except Exception as exc:
+        print("DO_SONG_ADVICE_ERROR:", exc)
+        card = fallback
 
     return {
         "ok": True,
@@ -2556,7 +2518,6 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
         "raw_pha": raw_engine.get("pha") if disabled_state else None,
         "disabled_state": disabled_state or None,
     }
-
 
 @app.get("/public/condition-signals/latest")
 async def public_latest_condition_signal(
