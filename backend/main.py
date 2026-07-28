@@ -214,6 +214,8 @@ class DoSongAdviceIn(BaseModel):
     signal_keys: list[str] = []
     wave: Dict[str, Any] = {}
     engine: Dict[str, Any] = {}
+    raw_engine: Dict[str, Any] = {}
+    nearest_engine: Dict[str, Any] = {}
 
 def sse(event: str, data: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -2197,16 +2199,26 @@ def do_song_disabled_state(payload: DoSongAdviceIn) -> str:
 
 def do_song_effective_prompt_engine(payload: DoSongAdviceIn) -> dict:
     engine = dict(payload.engine or {})
-    if not do_song_disabled_state(payload):
+    disabled_state = do_song_disabled_state(payload)
+    if not disabled_state:
         return engine
+
+    nearest = dict(payload.nearest_engine or {})
+    nearest_state = str(nearest.get("maTrangThai") or "").strip().lower()
+    if nearest and nearest_state and nearest_state not in DISABLED_DOSONG_STATES:
+        return {
+            **nearest,
+            "overriddenFrom": engine,
+            "overrideReason": f"disabled_{disabled_state}_use_nearest_state",
+        }
 
     return {
         **engine,
-        "maTrangThai": None,
+        "maTrangThai": "SN",
         "pha": None,
-        "tieuDe": "Do Song market watch",
-        "dienGiai": "The raw S2/S3 state is disabled inside the Do Song engine because waitbuy/buy are handled by separate condition flows. Write a neutral market-status view from the available wave data.",
-        "hanhDong": "Keep watching and wait for the next confirmed engine state.",
+        "tieuDe": "Thi truong dang trung tinh",
+        "dienGiai": "Tin hieu song chua ro rang sau khi tach rieng dieu kien Cho mua va Mua. Can theo doi them du lieu vong tron do song de xac nhan trang thai moi.",
+        "hanhDong": "Theo doi tiep va cho trang thai engine ro rang hon.",
         "disabledFrom": {
             "maTrangThai": engine.get("maTrangThai"),
             "pha": engine.get("pha"),
@@ -2217,7 +2229,7 @@ def do_song_effective_prompt_engine(payload: DoSongAdviceIn) -> dict:
 
 
 def do_song_engine_signal_keys(payload: DoSongAdviceIn) -> list[str]:
-    engine = payload.engine or {}
+    engine = do_song_effective_prompt_engine(payload)
     keys = ["do_song_engine"]
     ma_trang_thai = str(engine.get("maTrangThai") or "").strip().lower()
     if ma_trang_thai and ma_trang_thai not in DISABLED_DOSONG_STATES:
@@ -2295,7 +2307,7 @@ def resolve_do_song_condition_key(condition_logic: str) -> str:
 def do_song_condition_result(condition_key: str, payload: DoSongAdviceIn, template: dict | None = None) -> dict:
     current_keys = do_song_engine_signal_keys(payload)
     matched = condition_key in current_keys
-    engine = payload.engine or {}
+    engine = do_song_effective_prompt_engine(payload)
     return {
         "ok": True,
         "matched": matched,
@@ -2456,6 +2468,8 @@ def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, sign
                 "hanhDong": engine.get("hanhDong"),
                 "tinCay": engine.get("tinCay"),
                 "dacTrung": engine.get("dacTrung"),
+                "overrideReason": engine.get("overrideReason"),
+                "disabledReason": engine.get("disabledReason"),
             },
         }, ensure_ascii=False),
     ])
@@ -2466,7 +2480,7 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
     fallback = do_song_advice_fallback(payload)
     signal_keys = do_song_advice_signal_keys(payload)
     flow = await find_do_song_prompt_flow(payload, signal_keys)
-    raw_engine = payload.engine or {}
+    raw_engine = payload.raw_engine or payload.engine or {}
     engine = do_song_effective_prompt_engine(payload)
     disabled_state = do_song_disabled_state(payload)
 
