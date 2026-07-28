@@ -2144,7 +2144,7 @@ async def condition_realtime_wave_restart(
 
 
 def do_song_advice_fallback(payload: DoSongAdviceIn) -> dict:
-    engine = payload.engine or {}
+    engine = do_song_effective_prompt_engine(payload)
     return {
         "title": fit_signal_text_by_visible_chars(
             engine.get("tieuDe"),
@@ -2173,7 +2173,47 @@ def unique_signal_keys(keys: list[str | None]) -> list[str]:
     return output
 
 
-DISABLED_DOSONG_STATES = {"s2"}
+DISABLED_DOSONG_STATES = {"s2", "s3"}
+
+
+def disabled_do_song_signal_key(key: str, payload: DoSongAdviceIn) -> bool:
+    state = str((payload.engine or {}).get("maTrangThai") or "").strip().lower()
+    normalized = normalize_public_signal_key(key) or str(key or "").strip()
+    if state in {"s2", "s3"}:
+        return normalized in {
+            "waitbuy_over_threshold",
+            "buy_over_threshold",
+            "do_song_state_s2",
+            "do_song_state_s3",
+            "do_song_phase_chan_song",
+        }
+    return False
+
+
+def do_song_disabled_state(payload: DoSongAdviceIn) -> str:
+    state = str((payload.engine or {}).get("maTrangThai") or "").strip().lower()
+    return state if state in DISABLED_DOSONG_STATES else ""
+
+
+def do_song_effective_prompt_engine(payload: DoSongAdviceIn) -> dict:
+    engine = dict(payload.engine or {})
+    if not do_song_disabled_state(payload):
+        return engine
+
+    return {
+        **engine,
+        "maTrangThai": None,
+        "pha": None,
+        "tieuDe": "Do Song market watch",
+        "dienGiai": "The raw S2/S3 state is disabled inside the Do Song engine because waitbuy/buy are handled by separate condition flows. Write a neutral market-status view from the available wave data.",
+        "hanhDong": "Keep watching and wait for the next confirmed engine state.",
+        "disabledFrom": {
+            "maTrangThai": engine.get("maTrangThai"),
+            "pha": engine.get("pha"),
+            "tieuDe": engine.get("tieuDe"),
+        },
+        "disabledReason": "s2_s3_engine_conditions_disabled",
+    }
 
 
 def do_song_engine_signal_keys(payload: DoSongAdviceIn) -> list[str]:
@@ -2198,9 +2238,6 @@ def do_song_engine_signal_keys(payload: DoSongAdviceIn) -> list[str]:
 
 
 def do_song_entry_signal_keys(payload: DoSongAdviceIn) -> list[str]:
-    state = str((payload.engine or {}).get("maTrangThai") or "").strip().lower()
-    if state == "s3":
-        return ["buy_over_threshold"]
     return []
 
 
@@ -2209,6 +2246,7 @@ def do_song_advice_signal_keys(payload: DoSongAdviceIn) -> list[str]:
         key
         for key in unique_signal_keys(payload.signal_keys or [])
         if key not in {"buy_over_threshold", "waitbuy_over_threshold"}
+        and not disabled_do_song_signal_key(key, payload)
     ]
     return unique_signal_keys([
         *do_song_entry_signal_keys(payload),
@@ -2224,14 +2262,14 @@ def resolve_do_song_condition_key(condition_logic: str) -> str:
 
     if compact in {
         "do_song_engine",
-        "do_song_state_s0", "do_song_state_s1", "do_song_state_s2", "do_song_state_s3", "do_song_state_s4",
+        "do_song_state_s0", "do_song_state_s1", "do_song_state_s4",
         "do_song_state_s5", "do_song_state_s6", "do_song_state_s7", "do_song_state_sn",
-        "do_song_phase_dieu_chinh", "do_song_phase_tich_luy", "do_song_phase_chan_song",
+        "do_song_phase_dieu_chinh", "do_song_phase_tich_luy",
         "do_song_phase_song_tang", "do_song_phase_phan_phoi",
     }:
         return compact
 
-    for state in ("s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "sn"):
+    for state in ("s0", "s1", "s4", "s5", "s6", "s7", "sn"):
         if "do song" in normalized and state in normalized:
             return f"do_song_state_{state}"
         if "ma trang thai" in normalized and state in normalized:
@@ -2378,7 +2416,7 @@ async def find_do_song_prompt_flow(payload: DoSongAdviceIn, signal_keys: list[st
 
 
 def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, signal_keys: list[str]) -> str:
-    engine = payload.engine or {}
+    engine = do_song_effective_prompt_engine(payload)
     wave = payload.wave or {}
     title_prompt = str((flow or {}).get("trigger_title") or "Rewrite engine.tieuDe into the title field.").strip()
     response_prompt = str((flow or {}).get("trigger_prompt") or "Rewrite engine.dienGiai into the response field.").strip()
@@ -2394,6 +2432,7 @@ def build_do_song_advice_prompt(payload: DoSongAdviceIn, flow: dict | None, sign
         "- recommendation = rewrite engine.hanhDong using the recommendation prompt and docs.",
         "Do not copy prompts or docs verbatim; use them only for tone, vocabulary, and StockTradersAI context.",
         "Terminology rule: Cho mua/Ch? mua is a signal level, not ticker count. Say Ch? mua ??t m?c X or Ch? mua ? m?c X; never say X m? or X c? phi?u for Ch? mua.",
+        "Temporary rule: raw S2/S3 are disabled in Do Song engine. If disabledReason is s2_s3_engine_conditions_disabled, do not use waitbuy/buy as the main signal and do not write an S2/S3 entry-confirmation view; write a neutral do_song_engine view only.",
         build_signal_card_length_instruction(strict=False),
         "Selected step-3 prompts and docs:",
         json.dumps({
@@ -2427,7 +2466,9 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
     fallback = do_song_advice_fallback(payload)
     signal_keys = do_song_advice_signal_keys(payload)
     flow = await find_do_song_prompt_flow(payload, signal_keys)
-    engine = payload.engine or {}
+    raw_engine = payload.engine or {}
+    engine = do_song_effective_prompt_engine(payload)
+    disabled_state = do_song_disabled_state(payload)
 
     try:
         client = OpenAIClient()
@@ -2460,6 +2501,9 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
         "signal_keys": signal_keys,
         "maTrangThai": engine.get("maTrangThai"),
         "pha": engine.get("pha"),
+        "raw_maTrangThai": raw_engine.get("maTrangThai") if disabled_state else None,
+        "raw_pha": raw_engine.get("pha") if disabled_state else None,
+        "disabled_state": disabled_state or None,
     }
 
 
