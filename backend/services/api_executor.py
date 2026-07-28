@@ -87,6 +87,8 @@ class APIExecutor:
             return True
         if re.search(r"\b20\d{2}\b", normalized):
             return True
+        if "hom qua" in normalized or "ngay hom qua" in normalized:
+            return True
         if "dau nam" in normalized or "cuoi nam" in normalized:
             return True
         return False

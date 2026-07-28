@@ -3,7 +3,7 @@ import json
 import re
 import unicodedata
 from typing import Any, Dict, List, Tuple, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from core.prompt import SYSTEM_PROMPT
 from core.model_router import pick_model
@@ -79,7 +79,7 @@ FORCE_RULES_PHRASES = (
     "dat chuan ma manh", "ma manh", "bat dau manh", "dan song", "chan song", "song lon", "song hoi", "key nao", "key gi", "co key gi", "thuoc key", "nhom nao", "danh gia", "trang thai", "phan tich", "4 key", "four key", "dung song", "dung nganh", "composite score",
 )
 SMDT_DATA_INTENT_WORDS = (
-    "hom nay", "ngay", "co phieu", "ma", "nganh", "bao nhieu", "tang",
+    "hom nay", "hom qua", "ngay", "co phieu", "ma", "nganh", "bao nhieu", "tang",
     "giam", "vuot", "cross", "phien",
 )
 DEFINITION_INTENT_PHRASES = (
@@ -158,8 +158,11 @@ def extract_date_value(text: str) -> Optional[str]:
     if year:
         return year.group(1)
 
+    if "hom qua" in normalized or "ngay hom qua" in normalized:
+        return (datetime.now().date() - timedelta(days=1)).isoformat()
+
     if any(value in normalized for value in ("hom nay", "hien nay", "hien tai", "bay gio", "gan nhat")):
-        return "hôm nay"
+        return "hom nay"
     return None
 
 def ensure_smdt_percent(text: str) -> str:
@@ -774,7 +777,7 @@ def should_use_recent_question_context(user_text: str) -> bool:
     # question into the wrong topic, for example SMDT being answered as song lon.
     if has_explicit_calendar_date_text(user_text):
         return False
-    if any(phrase in normalized for phrase in ("hom nay", "hien nay", "hien tai", "bay gio", "gan nhat")):
+    if any(phrase in normalized for phrase in ("hom nay", "hom qua", "hien nay", "hien tai", "bay gio", "gan nhat")):
         return False
     if has_real_ticker(user_text):
         return False
