@@ -2173,11 +2173,14 @@ def unique_signal_keys(keys: list[str | None]) -> list[str]:
     return output
 
 
+DISABLED_DOSONG_STATES = {"s2"}
+
+
 def do_song_engine_signal_keys(payload: DoSongAdviceIn) -> list[str]:
     engine = payload.engine or {}
     keys = ["do_song_engine"]
     ma_trang_thai = str(engine.get("maTrangThai") or "").strip().lower()
-    if ma_trang_thai:
+    if ma_trang_thai and ma_trang_thai not in DISABLED_DOSONG_STATES:
         keys.append(f"do_song_state_{ma_trang_thai}")
 
     pha = normalize_chat_text(str(engine.get("pha") or ""))
@@ -2188,7 +2191,7 @@ def do_song_engine_signal_keys(payload: DoSongAdviceIn) -> list[str]:
         "song tang": "song_tang",
         "phan phoi": "phan_phoi",
     }
-    if pha in phase_map:
+    if pha in phase_map and ma_trang_thai not in DISABLED_DOSONG_STATES:
         keys.append(f"do_song_phase_{phase_map[pha]}")
 
     return unique_signal_keys(keys)
@@ -2198,8 +2201,6 @@ def do_song_entry_signal_keys(payload: DoSongAdviceIn) -> list[str]:
     state = str((payload.engine or {}).get("maTrangThai") or "").strip().lower()
     if state == "s3":
         return ["buy_over_threshold"]
-    if state == "s2":
-        return ["waitbuy_over_threshold"]
     return []
 
 
