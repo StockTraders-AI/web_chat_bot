@@ -694,14 +694,35 @@ def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
     parts.extend([
         "Mo ta/prompt cua case:",
         description,
-        "Quy tac bat buoc khi case nay khop:",
-        "- Lay mo ta/prompt cua case lam ngu canh chinh de tra loi cau hoi user.",
-        "- AI phai doc, hieu va dien giai lai cho tu nhien; khong be nguyen van mo ta ra ngoai.",
-        "- Duoc them cach noi de hieu hon, vi du ngan gon hoac cach dien dat mem hon, nhung khong lam sai y admin.",
+        "Nhiem vu khi case nay khop:",
+        "- Hay coi phan mo ta o tren la noi dung tho admin nem vao cho AI xu ly.",
+        "- Viet lai mo ta nay theo cach truyen dat cua AI de tra loi cau hoi user: tu nhien hon, de hieu hon, co them cach dien giai neu can.",
+        "- Khong be nguyen van mo ta ra ngoai; khong lap lai nguyen cau hoac cum dai trong mo ta.",
+        "- Giu dung so lieu, moc thoi gian, dieu kien va y chinh trong mo ta; khong tu them kien thuc moi lam lech y admin.",
         "- Khong nhac den admin, case, prompt noi bo, database hay man hinh thiet lap.",
-        "- Khong bia them kien thuc moi trai voi mo ta case neu cau hoi la dinh nghia/giai thich.",
     ])
     return "\n".join(parts)
+
+
+
+def case_idea_answer_too_similar(answer: str, description: str) -> bool:
+    answer_norm = normalize_search_text(answer)
+    description_norm = normalize_search_text(description)
+    if not answer_norm or not description_norm:
+        return False
+
+    if answer_norm == description_norm or description_norm in answer_norm:
+        return True
+
+    answer_tokens = [token for token in answer_norm.split() if token not in CASE_IDEA_STOPWORDS and len(token) > 2]
+    description_tokens = [token for token in description_norm.split() if token not in CASE_IDEA_STOPWORDS and len(token) > 2]
+    if len(description_tokens) < 5:
+        return False
+
+    common = set(answer_tokens).intersection(description_tokens)
+    overlap = len(common) / max(1, len(set(description_tokens)))
+    similar_length = len(answer_norm) <= len(description_norm) * 1.35
+    return overlap >= 0.72 and similar_length
 
 
 def recent_user_questions_from_messages(
@@ -1754,34 +1775,52 @@ Yêu cầu:
     def _answer_case_idea(self, case_idea: Dict[str, Any], user_text: str, model: str) -> str:
         fallback = str(case_idea.get("description") or "").strip()
         prompt = build_case_idea_prompt(case_idea)
+        system_text = (
+            "Ban la Chatbot StockTraders AI. Tra loi tieng Viet tu nhien, khong markdown.\n"
+            "Khi case y tuong khop, nhiem vu cua ban la rewrite noi dung mo ta theo cach truyen dat cua AI. "
+            "Mo ta la nguyen lieu tho; cau tra loi phai la cach dien dat moi, de hieu, giong dang noi voi user that.\n"
+            "Khong chep nguyen van mo ta. Giu dung so lieu, moc thoi gian, dieu kien va y chinh.\n\n"
+            + prompt
+        )
+        user_prompt = (
+            "Cau hoi user:\n"
+            + str(user_text or "").strip()
+            + "\n\nViet lai mo ta case theo cach truyen dat cua AI de tra loi cau hoi nay. "
+            "Co the them cach hieu, diem can chu y hoac y nghia thuc chien neu phu hop; "
+            "khong lap lai nguyen cau trong mo ta."
+        )
 
         try:
             resp = self.oa.chat(
                 model=model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Ban la Chatbot StockTraders AI. Tra loi tieng Viet tu nhien, ngan gon, khong markdown.\n"
-                            "Khi case y tuong khop, phai doc mo ta/prompt cua case lam ngu canh chinh, "
-                            "dien giai lai nhu mot cau tra loi that su cho user. Khong chep nguyen van mo ta ra ngoai.\n\n"
-                            + prompt
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": (
-                            "Cau hoi user:\n"
-                            + str(user_text or "").strip()
-                            + "\n\nHay tra loi dua tren case prompt o tren, viet lai cho de hieu va tu nhien."
-                        ),
-                    },
+                    {"role": "system", "content": system_text},
+                    {"role": "user", "content": user_prompt},
                 ],
                 tools=None,
                 tool_choice="auto",
             )
             text = (resp.choices[0].message.content or "").strip()
-            return text or fallback
+            if text and not case_idea_answer_too_similar(text, fallback):
+                return text
+
+            retry_prompt = (
+                user_prompt
+                + "\n\nCau tra loi vua tao van qua giong mo ta goc. Hay rewrite lai dung tinh than: "
+                "viet lai mo ta theo cach truyen dat cua AI, khac cau chu hon, co cach hieu/diem can chu y/y nghia, "
+                "giu so lieu quan trong, khong copy cum dai."
+            )
+            retry = self.oa.chat(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_text},
+                    {"role": "user", "content": retry_prompt},
+                ],
+                tools=None,
+                tool_choice="auto",
+            )
+            retry_text = (retry.choices[0].message.content or "").strip()
+            return retry_text or text or fallback
         except Exception as exc:
             print("CASE_IDEA_ANSWER_ERROR:", exc)
             return fallback

@@ -84,7 +84,12 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("09/04/2025", context)
         self.assertIn("Khong tu sua cau hoi", context)
 
-    async def test_chat_stream_lets_model_rewrite_supported_case_description(self):
+    async def test_chat_stream_retries_when_case_answer_is_too_close_to_description(self):
+        description = (
+            "Song lon la song co thoi gian tang gia keo dai tu 3 thang den 6 thang, "
+            "cac nhanh dieu chinh cua song lon la do tin cay song dat tu 70 phan tram tro len."
+        )
+
         class FakeMemory:
             def __init__(self):
                 self.messages = []
@@ -104,7 +109,7 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
                     "id": 2,
                     "name": "Dinh nghia song lon",
                     "indicators": "song lon",
-                    "description": "Song lon la abcdef",
+                    "description": description,
                     "status": "supported",
                 }]
 
@@ -114,7 +119,14 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
 
             def chat(self, **kwargs):
                 self.calls.append(kwargs)
-                message = SimpleNamespace(content="Song lon co the hieu la abcdef, noi ngan gon la tin hieu dang chu y.")
+                if len(self.calls) == 1:
+                    message = SimpleNamespace(content=description)
+                else:
+                    message = SimpleNamespace(content=(
+                        "Co the hieu song lon la mot pha tang du suc ben, khong chi la vai phien hoi ngan. "
+                        "Diem can chu y la xu huong phai duy tri trong khoang 3-6 thang va do tin cay dat tu 70 phan tram tro len. "
+                        "Khi doc tin hieu nay, nen xem no nhu bo loc de nhan dien giai doan thi truong dang co dong tien ung ho."
+                    ))
                 return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
         orch = Orchestrator.__new__(Orchestrator)
@@ -131,12 +143,14 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
             chunks.append((event, data))
 
         answer = "".join(data.get("text", "") for event, data in chunks if event == "delta")
-        self.assertEqual(answer, "Song lon co the hieu la abcdef, noi ngan gon la tin hieu dang chu y.")
+        self.assertIn("mot pha tang du suc ben", answer)
         self.assertEqual(chunks[-1][0], "done")
-        self.assertEqual(len(orch.oa.calls), 1)
+        self.assertEqual(len(orch.oa.calls), 2)
         system_text = orch.oa.calls[0]["messages"][0]["content"]
-        self.assertIn("Song lon la abcdef", system_text)
-        self.assertIn("Khong chep nguyen van mo ta", system_text)
+        retry_text = orch.oa.calls[1]["messages"][1]["content"]
+        self.assertIn(description, system_text)
+        self.assertIn("rewrite noi dung mo ta theo cach truyen dat cua AI", system_text)
+        self.assertIn("rewrite lai dung tinh than", retry_text)
 
     def test_case_prompt_contains_admin_description(self):
         prompt = build_case_idea_prompt({
@@ -149,6 +163,7 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Mo ta/prompt cua case", prompt)
         self.assertIn("Song lon la mo ta do admin cau hinh.", prompt)
         self.assertIn("Khong nhac den admin", prompt)
+        self.assertIn("Viet lai mo ta nay theo cach truyen dat cua AI", prompt)
 
     def test_latest_lookup_date_prefers_nearest_recent_question(self):
         context_text = build_contextual_user_text(
