@@ -696,9 +696,10 @@ def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
         description,
         "Quy tac bat buoc khi case nay khop:",
         "- Lay mo ta/prompt cua case lam ngu canh chinh de tra loi cau hoi user.",
-        "- Duoc viet lai cho tu nhien, ngan gon, de hieu; khong copy may moc neu khong can.",
+        "- AI phai doc, hieu va dien giai lai cho tu nhien; khong be nguyen van mo ta ra ngoai.",
+        "- Duoc them cach noi de hieu hon, vi du ngan gon hoac cach dien dat mem hon, nhung khong lam sai y admin.",
         "- Khong nhac den admin, case, prompt noi bo, database hay man hinh thiet lap.",
-        "- Khong bia them ngoai mo ta case neu cau hoi la dinh nghia/giai thich.",
+        "- Khong bia them kien thuc moi trai voi mo ta case neu cau hoi la dinh nghia/giai thich.",
     ])
     return "\n".join(parts)
 
@@ -1750,6 +1751,41 @@ Yêu cầu:
         except Exception as exc:
             print("WAITBUY_EXPLANATION_ERROR:", exc)
             return fallback
+    def _answer_case_idea(self, case_idea: Dict[str, Any], user_text: str, model: str) -> str:
+        fallback = str(case_idea.get("description") or "").strip()
+        prompt = build_case_idea_prompt(case_idea)
+
+        try:
+            resp = self.oa.chat(
+                model=model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Ban la Chatbot StockTraders AI. Tra loi tieng Viet tu nhien, ngan gon, khong markdown.\n"
+                            "Khi case y tuong khop, phai doc mo ta/prompt cua case lam ngu canh chinh, "
+                            "dien giai lai nhu mot cau tra loi that su cho user. Khong chep nguyen van mo ta ra ngoai.\n\n"
+                            + prompt
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            "Cau hoi user:\n"
+                            + str(user_text or "").strip()
+                            + "\n\nHay tra loi dua tren case prompt o tren, viet lai cho de hieu va tu nhien."
+                        ),
+                    },
+                ],
+                tools=None,
+                tool_choice="auto",
+            )
+            text = (resp.choices[0].message.content or "").strip()
+            return text or fallback
+        except Exception as exc:
+            print("CASE_IDEA_ANSWER_ERROR:", exc)
+            return fallback
+
     async def chat_stream(
         self,
         user_id: str,
@@ -1806,7 +1842,7 @@ Yêu cầu:
         matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
         if matched_case_idea:
             final_text = clean_chat_output(
-                sanitize_response_text(str(matched_case_idea.get("description") or "").strip())
+                sanitize_response_text(self._answer_case_idea(matched_case_idea, user_text, model))
             )
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):

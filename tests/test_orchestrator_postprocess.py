@@ -84,7 +84,7 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("09/04/2025", context)
         self.assertIn("Khong tu sua cau hoi", context)
 
-    async def test_chat_stream_returns_supported_case_description_before_rag(self):
+    async def test_chat_stream_lets_model_rewrite_supported_case_description(self):
         class FakeMemory:
             def __init__(self):
                 self.messages = []
@@ -108,8 +108,18 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
                     "status": "supported",
                 }]
 
+        class FakeOA:
+            def __init__(self):
+                self.calls = []
+
+            def chat(self, **kwargs):
+                self.calls.append(kwargs)
+                message = SimpleNamespace(content="Song lon co the hieu la abcdef, noi ngan gon la tin hieu dang chu y.")
+                return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
         orch = Orchestrator.__new__(Orchestrator)
         orch.memory = FakeMemory()
+        orch.oa = FakeOA()
 
         chunks = []
         async for event, data in orch._chat_stream_unlocked(
@@ -121,8 +131,12 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
             chunks.append((event, data))
 
         answer = "".join(data.get("text", "") for event, data in chunks if event == "delta")
-        self.assertEqual(answer, "Song lon la abcdef")
+        self.assertEqual(answer, "Song lon co the hieu la abcdef, noi ngan gon la tin hieu dang chu y.")
         self.assertEqual(chunks[-1][0], "done")
+        self.assertEqual(len(orch.oa.calls), 1)
+        system_text = orch.oa.calls[0]["messages"][0]["content"]
+        self.assertIn("Song lon la abcdef", system_text)
+        self.assertIn("Khong chep nguyen van mo ta", system_text)
 
     def test_case_prompt_contains_admin_description(self):
         prompt = build_case_idea_prompt({
