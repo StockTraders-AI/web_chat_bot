@@ -22,6 +22,8 @@ from core.orchestrator import (
     latest_lookup_date_in_text,
     should_force_rules,
     is_stock_related,
+    is_stock_4key_screen_query,
+    stock_4key_screen_args,
     _find_branch_drop_payload,
 )
 
@@ -490,5 +492,94 @@ class OrchestratorPostprocessTests(unittest.TestCase):
         self.assertIn('MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u', answer)
         self.assertNotIn('tin hieu thuan ca ma va nganh', answer)
 
+    def test_stock_4key_screen_query_without_ticker_builds_screen_args(self):
+        question = "Ma nao dung song dung nganh"
+
+        args = stock_4key_screen_args(question)
+
+        self.assertTrue(is_stock_4key_screen_query(question))
+        self.assertEqual(args["mode"], "screen")
+        self.assertEqual(args["group_4key"], "Đúng sóng - Đúng ngành")
+        self.assertFalse(args["include_composite"])
+        self.assertNotIn("ticker", args)
+
+    def test_formats_stock_4key_screen_answer_as_list(self):
+        payload = {
+            "ok": True,
+            "mode": "screen",
+            "date": "2026-07-01",
+            "group_filters": ["Dung song dung nganh"],
+            "total_screened": 2,
+            "total_matches": 1,
+            "results": [self.sample_4key_payload()],
+        }
+        payload["results"][0]["ticker"] = "SSI"
+
+        answer = format_stock_4key_answer(payload, user_text="Ma nao dung song dung nganh")
+
+        self.assertIn("Tim thay 1 ma", answer)
+        self.assertIn("SSI", answer)
+        self.assertIn("\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh", answer)
+        self.assertNotIn("SSI \u0111ang thu\u1ed9c", answer)
+
+    def test_latest_stock_4key_payload_keeps_screen_parent(self):
+        payload = {
+            "ok": True,
+            "mode": "screen",
+            "date": "2026-07-01",
+            "total_matches": 1,
+            "results": [self.sample_4key_payload()],
+        }
+        messages = [{"role": "tool", "content": json.dumps(payload)}]
+
+        found = latest_stock_4key_payload(messages)
+
+        self.assertEqual(found["mode"], "screen")
+        self.assertIn("results", found)
+
+    def test_stock_4key_screen_query_bypasses_model(self):
+        payload = {
+            "ok": True,
+            "mode": "screen",
+            "date": "2026-07-29",
+            "group_filters": ["Dung song dung nganh"],
+            "total_screened": 1,
+            "total_matches": 1,
+            "results": [self.sample_4key_payload()],
+        }
+        payload["results"][0]["ticker"] = "SSI"
+
+        class FakeExecutor:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, operation, args, **kwargs):
+                self.calls.append((operation, args, kwargs))
+                return payload
+
+        class FakeOpenAI:
+            def chat(self, *args, **kwargs):
+                raise AssertionError("screen query should not ask model to choose a tool")
+
+        orchestrator = Orchestrator.__new__(Orchestrator)
+        orchestrator.executor = FakeExecutor()
+        orchestrator.oa = FakeOpenAI()
+
+        _, answer = orchestrator._run_tool_loop(
+            model="unused",
+            messages=[],
+            enable_tools=True,
+            allowed_apis=["getStock4KeyEvaluation"],
+            current_doc="Cau hoi ve danh gia 4 key co phieu.txt",
+            user_text="ma nao dung song dung nganh",
+        )
+
+        self.assertIn("Tim thay 1 ma", answer)
+        self.assertIn("SSI", answer)
+        operation, args, _ = orchestrator.executor.calls[0]
+        self.assertEqual(operation, "getStock4KeyEvaluation")
+        self.assertEqual(args["mode"], "screen")
+        self.assertEqual(args["group_4key"], "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh")
+        self.assertNotIn("ticker", args)
 if __name__ == "__main__":
     unittest.main()

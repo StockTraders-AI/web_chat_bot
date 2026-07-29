@@ -233,6 +233,8 @@ def clean_chat_output(text: str) -> str:
 
 def _find_stock_4key_payload(value: Any) -> Optional[Dict[str, Any]]:
     if isinstance(value, dict):
+        if value.get("ok") and value.get("mode") in {"screen", "batch", "history"} and isinstance(value.get("results"), list):
+            return value
         if value.get("ok") and (
             value.get("group_4key")
             or (
@@ -505,6 +507,41 @@ def requested_4key_groups(user_text: str) -> tuple[str, ...]:
     return ()
 
 
+FOUR_KEY_SCREEN_PHRASES = (
+    "ma nao",
+    "danh sach ma",
+    "cac ma",
+    "nhung ma",
+    "co phieu nao",
+    "loc ma",
+    "tim ma",
+)
+
+
+def is_stock_4key_screen_query(user_text: str) -> bool:
+    normalized = normalize_search_text(user_text)
+    if not normalized:
+        return False
+    if has_real_ticker(user_text):
+        return False
+    if not requested_4key_groups(user_text):
+        return False
+    return any(phrase in normalized for phrase in FOUR_KEY_SCREEN_PHRASES)
+
+
+def stock_4key_screen_args(user_text: str) -> Optional[Dict[str, Any]]:
+    groups = requested_4key_groups(user_text)
+    if not groups or not is_stock_4key_screen_query(user_text):
+        return None
+    requested_date = _normalize_waitbuy_lookup_date(user_text) or datetime.now().strftime("%Y-%m-%d")
+    return {
+        "mode": "screen",
+        "date": requested_date,
+        "group_4key": groups[0],
+        "include_composite": False,
+    }
+
+
 def _change_word(now: Any, prev: Any) -> str:
     try:
         return "tăng" if float(now) >= float(prev) else "giảm"
@@ -512,7 +549,67 @@ def _change_word(now: Any, prev: Any) -> str:
         return "so với"
 
 
+
+def _format_4key_result_line(index: int, item: Dict[str, Any]) -> str:
+    ticker = str(item.get("ticker") or "ma").strip().upper()
+    if not item.get("ok"):
+        error = str(item.get("error") or "khong du du lieu").strip()
+        return f"{index}. {ticker}: khong danh gia duoc ({error})."
+    group = _display_4key_label(item.get("group_4key"))
+    recommendation = _display_4key_label(item.get("recommendation"))
+    branch = str(item.get("branch") or "nganh").strip()
+    parts = [f"{index}. {ticker}: {group}"]
+    if branch:
+        parts.append(f"nganh {branch}")
+    if recommendation:
+        parts.append(recommendation)
+    return " - ".join(parts) + "."
+
+
+def format_stock_4key_list_answer(payload: Dict[str, Any], user_text: str = "") -> str:
+    mode = str(payload.get("mode") or "").strip().lower()
+    results = payload.get("results") if isinstance(payload.get("results"), list) else []
+    date_text = _fmt_vn_date(payload.get("date") or payload.get("requested_date"))
+
+    if mode == "screen":
+        filters = [_display_4key_label(item) for item in (payload.get("group_filters") or [])]
+        group_text = ", ".join(item for item in filters if item) or "dieu kien da hoi"
+        total_matches = int(payload.get("total_matches") or 0)
+        total_screened = int(payload.get("total_screened") or 0)
+        if total_matches <= 0:
+            return f"Khong co ma nao thuoc nhom 4 Key \"{group_text}\" trong {total_screened} ma da ra soat ngay {date_text}."
+        lines = [f"Tim thay {total_matches} ma thuoc nhom 4 Key \"{group_text}\" ngay {date_text}:", ""]
+        for index, item in enumerate(results, start=1):
+            lines.append(_format_4key_result_line(index, item))
+        if total_matches > len(results):
+            lines.append(f"Con {total_matches - len(results)} ma khac, co the tang limit de xem them.")
+        return "\n".join(lines).strip()
+
+    if mode == "history":
+        ticker = str(payload.get("ticker") or "ma").strip().upper()
+        from_date = _fmt_vn_date(payload.get("from_date"))
+        lines = [f"Lich su 4 Key cua {ticker} tu {from_date} den {date_text}:", ""]
+        if not results:
+            return f"Chua co lich su 4 Key cua {ticker} tu {from_date}."
+        for index, item in enumerate(results, start=1):
+            item_date = _fmt_vn_date(item.get("date") or item.get("requested_date"))
+            group = _display_4key_label(item.get("group_4key"))
+            recommendation = _display_4key_label(item.get("recommendation"))
+            suffix = f" - {recommendation}" if recommendation else ""
+            lines.append(f"{index}. {item_date}: {group}{suffix}.")
+        return "\n".join(lines).strip()
+
+    lines = [f"Danh gia 4 Key cac ma ngay {date_text}:", ""]
+    if not results:
+        return f"Chua co ket qua 4 Key cho cac ma duoc hoi ngay {date_text}."
+    for index, item in enumerate(results, start=1):
+        lines.append(_format_4key_result_line(index, item))
+    return "\n".join(lines).strip()
+
 def format_stock_4key_answer(payload: Dict[str, Any], user_text: str = "") -> str:
+    if str(payload.get("mode") or "").strip().lower() in {"screen", "batch", "history"}:
+        return format_stock_4key_list_answer(payload, user_text=user_text)
+
     ticker = str(payload.get("ticker") or "mã").strip().upper()
     branch = str(payload.get("branch") or "ngành").strip()
     date_text = _fmt_vn_date(payload.get("date") or payload.get("requested_date"))
@@ -1518,6 +1615,23 @@ class Orchestrator:
 
             return messages, final_text
 
+        direct_4key_args = stock_4key_screen_args(user_text)
+        if direct_4key_args and (not allowed_apis or "getStock4KeyEvaluation" in allowed_apis):
+            result = self.executor.call(
+                "getStock4KeyEvaluation",
+                direct_4key_args,
+                doc_name=current_doc,
+                user_text=user_text,
+            )
+            messages.append({
+                "role": "tool",
+                "tool_call_id": "DIRECT_4KEY_SCREEN",
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+            if isinstance(result, dict) and result.get("ok"):
+                return messages, format_stock_4key_answer(result, user_text=user_text)
+            error = result.get("error") if isinstance(result, dict) else None
+            return messages, str(error or "Khong lay duoc danh sach 4 Key.")
         tools = self.registry.tools
 
         if allowed_apis:
@@ -1930,6 +2044,25 @@ Yêu cầu:
             final_text = clean_chat_output(
                 sanitize_response_text(self._answer_case_idea(matched_case_idea, user_text, model))
             )
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
+
+        stock_4key_screen = stock_4key_screen_args(user_text)
+        if stock_4key_screen:
+            result = self.executor.call(
+                "getStock4KeyEvaluation",
+                stock_4key_screen,
+                user_text=user_text,
+            )
+            final_text = format_stock_4key_answer(result, user_text=user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
                 chunk = final_text[i:i + STREAM_CHUNK_CHARS]

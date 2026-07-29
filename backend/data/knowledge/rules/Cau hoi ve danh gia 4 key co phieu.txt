@@ -23,6 +23,11 @@ Call: getStock4KeyEvaluation.
 Args: mode=history, ticker, from_date=YYYY-MM-DD, include_composite=false.
 Answer: tom tat cac moc/ngay theo ket qua tool.
 
+Guide "Loc danh sach ma theo nhom 4 key [date]"
+Intent: user hoi ma nao/danh sach ma/cac ma thuoc mot nhom 4-key, co the khong noi ticker cu the. Vi du: "Ma nao dung song dung nganh", "ma nao dung song, dung nganh", "cac ma sai song sai nganh".
+Call: getStock4KeyEvaluation.
+Args: mode=screen, date=YYYY-MM-DD, group_4key=<nhom user hoi>, include_composite=false. Neu user hoi hom nay/hien nay/khong noi ngay thi dung ngay hien tai trong system prompt; khong de trong date. Khong truyen ticker neu user khong chi dinh ticker.
+Answer: list ngan gon cac ma thoa nhom 4-key, kem nganh va khuyen nghi neu co. Neu khong co ma nao thoa dieu kien thi noi ro khong co ket qua.
 Guide "Danh gia 4 key nhieu ma [date]"
 Intent: user hoi 4-key cho nhieu ma cu the.
 Call: getStock4KeyEvaluation.

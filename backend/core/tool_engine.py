@@ -65,25 +65,32 @@ class ToolRegistry:
                 "name": "getStock4KeyEvaluation",
                 "description": (
                     "Phan tich/score/rating/4-key co phieu. "
-                    "Phan tich/score/rating: mode=single, include_composite=true; neu co 4-key thi neu Nhom 4 Key. "
-                    "Hoi rieng 4-key: include_composite=false."
+                    "Phan tich/score/rating 1 ma: mode=single, include_composite=true; neu co 4-key thi neu Nhom 4 Key. "
+                    "Hoi rieng 4-key 1 ma: mode=single, include_composite=false. "
+                    "Hoi 'ma nao/danh sach ma' theo nhom 4-key: mode=screen, date, group_4key; khong can ticker."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "mode": {"type": "string", "enum": ["single", "batch", "history"]},
+                        "mode": {"type": "string", "enum": ["single", "batch", "history", "screen"]},
                         "ticker": {"type": "string"},
                         "tickers": {"type": "array", "items": {"type": "string"}},
-                        "date": {"type": "string", "description": "YYYY-MM-DD cho single/batch."},
+                        "date": {"type": "string", "description": "YYYY-MM-DD cho single/batch/screen."},
                         "from_date": {"type": "string", "description": "YYYY-MM-DD cho history."},
                         "include_composite": {"type": "boolean"},
-                        "lookback_sessions": {"type": "integer"}
+                        "lookback_sessions": {"type": "integer"},
+                        "group_4key": {
+                            "type": "string",
+                            "description": "Dung cho mode=screen. Vi du: Dung song dung nganh, Dung song sai nganh, Dung nganh sai song, Sai song sai nganh."
+                        },
+                        "limit": {"type": "integer", "description": "So ma toi da tra ve cho mode=screen."}
                     },
                     "required": [],
                     "additionalProperties": False,
                 },
             },
         })
+
     def _parse_operations(self) -> Dict[str, Dict[str, Any]]:
         ops: Dict[str, Dict[str, Any]] = {}
         paths = self.schema.get("paths", {})
