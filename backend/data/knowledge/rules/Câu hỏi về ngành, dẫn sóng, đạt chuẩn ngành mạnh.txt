@@ -1,5 +1,6 @@
 Guide "Ngành nào đang dẫn dắt"
 gọi api getLeadingCoreBranches, truyền date được hỏi, nếu câu hỏi không có date thì không truyền
+Lấy tất cả ngành trả về ra để trả lời kèm smdt
 
 Guide Hướng dẫn xử lý câu hỏi
 Lộ trình các dòng dẫn sóng ?
