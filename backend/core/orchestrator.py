@@ -572,18 +572,10 @@ def format_stock_4key_list_answer(payload: Dict[str, Any], user_text: str = "") 
     date_text = _fmt_vn_date(payload.get("date") or payload.get("requested_date"))
 
     if mode == "screen":
-        filters = [_display_4key_label(item) for item in (payload.get("group_filters") or [])]
-        group_text = ", ".join(item for item in filters if item) or "dieu kien da hoi"
-        total_matches = int(payload.get("total_matches") or 0)
-        total_screened = int(payload.get("total_screened") or 0)
-        if total_matches <= 0:
-            return f"Khong co ma nao thuoc nhom 4 Key \"{group_text}\" trong {total_screened} ma da ra soat ngay {date_text}."
-        lines = [f"Tim thay {total_matches} ma thuoc nhom 4 Key \"{group_text}\" ngay {date_text}:", ""]
-        for index, item in enumerate(results, start=1):
-            lines.append(_format_4key_result_line(index, item))
-        if total_matches > len(results):
-            lines.append(f"Con {total_matches - len(results)} ma khac, co the tang limit de xem them.")
-        return "\n".join(lines).strip()
+        tickers = [str(item.get("ticker") or "").strip().upper() for item in results if isinstance(item, dict) and item.get("ok") and item.get("ticker")]
+        if not tickers:
+            return "Khong co ma nao thoa dieu kien."
+        return ", ".join(tickers)
 
     if mode == "history":
         ticker = str(payload.get("ticker") or "ma").strip().upper()

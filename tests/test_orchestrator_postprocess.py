@@ -517,10 +517,7 @@ class OrchestratorPostprocessTests(unittest.TestCase):
 
         answer = format_stock_4key_answer(payload, user_text="Ma nao dung song dung nganh")
 
-        self.assertIn("Tim thay 1 ma", answer)
-        self.assertIn("SSI", answer)
-        self.assertIn("\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh", answer)
-        self.assertNotIn("SSI \u0111ang thu\u1ed9c", answer)
+        self.assertEqual(answer, "SSI")
 
     def test_latest_stock_4key_payload_keeps_screen_parent(self):
         payload = {
@@ -574,8 +571,7 @@ class OrchestratorPostprocessTests(unittest.TestCase):
             user_text="ma nao dung song dung nganh",
         )
 
-        self.assertIn("Tim thay 1 ma", answer)
-        self.assertIn("SSI", answer)
+        self.assertEqual(answer, "SSI")
         operation, args, _ = orchestrator.executor.calls[0]
         self.assertEqual(operation, "getStock4KeyEvaluation")
         self.assertEqual(args["mode"], "screen")
