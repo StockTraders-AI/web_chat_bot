@@ -1,3 +1,6 @@
+Guide "Ngành nào đang dẫn dắt"
+gọi api getLeadingCoreBranches, truyền date được hỏi, nếu câu hỏi không có date thì không truyền
+
 Guide Hướng dẫn xử lý câu hỏi
 Lộ trình các dòng dẫn sóng ?
 Gọi api getCoreBranchLeader truyền [date] được hỏi và lập bảng trả lời.
