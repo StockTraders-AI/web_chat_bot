@@ -1164,6 +1164,39 @@
         }
       }
     },
+    "/service/data/getLeadingCoreBranches": {
+      "post": {
+        "summary": "Danh sach nganh chu luc co SMDT vuot nguong trong ngay",
+        "operationId": "getLeadingCoreBranches",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "description": "YYYY-MM-DD optional. Neu khong truyen thi API lay ngay hien tai."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Danh sach nganh chu luc dang dan dat theo nguong SMDT",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LeadingCoreBranchesReply"
+                }
+              }
+            }
+          },
+          "404": { "description": "Khong co du lieu phu hop" },
+          "502": { "description": "Upstream error" }
+        }
+      }
+    },
     "/service/data/getCoreBranchLeader": {
       "post": {
         "summary": "Ngành chủ lực dẫn sóng theo tháng",
@@ -1524,6 +1557,31 @@
           "smdt":{ "type":"number" }
         },
         "required":["date","smdt"]
+      },
+      "LeadingCoreBranchesReply": {
+        "type": "object",
+        "properties": {
+          "date": { "type": "string", "format": "date" },
+          "lastDate": { "type": "string", "format": "date" },
+          "threshold": { "type": "number" },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LeadingCoreBranchItem"
+            }
+          }
+        },
+        "required": ["date", "lastDate", "threshold", "branches"]
+      },
+      "LeadingCoreBranchItem": {
+        "type": "object",
+        "properties": {
+          "keyName": { "type": "string" },
+          "keyValue": { "type": "string" },
+          "date": { "type": "string", "format": "date" },
+          "smdt": { "type": "number" }
+        },
+        "required": ["keyName", "keyValue", "date", "smdt"]
       },
       "CoreBranchLeaderReply": {
         "type": "object",
