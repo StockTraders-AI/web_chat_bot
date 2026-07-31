@@ -67,7 +67,7 @@ class ToolRegistry:
                     "Phan tich/score/rating/4-key co phieu. "
                     "Phan tich/score/rating 1 ma: mode=single, include_composite=true; neu co 4-key thi neu Nhom 4 Key. "
                     "Hoi rieng 4-key 1 ma: mode=single, include_composite=false. "
-                    "Hoi 'ma nao/danh sach ma' theo nhom 4-key: mode=screen, date, group_4key; khong can ticker."
+                    "Chi khi user hoi dung cau 'Cung cap danh sach cac ma dung song dung nganh': mode=screen, date, group_4key=Dung song dung nganh; khong can ticker."
                 ),
                 "parameters": {
                     "type": "object",

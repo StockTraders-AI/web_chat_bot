@@ -492,12 +492,15 @@ class OrchestratorPostprocessTests(unittest.TestCase):
         self.assertIn('MUA - t\u00edn hi\u1ec7u thu\u1eadn c\u1ea3 2 chi\u1ec1u', answer)
         self.assertNotIn('tin hieu thuan ca ma va nganh', answer)
 
-    def test_stock_4key_screen_query_without_ticker_builds_screen_args(self):
-        question = "Ma nao dung song dung nganh"
+    def test_stock_4key_screen_query_requires_exact_list_prompt(self):
+        generic_question = "Ma nao dung song dung nganh"
+        exact_question = "Cung cap danh sach cac ma dung song dung nganh"
 
-        args = stock_4key_screen_args(question)
+        args = stock_4key_screen_args(exact_question)
 
-        self.assertTrue(is_stock_4key_screen_query(question))
+        self.assertFalse(is_stock_4key_screen_query(generic_question))
+        self.assertIsNone(stock_4key_screen_args(generic_question))
+        self.assertTrue(is_stock_4key_screen_query(exact_question))
         self.assertEqual(args["mode"], "screen")
         self.assertEqual(args["group_4key"], "Đúng sóng - Đúng ngành")
         self.assertFalse(args["include_composite"])
@@ -568,7 +571,7 @@ class OrchestratorPostprocessTests(unittest.TestCase):
             enable_tools=True,
             allowed_apis=["getStock4KeyEvaluation"],
             current_doc="Cau hoi ve danh gia 4 key co phieu.txt",
-            user_text="ma nao dung song dung nganh",
+            user_text="Cung cap danh sach cac ma dung song dung nganh",
         )
 
         self.assertEqual(answer, "SSI")

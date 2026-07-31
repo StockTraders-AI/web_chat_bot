@@ -507,26 +507,14 @@ def requested_4key_groups(user_text: str) -> tuple[str, ...]:
     return ()
 
 
-FOUR_KEY_SCREEN_PHRASES = (
-    "ma nao",
-    "danh sach ma",
-    "cac ma",
-    "nhung ma",
-    "co phieu nao",
-    "loc ma",
-    "tim ma",
-)
+FOUR_KEY_SCREEN_QUERY = "cung cap danh sach cac ma dung song dung nganh"
 
 
 def is_stock_4key_screen_query(user_text: str) -> bool:
     normalized = normalize_search_text(user_text)
     if not normalized:
         return False
-    if has_real_ticker(user_text):
-        return False
-    if not requested_4key_groups(user_text):
-        return False
-    return any(phrase in normalized for phrase in FOUR_KEY_SCREEN_PHRASES)
+    return normalized.strip(" ?.!,;:") == FOUR_KEY_SCREEN_QUERY
 
 
 def stock_4key_screen_args(user_text: str) -> Optional[Dict[str, Any]]:
