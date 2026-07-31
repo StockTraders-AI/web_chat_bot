@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, Header, HTTPException
@@ -64,6 +65,71 @@ def normalize_user_id(value: Optional[str]) -> str:
 def build_chat_input(question: str, portfolio: Optional[dict[str, Any]] = None) -> tuple[str, bool]:
     return question.strip(), False
 
+def normalize_search_text(text: str) -> str:
+    normalized = unicodedata.normalize("NFD", text or "")
+    normalized = "".join(c for c in normalized if unicodedata.category(c) != "Mn")
+    normalized = normalized.replace("đ", "d").replace("Đ", "D")
+    normalized = normalized.lower()
+    normalized = re.sub(r"[^a-z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def is_portfolio_4key_list_question(question: str) -> bool:
+    return normalize_search_text(question) == "ma nao dung song dung nganh"
+
+
+def extract_portfolio_position(portfolio: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if not isinstance(portfolio, dict):
+        return None
+    position = portfolio.get("position")
+    if isinstance(position, dict):
+        return position
+    positions = portfolio.get("positions")
+    if isinstance(positions, list) and positions and isinstance(positions[0], dict):
+        return positions[0]
+    if isinstance(portfolio.get("ticker"), str):
+        return portfolio
+    return None
+
+
+def position_ticker(position: Optional[dict[str, Any]]) -> str:
+    if not isinstance(position, dict):
+        return ""
+    return str(position.get("ticker") or position.get("symbol") or position.get("stockCode") or "").strip().upper()
+
+
+def position_is_right_wave_branch(position: Optional[dict[str, Any]]) -> Optional[bool]:
+    if not isinstance(position, dict):
+        return None
+    raw = position.get("cat") or position.get("group_4key") or position.get("group")
+    normalized = normalize_search_text(str(raw or ""))
+    if normalized in {"dd", "dung song dung nganh"}:
+        return True
+    if normalized in {"ds", "sd", "ss", "dung song sai nganh", "dung nganh sai song", "sai song dung nganh", "sai song sai nganh"}:
+        return False
+    return None
+
+
+def format_single_position_4key_answer(ticker: str, is_match: bool) -> str:
+    if is_match:
+        return ticker
+    return "Không có mã nào đúng sóng đúng ngành trong mã được gửi."
+
+
+def answer_portfolio_position_4key(question: str, portfolio: Optional[dict[str, Any]]) -> Optional[str]:
+    if not is_portfolio_4key_list_question(question):
+        return None
+
+    position = extract_portfolio_position(portfolio)
+    ticker = position_ticker(position)
+    if not ticker:
+        return "Vui lòng gửi mã cần phân tích."
+
+    local_match = position_is_right_wave_branch(position)
+    if local_match is None:
+        return "Vui lòng gửi trạng thái 4 Key của mã cần phân tích."
+    return format_single_position_4key_answer(ticker, local_match)
+
 
 @router.post("/portfolio-chat")
 async def portfolio_chat(
@@ -80,9 +146,19 @@ async def portfolio_chat(
     user_id = normalize_user_id(payload.user_id)
     chat_user_id = f"portfolio:{user_id}:{conversation_id}"
     user_text, _ = build_chat_input(question, payload.portfolio)
+    orchestrator = current_orchestrator()
+
+    direct_answer = answer_portfolio_position_4key(question, payload.portfolio)
+    if direct_answer is not None:
+        return {
+            "answer": direct_answer,
+            "sources": [],
+            "usage": {},
+            "conversation_id": conversation_id,
+        }
 
     answer, done_data = await collect_standard_chat(
-        current_orchestrator(),
+        orchestrator,
         user_id=chat_user_id,
         user_text=user_text,
         language=payload.language,
