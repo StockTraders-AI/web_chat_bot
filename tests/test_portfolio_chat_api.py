@@ -129,6 +129,18 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["answer"], "Không có mã nào đúng sóng đúng ngành trong mã được gửi.")
         self.assertEqual(self.orchestrator.calls, [])
+    async def test_portfolio_chat_answers_single_position_ss(self):
+        payload = route.PortfolioChatIn(
+            question="Mã nào sai sóng, sai ngành?",
+            portfolio={"position": {"ticker": "BVS", "cat": "ss"}},
+            user_id="u1",
+            conversation_id="p1",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        self.assertEqual(result["answer"], "BVS")
+        self.assertEqual(self.orchestrator.calls, [])
     async def test_portfolio_chat_api_key_is_optional_but_enforced_when_set(self):
         payload = route.PortfolioChatIn(
             question="BVS thuoc nhom 4 key nao?",

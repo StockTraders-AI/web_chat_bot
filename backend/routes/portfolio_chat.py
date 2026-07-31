@@ -74,8 +74,17 @@ def normalize_search_text(text: str) -> str:
     return re.sub(r"\s+", " ", normalized).strip()
 
 
-def is_portfolio_4key_list_question(question: str) -> bool:
-    return normalize_search_text(question) == "ma nao dung song dung nganh"
+PORTFOLIO_4KEY_QUESTION_TO_CAT = {
+    "ma nao dung song dung nganh": "dd",
+    "ma nao dung song sai nganh": "ds",
+    "ma nao sai song dung nganh": "sd",
+    "ma nao dung nganh sai song": "sd",
+    "ma nao sai song sai nganh": "ss",
+}
+
+
+def requested_portfolio_4key_cat(question: str) -> Optional[str]:
+    return PORTFOLIO_4KEY_QUESTION_TO_CAT.get(normalize_search_text(question))
 
 
 def extract_portfolio_position(portfolio: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
@@ -98,26 +107,42 @@ def position_ticker(position: Optional[dict[str, Any]]) -> str:
     return str(position.get("ticker") or position.get("symbol") or position.get("stockCode") or "").strip().upper()
 
 
-def position_is_right_wave_branch(position: Optional[dict[str, Any]]) -> Optional[bool]:
+FOUR_KEY_GROUP_TO_CAT = {
+    "dd": "dd",
+    "ds": "ds",
+    "sd": "sd",
+    "ss": "ss",
+    "dung song dung nganh": "dd",
+    "dung song sai nganh": "ds",
+    "dung nganh sai song": "sd",
+    "sai song dung nganh": "sd",
+    "sai song sai nganh": "ss",
+}
+
+
+def position_4key_cat(position: Optional[dict[str, Any]]) -> Optional[str]:
     if not isinstance(position, dict):
         return None
     raw = position.get("cat") or position.get("group_4key") or position.get("group")
-    normalized = normalize_search_text(str(raw or ""))
-    if normalized in {"dd", "dung song dung nganh"}:
-        return True
-    if normalized in {"ds", "sd", "ss", "dung song sai nganh", "dung nganh sai song", "sai song dung nganh", "sai song sai nganh"}:
-        return False
-    return None
+    return FOUR_KEY_GROUP_TO_CAT.get(normalize_search_text(str(raw or "")))
 
 
-def format_single_position_4key_answer(ticker: str, is_match: bool) -> str:
+def format_single_position_4key_answer(ticker: str, is_match: bool, requested_cat: str) -> str:
     if is_match:
         return ticker
-    return "Không có mã nào đúng sóng đúng ngành trong mã được gửi."
+    labels = {
+        "dd": "đúng sóng đúng ngành",
+        "ds": "đúng sóng sai ngành",
+        "sd": "sai sóng đúng ngành",
+        "ss": "sai sóng sai ngành",
+    }
+    label = labels.get(requested_cat, "nhóm 4 Key được hỏi")
+    return f"Không có mã nào {label} trong mã được gửi."
 
 
 def answer_portfolio_position_4key(question: str, portfolio: Optional[dict[str, Any]]) -> Optional[str]:
-    if not is_portfolio_4key_list_question(question):
+    requested_cat = requested_portfolio_4key_cat(question)
+    if not requested_cat:
         return None
 
     position = extract_portfolio_position(portfolio)
@@ -125,10 +150,10 @@ def answer_portfolio_position_4key(question: str, portfolio: Optional[dict[str, 
     if not ticker:
         return "Vui lòng gửi mã cần phân tích."
 
-    local_match = position_is_right_wave_branch(position)
-    if local_match is None:
+    actual_cat = position_4key_cat(position)
+    if actual_cat is None:
         return "Vui lòng gửi trạng thái 4 Key của mã cần phân tích."
-    return format_single_position_4key_answer(ticker, local_match)
+    return format_single_position_4key_answer(ticker, actual_cat == requested_cat, requested_cat)
 
 
 @router.post("/portfolio-chat")
