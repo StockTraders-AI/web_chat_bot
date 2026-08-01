@@ -322,6 +322,55 @@ button:hover { opacity: .9; }
   gap: 6px;
 }
 
+.case-docs-field textarea {
+  min-height: 86px;
+}
+
+.case-docs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.case-docs-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 48px;
+  padding: 7px 8px;
+  border: 1px dashed #314363;
+  border-radius: 8px;
+  background: rgba(11, 20, 36, .54);
+}
+
+.case-docs-empty {
+  color: #7f8da9;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.case-docs-file-chip,
+.case-idea-docs-summary span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(47, 127, 232, .14);
+  border: 1px solid rgba(47, 127, 232, .42);
+  color: #dce8ff;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.case-idea-docs-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
 .sales-target-form-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

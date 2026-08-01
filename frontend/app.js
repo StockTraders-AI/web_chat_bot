@@ -73,6 +73,10 @@ const caseIdeaListEl = document.getElementById("caseIdeaList");
 const caseIdeaNameEl = document.getElementById("caseIdeaName");
 const caseIdeaIndicatorsEl = document.getElementById("caseIdeaIndicators");
 const caseIdeaDescriptionEl = document.getElementById("caseIdeaDescription");
+const caseIdeaDocsEl = document.getElementById("caseIdeaDocs");
+const caseIdeaDocsImportBtn = document.getElementById("caseIdeaDocsImport");
+const caseIdeaDocsFileEl = document.getElementById("caseIdeaDocsFile");
+const caseIdeaDocsFileListEl = document.getElementById("caseIdeaDocsFileList");
 const saveCaseIdeaBtn = document.getElementById("saveCaseIdeaBtn");
 const cancelCaseIdeaBtn = document.getElementById("cancelCaseIdeaBtn");
 const conditionStep1El = document.getElementById("conditionStep1");
@@ -158,6 +162,8 @@ let salesDiscoveryTargets = [];
 let caseIdeas = [];
 let editingSalesTargetId = null;
 let editingCaseIdeaId = null;
+let editingCaseIdeaDocsFileText = "";
+let editingCaseIdeaDocsFileNames = [];
 let editingConditionFlowId = null;
 let selectedConditions = [];
 let nextOperator = "AND";
@@ -1031,10 +1037,15 @@ async function showCaseIdeaAdminView() {
 
 function resetCaseIdeaForm() {
   editingCaseIdeaId = null;
+  editingCaseIdeaDocsFileText = "";
+  editingCaseIdeaDocsFileNames = [];
   if (caseIdeaNameEl) caseIdeaNameEl.value = "";
   if (caseIdeaIndicatorsEl) caseIdeaIndicatorsEl.value = "";
   if (caseIdeaDescriptionEl) caseIdeaDescriptionEl.value = "";
-  if (saveCaseIdeaBtn) saveCaseIdeaBtn.textContent = "Lưu case";
+  if (caseIdeaDocsEl) caseIdeaDocsEl.value = "";
+  if (caseIdeaDocsFileEl) caseIdeaDocsFileEl.value = "";
+  renderCaseIdeaDocsFileList();
+  if (saveCaseIdeaBtn) saveCaseIdeaBtn.textContent = "L\u01b0u case";
 }
 
 async function loadCaseIdeas() {
@@ -1065,6 +1076,10 @@ function renderCaseIdeas() {
 
   caseIdeaListEl.innerHTML = caseIdeas.map((item) => {
     const supported = item.status === "supported";
+    const docsFileNames = parseDocsFileNames(item.docs_file_names);
+    const docsSummary = docsFileNames.length
+      ? `<div class="case-idea-docs-summary">${docsFileNames.map((name) => `<span>${escapeHtml(name)}</span>`).join("")}</div>`
+      : "";
     return `
       <div class="case-idea-row">
         <div>
@@ -1072,7 +1087,10 @@ function renderCaseIdeas() {
           <small>#${escapeHtml(item.id || "-")}</small>
         </div>
         <div>${escapeHtml(item.indicators || "-")}</div>
-        <div>${escapeHtml(item.description || "-")}</div>
+        <div>
+          <div>${escapeHtml(item.description || "-")}</div>
+          ${docsSummary}
+        </div>
         <div class="condition-actions case-idea-actions">
           <button type="button" title="Sửa" onclick="editCaseIdea(${item.id})">✎</button>
           <button
@@ -1096,6 +1114,11 @@ function editCaseIdea(id) {
   caseIdeaNameEl.value = item.name || "";
   caseIdeaIndicatorsEl.value = item.indicators || "";
   caseIdeaDescriptionEl.value = item.description || "";
+  if (caseIdeaDocsEl) caseIdeaDocsEl.value = item.docs || "";
+  editingCaseIdeaDocsFileText = item.docs_file_text || "";
+  editingCaseIdeaDocsFileNames = parseDocsFileNames(item.docs_file_names);
+  renderCaseIdeaDocsFileList();
+  if (caseIdeaDocsFileEl) caseIdeaDocsFileEl.value = "";
   saveCaseIdeaBtn.textContent = "Cập nhật case";
 }
 
@@ -1104,6 +1127,9 @@ async function saveCaseIdea() {
     name: caseIdeaNameEl.value.trim(),
     indicators: caseIdeaIndicatorsEl.value.trim(),
     description: caseIdeaDescriptionEl.value.trim(),
+    docs: String(caseIdeaDocsEl?.value || "").trim(),
+    docs_file_text: editingCaseIdeaDocsFileText.trim(),
+    docs_file_names: editingCaseIdeaDocsFileNames.join("\n"),
   };
 
   if (!payload.name) {
@@ -1160,6 +1186,50 @@ async function confirmCaseIdea(id) {
 
   await loadCaseIdeas();
   showToast(data.status === "supported" ? "Đã bật prompt case" : "Đã tắt prompt case");
+}
+
+function parseDocsFileNames(value) {
+  return String(value || "")
+    .split("\n")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function renderCaseIdeaDocsFileList() {
+  if (!caseIdeaDocsFileListEl) return;
+
+  if (!editingCaseIdeaDocsFileNames.length) {
+    caseIdeaDocsFileListEl.innerHTML = `<span class="case-docs-empty">Ch\u01b0a n\u1ea1p file</span>`;
+    return;
+  }
+
+  caseIdeaDocsFileListEl.innerHTML = editingCaseIdeaDocsFileNames.map((name) => `
+    <span class="case-docs-file-chip">${escapeHtml(name)}</span>
+  `).join("");
+}
+
+async function extractDocsFileText(file) {
+  const fileName = String(file?.name || "").toLowerCase();
+  const isServerExtracted =
+    file.type === "application/pdf" ||
+    file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    fileName.endsWith(".pdf") ||
+    fileName.endsWith(".docx") ||
+    fileName.endsWith(".doc");
+
+  if (isServerExtracted) {
+    const res = await fetch(`/condition-docs/extract?filename=${encodeURIComponent(file.name || "docs")}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || "Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c file docs");
+    return String(data.text || "");
+  }
+
+  return file.text();
 }
 
 async function deleteCaseIdea(id) {
@@ -3662,6 +3732,28 @@ importSalesPromptBtn?.addEventListener("click", openSalesPromptFilePicker);
 salesTargetPromptFileEl?.addEventListener("change", importSalesPromptFromFile);
 saveCaseIdeaBtn?.addEventListener("click", saveCaseIdea);
 cancelCaseIdeaBtn?.addEventListener("click", resetCaseIdeaForm);
+caseIdeaDocsImportBtn?.addEventListener("click", () => caseIdeaDocsFileEl?.click());
+caseIdeaDocsFileEl?.addEventListener("change", async () => {
+  const file = caseIdeaDocsFileEl.files?.[0];
+  if (!file) return;
+
+  try {
+    const text = await extractDocsFileText(file);
+    const cleanedText = text.trim();
+    if (!cleanedText) throw new Error("File kh\u00f4ng c\u00f3 n\u1ed9i dung docs");
+
+    editingCaseIdeaDocsFileText = [editingCaseIdeaDocsFileText, `File: ${file.name}\n${cleanedText}`]
+      .filter(Boolean)
+      .join("\n\n");
+    editingCaseIdeaDocsFileNames = [...editingCaseIdeaDocsFileNames, file.name];
+    renderCaseIdeaDocsFileList();
+    showToast(`\u0110\u00e3 n\u1ea1p file ${file.name}`);
+  } catch (err) {
+    showToast(err?.message || "Kh\u00f4ng \u0111\u1ecdc \u0111\u01b0\u1ee3c file docs", "error");
+  } finally {
+    caseIdeaDocsFileEl.value = "";
+  }
+});
 createAccountBtn.addEventListener("click", openCreateAccountModal);
 accountCreateCloseBtn.addEventListener("click", closeCreateAccountModal);
 accountCreateCancelBtn.addEventListener("click", closeCreateAccountModal);

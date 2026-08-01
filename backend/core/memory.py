@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS case_ideas (
   name TEXT NOT NULL,
   indicators TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
+  docs TEXT NOT NULL DEFAULT '',
+  docs_file_text TEXT NOT NULL DEFAULT '',
+  docs_file_names TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT 'waiting'
     CHECK(status IN ('waiting','supported')),
   created_by TEXT DEFAULT 'system',
@@ -362,6 +365,27 @@ class MemoryStore:
             try:
                 await db.execute(
                     "ALTER TABLE condition_flows ADD COLUMN trigger_docs_file_names TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass
+
+            try:
+                await db.execute(
+                    "ALTER TABLE case_ideas ADD COLUMN docs TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass
+
+            try:
+                await db.execute(
+                    "ALTER TABLE case_ideas ADD COLUMN docs_file_text TEXT NOT NULL DEFAULT ''"
+                )
+            except Exception:
+                pass
+
+            try:
+                await db.execute(
+                    "ALTER TABLE case_ideas ADD COLUMN docs_file_names TEXT NOT NULL DEFAULT ''"
                 )
             except Exception:
                 pass
@@ -1396,6 +1420,9 @@ class MemoryStore:
                     name,
                     indicators,
                     description,
+                    docs,
+                    docs_file_text,
+                    docs_file_names,
                     status,
                     created_by,
                     created_at,
@@ -1418,6 +1445,9 @@ class MemoryStore:
                     name,
                     indicators,
                     description,
+                    docs,
+                    docs_file_text,
+                    docs_file_names,
                     status,
                     created_by,
                     created_at,
@@ -1436,6 +1466,9 @@ class MemoryStore:
         name: str,
         indicators: str,
         description: str,
+        docs: str = "",
+        docs_file_text: str = "",
+        docs_file_names: str = "",
         created_by: str | None = None,
     ):
         async with aiosqlite.connect(self.db_path) as db:
@@ -1445,12 +1478,15 @@ class MemoryStore:
                     name,
                     indicators,
                     description,
+                    docs,
+                    docs_file_text,
+                    docs_file_names,
                     status,
                     created_by
                 )
-                VALUES(?, ?, ?, 'waiting', ?)
+                VALUES(?, ?, ?, ?, ?, ?, 'waiting', ?)
                 """,
-                (name, indicators, description, created_by),
+                (name, indicators, description, docs, docs_file_text, docs_file_names, created_by),
             )
             await db.commit()
             return cur.lastrowid
@@ -1461,6 +1497,9 @@ class MemoryStore:
         name: str,
         indicators: str,
         description: str,
+        docs: str = "",
+        docs_file_text: str = "",
+        docs_file_names: str = "",
     ):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute(
@@ -1470,10 +1509,13 @@ class MemoryStore:
                     name=?,
                     indicators=?,
                     description=?,
+                    docs=?,
+                    docs_file_text=?,
+                    docs_file_names=?,
                     updated_at=CURRENT_TIMESTAMP
                 WHERE id=?
                 """,
-                (name, indicators, description, case_id),
+                (name, indicators, description, docs, docs_file_text, docs_file_names, case_id),
             )
             await db.commit()
 

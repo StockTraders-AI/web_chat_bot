@@ -1,5 +1,6 @@
-import json, os, re
+import json, os, re, zipfile
 from io import BytesIO
+from xml.etree import ElementTree
 from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import Cookie, FastAPI, Header, HTTPException, Request, Response
@@ -193,6 +194,9 @@ class CaseIdeaIn(BaseModel):
     name: str
     indicators: str = ""
     description: str = ""
+    docs: str = ""
+    docs_file_text: str = ""
+    docs_file_names: str = ""
 
 
 class SalesDiscoveryTargetIn(BaseModel):
@@ -313,6 +317,28 @@ def combine_trigger_docs(manual_docs: Any = "", file_docs: Any = "") -> str:
         compact_signal_text(file_docs, "", max_chars=8000),
     ]
     return "\n\n".join(part for part in parts if part)
+
+
+def extract_docx_text(raw: bytes) -> str:
+    try:
+        with zipfile.ZipFile(BytesIO(raw)) as docx:
+            xml = docx.read("word/document.xml")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Khong doc duoc noi dung DOCX")
+
+    try:
+        root = ElementTree.fromstring(xml)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Khong doc duoc noi dung DOCX")
+
+    namespace = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    paragraphs = []
+    for paragraph in root.findall(".//w:p", namespace):
+        texts = [node.text or "" for node in paragraph.findall(".//w:t", namespace)]
+        line = "".join(texts).strip()
+        if line:
+            paragraphs.append(line)
+    return "\n".join(paragraphs)
 
 
 def build_demo_flow_ai_message(
@@ -1826,7 +1852,7 @@ async def extract_condition_docs_file(
     authorization: Optional[str] = Header(default=None),
     session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
 ):
-    await require_super_admin(authorization, session_cookie)
+    await require_admin_or_super_admin(authorization, session_cookie)
 
     raw = await request.body()
     if not raw:
@@ -1849,6 +1875,8 @@ async def extract_condition_docs_file(
             text = "\n".join(page.extract_text() or "" for page in reader.pages)
         except Exception:
             raise HTTPException(status_code=400, detail="Khong doc duoc noi dung PDF")
+    elif name.endswith(".docx") or "officedocument.wordprocessingml.document" in content_type:
+        text = extract_docx_text(raw)
     else:
         text = raw.decode("utf-8", errors="ignore")
 
@@ -2638,6 +2666,9 @@ async def create_case_idea(
         name=payload.name.strip(),
         indicators=payload.indicators.strip(),
         description=payload.description.strip(),
+        docs=payload.docs.strip(),
+        docs_file_text=payload.docs_file_text.strip(),
+        docs_file_names=payload.docs_file_names.strip(),
         created_by=account["username"],
     )
 
@@ -2665,6 +2696,9 @@ async def update_case_idea(
         name=payload.name.strip(),
         indicators=payload.indicators.strip(),
         description=payload.description.strip(),
+        docs=payload.docs.strip(),
+        docs_file_text=payload.docs_file_text.strip(),
+        docs_file_names=payload.docs_file_names.strip(),
     )
 
     return {"ok": True}

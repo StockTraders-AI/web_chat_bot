@@ -582,6 +582,16 @@
               <textarea id="caseIdeaDescription" rows="5" placeholder="Admin nhập mô tả/prompt để AI dùng trả lời khi câu hỏi khớp case này."></textarea>
             </label>
 
+            <label class="login-field case-docs-field">
+              <span class="case-docs-head">
+                <span>Docs StockTradersAI</span>
+                <button class="mini-file-btn" id="caseIdeaDocsImport" type="button">N&#7841;p file</button>
+              </span>
+              <input id="caseIdeaDocsFile" type="file" accept=".txt,.md,.csv,.json,.pdf,.doc,.docx,text/plain,text/markdown,application/json,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword" hidden />
+              <div class="case-docs-file-list" id="caseIdeaDocsFileList">Ch&#432;a n&#7841;p file</div>
+              <textarea id="caseIdeaDocs" rows="4" maxlength="8000" placeholder="Docs nh&#7853;p tay th&#234;m n&#7871;u c&#7847;n, c&#243; th&#7875; &#273;&#7875; tr&#7889;ng..."></textarea>
+            </label>
+
             <div class="form-actions">
               <button id="cancelCaseIdeaBtn" type="button">Hủy</button>
               <button class="primary-action" id="saveCaseIdeaBtn" type="button">Lưu case</button>

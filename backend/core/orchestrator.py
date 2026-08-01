@@ -764,6 +764,14 @@ def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
     name = str(case_idea.get("name") or "").strip()
     indicators = str(case_idea.get("indicators") or "").strip()
     description = str(case_idea.get("description") or "").strip()
+    docs = "\n\n".join(
+        part
+        for part in [
+            str(case_idea.get("docs") or "").strip(),
+            str(case_idea.get("docs_file_text") or "").strip(),
+        ]
+        if part
+    )
 
     parts = [
         "CASE PROMPT DO ADMIN THIET LAP - UU TIEN CHO CAU HOI HIEN TAI:",
@@ -774,11 +782,18 @@ def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
     parts.extend([
         "Mo ta/prompt cua case:",
         description,
+    ])
+    if docs:
+        parts.extend([
+            "Docs tham chieu StockTradersAI cua case:",
+            docs[:8000],
+        ])
+    parts.extend([
         "Nhiem vu khi case nay khop:",
-        "- Hay coi phan mo ta o tren la noi dung tho admin nem vao cho AI xu ly.",
-        "- Viet lai mo ta nay theo cach truyen dat cua AI de tra loi cau hoi user: tu nhien hon, de hieu hon, co them cach dien giai neu can.",
-        "- Khong be nguyen van mo ta ra ngoai; khong lap lai nguyen cau hoac cum dai trong mo ta.",
-        "- Giu dung so lieu, moc thoi gian, dieu kien va y chinh trong mo ta; khong tu them kien thuc moi lam lech y admin.",
+        "- Hay coi phan mo ta va docs o tren la noi dung tho admin nem vao cho AI xu ly.",
+        "- Viet lai mo ta nay theo cach truyen dat cua AI de tra loi cau hoi user: tu nhien hon, de hieu hon, co them cach dien giai neu can; dung docs de bo sung ngu canh neu co.",
+        "- Khong be nguyen van mo ta/docs ra ngoai; khong lap lai nguyen cau hoac cum dai trong mo ta/docs.",
+        "- Giu dung so lieu, moc thoi gian, dieu kien va y chinh trong mo ta/docs; khong tu them kien thuc moi lam lech y admin.",
         "- Khong nhac den admin, case, prompt noi bo, database hay man hinh thiet lap.",
     ])
     return "\n".join(parts)
