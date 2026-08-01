@@ -741,6 +741,13 @@ def score_case_idea_match(user_text: str, case_idea: Dict[str, Any]) -> int:
     if len(desc_overlap) >= 2:
         score += min(20, len(desc_overlap) * 3)
 
+    if len(desc_overlap) >= 3 and desc_tokens:
+        desc_overlap_ratio = len(desc_overlap) / max(1, len(desc_tokens))
+        if desc_overlap_ratio >= 0.45:
+            score += 35
+        elif len(desc_overlap) >= 4 and desc_overlap_ratio >= 0.30:
+            score += 25
+
     return score
 
 

@@ -52,6 +52,37 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(matched)
         self.assertEqual(matched["id"], 2)
 
+    def test_empty_sample_questions_can_match_case_name(self):
+        cases = [{
+            "id": 2,
+            "name": "Dinh nghia song lon",
+            "indicators": "",
+            "description": "Song lon la trang thai thi truong co dong tien xac nhan manh.",
+            "status": "supported",
+        }]
+
+        matched = find_matching_case_idea("song lon la gi", cases)
+
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched["id"], 2)
+
+    def test_description_can_match_when_many_terms_overlap(self):
+        cases = [{
+            "id": 3,
+            "name": "Khai niem noi bo",
+            "indicators": "",
+            "description": "Song lon la trang thai thi truong co dong tien xac nhan manh.",
+            "status": "supported",
+        }]
+
+        matched = find_matching_case_idea(
+            "trang thai thi truong co dong tien xac nhan manh la gi",
+            cases,
+        )
+
+        self.assertIsNotNone(matched)
+        self.assertEqual(matched["id"], 3)
+
     def test_waiting_case_does_not_match_until_checked_green(self):
         cases = [{
             "id": 2,
