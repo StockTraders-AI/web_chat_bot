@@ -778,7 +778,7 @@ def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
         f"Ten case: {name}",
     ]
     if indicators:
-        parts.append(f"Tu khoa/chi so nhan dien: {indicators}")
+        parts.append(f"Cau hoi mau/tu khoa nhan dien: {indicators}")
     parts.extend([
         "Mo ta/prompt cua case:",
         description,
