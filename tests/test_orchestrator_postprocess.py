@@ -117,10 +117,16 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("09/04/2025", context)
         self.assertIn("Khong tu sua cau hoi", context)
 
-    async def test_chat_stream_retries_when_case_answer_is_too_close_to_description(self):
-        description = (
-            "Song lon la song co thoi gian tang gia keo dai tu 3 thang den 6 thang, "
-            "cac nhanh dieu chinh cua song lon la do tin cay song dat tu 70 phan tram tro len."
+    async def test_chat_stream_retries_when_case_answer_is_too_close_to_source_docs(self):
+        focus_note = (
+            "Viet dinh nghia can chu trong cac thong so, nguong quy dinh cua he thong "
+            "va ghi chu dinh nghia rieng tu StockTraders AI."
+        )
+        docs_source = (
+            "Song lon la song co thoi gian tang gia keo dai tu 3 thang den 6 thang. "
+            "Khi so luong co phieu Cho mua tang len va dat moc 60 ma, day la dau hieu "
+            "chuyen doi tu thi truong suy yeu sang thi truong co trien vong tang truong. "
+            "Do tin cay song dat tu 70 phan tram tro len."
         )
 
         class FakeMemory:
@@ -142,7 +148,8 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
                     "id": 2,
                     "name": "Dinh nghia song lon",
                     "indicators": "song lon",
-                    "description": description,
+                    "description": focus_note,
+                    "docs": docs_source,
                     "status": "supported",
                 }]
 
@@ -153,12 +160,12 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
             def chat(self, **kwargs):
                 self.calls.append(kwargs)
                 if len(self.calls) == 1:
-                    message = SimpleNamespace(content=description)
+                    message = SimpleNamespace(content=docs_source)
                 else:
                     message = SimpleNamespace(content=(
-                        "Co the hieu song lon la mot pha tang du suc ben, khong chi la vai phien hoi ngan. "
-                        "Diem can chu y la xu huong phai duy tri trong khoang 3-6 thang va do tin cay dat tu 70 phan tram tro len. "
-                        "Khi doc tin hieu nay, nen xem no nhu bo loc de nhan dien giai doan thi truong dang co dong tien ung ho."
+                        "Song lon trong StockTraders AI la pha tang keo dai khoang 3-6 thang, "
+                        "nhung diem can bam la cac nguong he thong: Cho mua dat moc 60 ma cho thay "
+                        "thi truong co dau hieu chuyen tu suy yeu sang trien vong tang truong, va do tin cay song can dat tu 70 phan tram tro len."
                     ))
                 return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
@@ -176,28 +183,30 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
             chunks.append((event, data))
 
         answer = "".join(data.get("text", "") for event, data in chunks if event == "delta")
-        self.assertIn("mot pha tang du suc ben", answer)
+        self.assertIn("Cho mua dat moc 60 ma", answer)
         self.assertEqual(chunks[-1][0], "done")
         self.assertEqual(len(orch.oa.calls), 2)
         system_text = orch.oa.calls[0]["messages"][0]["content"]
         retry_text = orch.oa.calls[1]["messages"][1]["content"]
-        self.assertIn(description, system_text)
-        self.assertIn("rewrite noi dung mo ta theo cach truyen dat cua AI", system_text)
-        self.assertIn("rewrite lai dung tinh than", retry_text)
-
-    def test_case_prompt_contains_admin_description(self):
+        self.assertIn(docs_source, system_text)
+        self.assertIn(focus_note, system_text)
+        self.assertIn("docs nguon la noi dung chinh", system_text)
+        self.assertIn("docs la nguon chinh", retry_text)
+    def test_case_prompt_contains_focus_note_and_docs_source(self):
         prompt = build_case_idea_prompt({
             "name": "Dinh nghia song lon",
             "indicators": "song lon",
-            "description": "Song lon la mo ta do admin cau hinh.",
+            "description": "Can chu trong nguong quy dinh cua he thong.",
+            "docs": "Cho mua dat moc 60 ma la tin hieu quan trong.",
             "status": "supported",
         })
 
-        self.assertIn("Mo ta/prompt cua case", prompt)
-        self.assertIn("Song lon la mo ta do admin cau hinh.", prompt)
-        self.assertIn("Khong nhac den admin", prompt)
-        self.assertIn("Viet lai mo ta nay theo cach truyen dat cua AI", prompt)
-
+        self.assertIn("Ghi chu trong tam/cach khai thac docs cua case", prompt)
+        self.assertIn("Can chu trong nguong quy dinh cua he thong.", prompt)
+        self.assertIn("Docs nguon StockTradersAI cua case", prompt)
+        self.assertIn("Cho mua dat moc 60 ma", prompt)
+        self.assertIn("Docs nguon la noi dung chinh", prompt)
+        self.assertIn("khong tra loi lan man", prompt)
     def test_latest_lookup_date_prefers_nearest_recent_question(self):
         context_text = build_contextual_user_text(
             "co xac nhan chan song khong?",
@@ -301,10 +310,7 @@ class CaseIdeaPromptTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("Song lon la prompt rieng admin muon AI dung de tra loi.", system_text)
         self.assertIn("LICH SU 3 CAU HOI USER GAN NHAT", system_text)
         self.assertIn("09/04/2025", system_text)
-        self.assertIn("LICH SU 3 CAU HOI USER GAN NHAT", user_text)
-        self.assertIn("09/04/2025", user_text)
-        self.assertIn("CAU HOI HIEN TAI - GIU NGUYEN VAN BAN USER", user_text)
-        self.assertIn("Dinh nghia song lon la gi?", user_text)
+        self.assertEqual(user_text, "Dinh nghia song lon la gi?")
         self.assertNotIn("CAU HOI DA HIEU THEO NGU CANH", user_text)
         self.assertFalse(enable_tools)
         self.assertEqual(sources, [])

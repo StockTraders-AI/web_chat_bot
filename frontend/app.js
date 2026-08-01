@@ -162,8 +162,7 @@ let salesDiscoveryTargets = [];
 let caseIdeas = [];
 let editingSalesTargetId = null;
 let editingCaseIdeaId = null;
-let editingCaseIdeaDocsFileText = "";
-let editingCaseIdeaDocsFileNames = [];
+let editingCaseIdeaDocsFiles = [];
 let editingConditionFlowId = null;
 let selectedConditions = [];
 let nextOperator = "AND";
@@ -1037,8 +1036,7 @@ async function showCaseIdeaAdminView() {
 
 function resetCaseIdeaForm() {
   editingCaseIdeaId = null;
-  editingCaseIdeaDocsFileText = "";
-  editingCaseIdeaDocsFileNames = [];
+  editingCaseIdeaDocsFiles = [];
   if (caseIdeaNameEl) caseIdeaNameEl.value = "";
   if (caseIdeaIndicatorsEl) caseIdeaIndicatorsEl.value = "";
   if (caseIdeaDescriptionEl) caseIdeaDescriptionEl.value = "";
@@ -1115,8 +1113,7 @@ function editCaseIdea(id) {
   caseIdeaIndicatorsEl.value = item.indicators || "";
   caseIdeaDescriptionEl.value = item.description || "";
   if (caseIdeaDocsEl) caseIdeaDocsEl.value = item.docs || "";
-  editingCaseIdeaDocsFileText = item.docs_file_text || "";
-  editingCaseIdeaDocsFileNames = parseDocsFileNames(item.docs_file_names);
+  editingCaseIdeaDocsFiles = parseCaseIdeaDocsFiles(item.docs_file_names, item.docs_file_text);
   renderCaseIdeaDocsFileList();
   if (caseIdeaDocsFileEl) caseIdeaDocsFileEl.value = "";
   saveCaseIdeaBtn.textContent = "Cập nhật case";
@@ -1128,8 +1125,8 @@ async function saveCaseIdea() {
     indicators: caseIdeaIndicatorsEl.value.trim(),
     description: caseIdeaDescriptionEl.value.trim(),
     docs: String(caseIdeaDocsEl?.value || "").trim(),
-    docs_file_text: editingCaseIdeaDocsFileText.trim(),
-    docs_file_names: editingCaseIdeaDocsFileNames.join("\n"),
+    docs_file_text: serializeCaseIdeaDocsFileText(),
+    docs_file_names: serializeCaseIdeaDocsFileNames(),
   };
 
   if (!payload.name) {
@@ -1195,16 +1192,56 @@ function parseDocsFileNames(value) {
     .filter(Boolean);
 }
 
+function parseCaseIdeaDocsFileBlocks(value) {
+  return String(value || "")
+    .split(/\n{2,}File: /)
+    .map((block, index) => (index === 0 ? block : `File: ${block}`))
+    .map((block) => block.trim())
+    .filter(Boolean);
+}
+
+function parseCaseIdeaDocsFiles(fileNamesValue, fileTextValue) {
+  const names = parseDocsFileNames(fileNamesValue);
+  const blocks = parseCaseIdeaDocsFileBlocks(fileTextValue);
+  return names.map((name, index) => {
+    const existingBlock = blocks.find((block) => block.startsWith(`File: ${name}\n`));
+    const fallbackBlock = blocks[index] || "";
+    const block = existingBlock || fallbackBlock;
+    const prefix = `File: ${name}\n`;
+    const text = block.startsWith(prefix) ? block.slice(prefix.length).trim() : block.trim();
+    return { name, text };
+  });
+}
+
+function serializeCaseIdeaDocsFileNames() {
+  return editingCaseIdeaDocsFiles.map((file) => file.name).join("\n");
+}
+
+function serializeCaseIdeaDocsFileText() {
+  return editingCaseIdeaDocsFiles
+    .map((file) => `File: ${file.name}\n${file.text}`)
+    .join("\n\n")
+    .trim();
+}
+
+function removeCaseIdeaDocsFile(index) {
+  editingCaseIdeaDocsFiles = editingCaseIdeaDocsFiles.filter((_, fileIndex) => fileIndex !== Number(index));
+  renderCaseIdeaDocsFileList();
+}
+
 function renderCaseIdeaDocsFileList() {
   if (!caseIdeaDocsFileListEl) return;
 
-  if (!editingCaseIdeaDocsFileNames.length) {
+  if (!editingCaseIdeaDocsFiles.length) {
     caseIdeaDocsFileListEl.innerHTML = `<span class="case-docs-empty">Ch\u01b0a n\u1ea1p file</span>`;
     return;
   }
 
-  caseIdeaDocsFileListEl.innerHTML = editingCaseIdeaDocsFileNames.map((name) => `
-    <span class="case-docs-file-chip">${escapeHtml(name)}</span>
+  caseIdeaDocsFileListEl.innerHTML = editingCaseIdeaDocsFiles.map((file, index) => `
+    <span class="case-docs-file-chip">
+      <span>${escapeHtml(file.name)}</span>
+      <button type="button" title="X\u00f3a file" onclick="removeCaseIdeaDocsFile(${index})">&times;</button>
+    </span>
   `).join("");
 }
 
@@ -3742,10 +3779,7 @@ caseIdeaDocsFileEl?.addEventListener("change", async () => {
     const cleanedText = text.trim();
     if (!cleanedText) throw new Error("File kh\u00f4ng c\u00f3 n\u1ed9i dung docs");
 
-    editingCaseIdeaDocsFileText = [editingCaseIdeaDocsFileText, `File: ${file.name}\n${cleanedText}`]
-      .filter(Boolean)
-      .join("\n\n");
-    editingCaseIdeaDocsFileNames = [...editingCaseIdeaDocsFileNames, file.name];
+    editingCaseIdeaDocsFiles = [...editingCaseIdeaDocsFiles, { name: file.name, text: cleanedText }];
     renderCaseIdeaDocsFileList();
     showToast(`\u0110\u00e3 n\u1ea1p file ${file.name}`);
   } catch (err) {

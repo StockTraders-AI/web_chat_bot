@@ -371,6 +371,32 @@ button:hover { opacity: .9; }
   margin-top: 8px;
 }
 
+.case-docs-file-chip {
+  gap: 6px;
+}
+
+.case-docs-file-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .12);
+  color: #dce8ff;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.case-docs-file-chip button:hover {
+  background: rgba(255, 80, 112, .24);
+  color: #fff;
+}
+
 .sales-target-form-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -697,7 +697,11 @@ def score_case_idea_match(user_text: str, case_idea: Dict[str, Any]) -> int:
         return 0
 
     description = str(case_idea.get("description") or "").strip()
-    if not description:
+    docs_text = " ".join([
+        str(case_idea.get("docs") or "").strip(),
+        str(case_idea.get("docs_file_text") or "").strip(),
+    ]).strip()
+    if not description and not docs_text:
         return 0
 
     user_norm = normalize_search_text(user_text)
@@ -786,21 +790,22 @@ def build_case_idea_prompt(case_idea: Dict[str, Any]) -> str:
     ]
     if indicators:
         parts.append(f"Cau hoi mau/tu khoa nhan dien: {indicators}")
-    parts.extend([
-        "Mo ta/prompt cua case:",
-        description,
-    ])
+    if description:
+        parts.extend([
+            "Ghi chu trong tam/cach khai thac docs cua case:",
+            description,
+        ])
     if docs:
         parts.extend([
-            "Docs tham chieu StockTradersAI cua case:",
+            "Docs nguon StockTradersAI cua case:",
             docs[:8000],
         ])
     parts.extend([
         "Nhiem vu khi case nay khop:",
-        "- Hay coi phan mo ta va docs o tren la noi dung tho admin nem vao cho AI xu ly.",
-        "- Viet lai mo ta nay theo cach truyen dat cua AI de tra loi cau hoi user: tu nhien hon, de hieu hon, co them cach dien giai neu can; dung docs de bo sung ngu canh neu co.",
-        "- Khong be nguyen van mo ta/docs ra ngoai; khong lap lai nguyen cau hoac cum dai trong mo ta/docs.",
-        "- Giu dung so lieu, moc thoi gian, dieu kien va y chinh trong mo ta/docs; khong tu them kien thuc moi lam lech y admin.",
+        "- Docs nguon la noi dung chinh de tra loi; ghi chu trong tam chi la huong dan can moi key nao trong docs.",
+        "- Neu docs dai, hay chon dung cac y lien quan cau hoi user va ghi chu: dinh nghia, thong so, nguong, moc, dieu kien, quy tac he thong.",
+        "- Uu tien cac con so, nguong va quy dinh ro rang trong docs; khong tra loi lan man hoac tom tat toan bo docs neu user hoi mot dinh nghia cu the.",
+        "- Neu docs khong co, moi duoc dung ghi chu trong tam lam nguon fallback.",
         "- Khong nhac den admin, case, prompt noi bo, database hay man hinh thiet lap.",
     ])
     return "\n".join(parts)
@@ -1934,21 +1939,30 @@ Yêu cầu:
             print("WAITBUY_EXPLANATION_ERROR:", exc)
             return fallback
     def _answer_case_idea(self, case_idea: Dict[str, Any], user_text: str, model: str) -> str:
-        fallback = str(case_idea.get("description") or "").strip()
+        docs_source = "\n\n".join(
+            part
+            for part in [
+                str(case_idea.get("docs") or "").strip(),
+                str(case_idea.get("docs_file_text") or "").strip(),
+            ]
+            if part
+        )
+        focus_note = str(case_idea.get("description") or "").strip()
+        fallback = (docs_source[:600] or focus_note).strip()
         prompt = build_case_idea_prompt(case_idea)
         system_text = (
             "Ban la Chatbot StockTraders AI. Tra loi tieng Viet tu nhien, khong markdown.\n"
-            "Khi case y tuong khop, nhiem vu cua ban la rewrite noi dung mo ta theo cach truyen dat cua AI. "
-            "Mo ta la nguyen lieu tho; cau tra loi phai la cach dien dat moi, de hieu, giong dang noi voi user that.\n"
-            "Khong chep nguyen van mo ta. Giu dung so lieu, moc thoi gian, dieu kien va y chinh.\n\n"
+            "Khi case y tuong khop, docs nguon la noi dung chinh. Ghi chu trong tam cua admin chi dung de dinh huong can moi key nao trong docs. "
+            "Neu docs dai, hay trich dung dinh nghia, thong so, nguong, moc va quy tac lien quan nhat; khong tom tat lan man toan bo docs.\n"
+            "Khong bia ngoai docs/ghi chu. Khong chep nguyen van doan dai; duoc dien giai lai nhung phai giu dung so lieu, nguong va dieu kien.\n\n"
             + prompt
         )
         user_prompt = (
             "Cau hoi user:\n"
             + str(user_text or "").strip()
-            + "\n\nViet lai mo ta case theo cach truyen dat cua AI de tra loi cau hoi nay. "
-            "Co the them cach hieu, diem can chu y hoac y nghia thuc chien neu phu hop; "
-            "khong lap lai nguyen cau trong mo ta."
+            + "\n\nHay tra loi bang cach khai thac docs nguon theo ghi chu trong tam. "
+            "Neu user hoi dinh nghia, phai neu dung cac key chinh, thong so/nguong/quy dinh trong docs neu co; "
+            "khong tra loi chung chung hoac lan man."
         )
 
         try:
@@ -1967,9 +1981,9 @@ Yêu cầu:
 
             retry_prompt = (
                 user_prompt
-                + "\n\nCau tra loi vua tao van qua giong mo ta goc. Hay rewrite lai dung tinh than: "
-                "viet lai mo ta theo cach truyen dat cua AI, khac cau chu hon, co cach hieu/diem can chu y/y nghia, "
-                "giu so lieu quan trong, khong copy cum dai."
+                + "\n\nCau tra loi vua tao chua dat. Hay tra loi lai dung tinh than: "
+                "docs la nguon chinh, ghi chu chi la trong tam khai thac; rut key, nguong, thong so, quy tac lien quan nhat, "
+                "giu so lieu quan trong, khong copy cum dai va khong lan man."
             )
             retry = self.oa.chat(
                 model=model,
@@ -1985,7 +1999,6 @@ Yêu cầu:
         except Exception as exc:
             print("CASE_IDEA_ANSWER_ERROR:", exc)
             return fallback
-
     async def chat_stream(
         self,
         user_id: str,
