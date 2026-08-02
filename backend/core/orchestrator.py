@@ -2118,6 +2118,24 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
+        stock_4key_single = stock_4key_single_args(user_text)
+        if stock_4key_single:
+            result = self.executor.call(
+                "getStock4KeyEvaluation",
+                stock_4key_single,
+                user_text=user_text,
+            )
+            final_text = format_stock_4key_answer(result, user_text=user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data(["4-key"]))
+            return
         matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
         if matched_case_idea:
             final_text = clean_chat_output(
@@ -2133,25 +2151,6 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        stock_4key_single = stock_4key_single_args(user_text)
-        if stock_4key_single:
-            result = self.executor.call(
-                "getStock4KeyEvaluation",
-                stock_4key_single,
-                user_text=user_text,
-            )
-            final_text = format_stock_4key_answer(result, user_text=user_text)
-            final_text = clean_chat_output(sanitize_response_text(final_text))
-            full = ""
-            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
-                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
-                if chunk:
-                    full += chunk
-                    yield ("chunk", {"text": chunk})
-            await self.memory.add(user_id, "user", user_text)
-            await self.memory.add(user_id, "assistant", full)
-            yield ("done", done_data(["4-key"]))
-            return
         stock_4key_screen = stock_4key_screen_args(user_text)
         if stock_4key_screen:
             result = self.executor.call(
