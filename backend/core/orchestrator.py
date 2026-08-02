@@ -2071,6 +2071,18 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
+        if is_buy_definition_query(user_text):
+            final_text = clean_chat_output(sanitize_response_text(format_buy_definition_answer()))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
+
         matched_case_idea = None
         if not should_force_rules(user_text):
             matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
@@ -2149,18 +2161,6 @@ Yêu cầu:
         if is_recent_total_trade_query(user_text):
             final_text = self._answer_recent_total_trade(user_text)
             final_text = clean_chat_output(sanitize_response_text(final_text))
-            full = ""
-            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
-                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
-                if chunk:
-                    full += chunk
-                    yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
-            yield ("done", done_data([]))
-            return
-
-        if is_buy_definition_query(user_text):
-            final_text = clean_chat_output(sanitize_response_text(format_buy_definition_answer()))
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
                 chunk = final_text[i:i + STREAM_CHUNK_CHARS]
