@@ -1045,25 +1045,6 @@ def is_waitbuy_value_query(text: str) -> bool:
     return _normalize_waitbuy_lookup_date(text) is not None
 
 
-def is_buy_definition_query(text: str) -> bool:
-    normalized = normalize_search_text(text)
-    if not is_definition_query(text):
-        return False
-    if "cho mua" in normalized or "waitbuy" in normalized:
-        return False
-    return bool(re.search(r"\b(?:tin hieu mua|trang thai mua|mua)\b", normalized))
-
-
-def format_buy_definition_answer() -> str:
-    return (
-        '"Mua" l\u00e0 t\u00edn hi\u1ec7u x\u00e1c nh\u1eadn m\u1ea1nh h\u01a1n "Ch\u1edd mua" trong h\u1ec7 th\u1ed1ng StockTraders AI. '
-        "Khi m\u1ed9t c\u1ed5 phi\u1ebfu chuy\u1ec3n sang tr\u1ea1ng th\u00e1i Mua, h\u1ec7 th\u1ed1ng ghi nh\u1eadn l\u1ef1c c\u1ea7u \u0111\u00e3 r\u00f5 h\u01a1n, "
-        "d\u00f2ng ti\u1ec1n c\u1ea3i thi\u1ec7n v\u00e0 t\u00edn hi\u1ec7u \u0111\u1ee7 \u0111i\u1ec1u ki\u1ec7n \u0111\u1ec3 nh\u00e0 \u0111\u1ea7u t\u01b0 c\u00e2n nh\u1eafc n\u00e2ng t\u1ef7 tr\u1ecdng theo k\u1ebf ho\u1ea1ch. "
-        "\u0110\u00e2y kh\u00f4ng c\u00f2n l\u00e0 giai \u0111o\u1ea1n d\u00f2 \u0111\u00e1y s\u1edbm, m\u00e0 l\u00e0 b\u01b0\u1edbc x\u00e1c nh\u1eadn sau khi t\u00edn hi\u1ec7u t\u00edch l\u0169y \u0111\u00e3 r\u00f5 h\u01a1n."
-    )
-
-
-
 def extract_stock_wave_rows(raw: Any) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
 
@@ -2071,21 +2052,7 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        if is_buy_definition_query(user_text):
-            final_text = clean_chat_output(sanitize_response_text(format_buy_definition_answer()))
-            full = ""
-            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
-                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
-                if chunk:
-                    full += chunk
-                    yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
-            yield ("done", done_data([]))
-            return
-
-        matched_case_idea = None
-        if not should_force_rules(user_text):
-            matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
+        matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
         if matched_case_idea:
             final_text = clean_chat_output(
                 sanitize_response_text(self._answer_case_idea(matched_case_idea, user_text, model))
