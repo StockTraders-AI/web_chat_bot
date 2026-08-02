@@ -393,6 +393,7 @@ def _display_lookup_key(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", " ", normalized).strip()
 
 
+
 def _display_4key_label(value: Any) -> str:
     text = str(value or "").strip()
     if not text:
@@ -508,13 +509,29 @@ def requested_4key_groups(user_text: str) -> tuple[str, ...]:
 
 
 FOUR_KEY_SCREEN_QUERY = "cung cap danh sach cac ma dung song dung nganh"
+FOUR_KEY_SCREEN_INTENT_PHRASES = (
+    "cung cap",
+    "danh sach",
+    "danh muc",
+    "cac ma",
+    "nhung ma",
+    "loc danh sach",
+    "loc danh muc",
+    "liet ke",
+    "cho toi danh sach",
+    "cho toi danh muc",
+)
 
 
 def is_stock_4key_screen_query(user_text: str) -> bool:
-    normalized = normalize_search_text(user_text)
+    normalized = normalize_search_text(user_text).strip(" ?.!,;:")
     if not normalized:
         return False
-    return normalized.strip(" ?.!,;:") == FOUR_KEY_SCREEN_QUERY
+    if normalized == FOUR_KEY_SCREEN_QUERY:
+        return True
+    if not requested_4key_groups(user_text):
+        return False
+    return any(phrase in normalized for phrase in FOUR_KEY_SCREEN_INTENT_PHRASES)
 
 
 def stock_4key_screen_args(user_text: str) -> Optional[Dict[str, Any]]:
@@ -537,6 +554,26 @@ def _change_word(now: Any, prev: Any) -> str:
         return "so với"
 
 
+
+def stock_4key_single_args(user_text: str) -> Optional[Dict[str, Any]]:
+    ticker = extract_ticker(user_text)
+    if not ticker:
+        return None
+
+    normalized = normalize_search_text(user_text)
+    groups = requested_4key_groups(user_text)
+    has_4key_phrase = any(phrase in normalized for phrase in FOUR_KEY_ONLY_PHRASES)
+    has_detail_phrase = any(phrase in normalized for phrase in FOUR_KEY_DETAIL_PHRASES)
+    if not (groups or has_4key_phrase or "4 key" in normalized or "4key" in normalized):
+        return None
+
+    requested_date = _normalize_waitbuy_lookup_date(user_text) or datetime.now().strftime("%Y-%m-%d")
+    return {
+        "mode": "single",
+        "ticker": ticker,
+        "date": requested_date,
+        "include_composite": bool(has_detail_phrase or groups),
+    }
 
 def _format_4key_result_line(index: int, item: Dict[str, Any]) -> str:
     ticker = str(item.get("ticker") or "ma").strip().upper()
@@ -708,11 +745,23 @@ def score_case_idea_match(user_text: str, case_idea: Dict[str, Any]) -> int:
     if not user_norm:
         return 0
 
-    user_token_set = set(case_idea_tokens(user_text))
-    score = 0
-
     name = str(case_idea.get("name") or "").strip()
     name_norm = normalize_search_text(name)
+    topic_norm = normalize_search_text(" ".join([name, str(case_idea.get("indicators") or "")]))
+    bare_buy_definition = (
+        is_definition_query(user_text)
+        and bool(re.search(r"\bmua\b", user_norm))
+        and "cho mua" not in user_norm
+        and "waitbuy" not in user_norm
+    )
+    if bare_buy_definition and ("cho mua" in topic_norm or "waitbuy" in topic_norm):
+        return 0
+
+    user_token_set = set(case_idea_tokens(user_text))
+    score = 0
+    if bare_buy_definition and ("dinh nghia mua" in topic_norm or "mua la gi" in topic_norm):
+        score += 120
+
     name_tokens = case_idea_tokens(name)
     name_token_set = set(name_tokens)
 
@@ -1622,6 +1671,23 @@ class Orchestrator:
 
             return messages, final_text
 
+        direct_4key_single_args = stock_4key_single_args(user_text)
+        if direct_4key_single_args and (not allowed_apis or "getStock4KeyEvaluation" in allowed_apis):
+            result = self.executor.call(
+                "getStock4KeyEvaluation",
+                direct_4key_single_args,
+                doc_name=current_doc,
+                user_text=user_text,
+            )
+            messages.append({
+                "role": "tool",
+                "tool_call_id": "DIRECT_4KEY_SINGLE",
+                "content": json.dumps(result, ensure_ascii=False),
+            })
+            if isinstance(result, dict) and result.get("ok"):
+                return messages, format_stock_4key_answer(result, user_text=user_text)
+            error = result.get("error") if isinstance(result, dict) else None
+            return messages, str(error or "Khong lay duoc du lieu 4 Key.")
         direct_4key_args = stock_4key_screen_args(user_text)
         if direct_4key_args and (not allowed_apis or "getStock4KeyEvaluation" in allowed_apis):
             result = self.executor.call(
@@ -2067,6 +2133,25 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
+        stock_4key_single = stock_4key_single_args(user_text)
+        if stock_4key_single:
+            result = self.executor.call(
+                "getStock4KeyEvaluation",
+                stock_4key_single,
+                user_text=user_text,
+            )
+            final_text = format_stock_4key_answer(result, user_text=user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("chunk", {"text": chunk})
+            await self.memory.add(user_id, "user", user_text)
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data(["4-key"]))
+            return
         stock_4key_screen = stock_4key_screen_args(user_text)
         if stock_4key_screen:
             result = self.executor.call(

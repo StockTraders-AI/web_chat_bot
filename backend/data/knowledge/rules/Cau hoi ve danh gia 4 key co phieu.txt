@@ -1,5 +1,5 @@
 Guide "Phan tich co phieu [ticker]"
-Intent: tai sao/vi sao/ly do/giai thich/chi tiet ve 4-key/composite cua 1 ma co phieu.
+Intent: tai sao/vi sao/ly do/giai thich/chi tiet ve 4-key/composite cua 1 ma co phieu, bao gom cau hoi nhu "Vi sao DIG sai song sai nganh?" hoac "Tai sao [ticker] dung song sai nganh?".
 Call: getStock4KeyEvaluation.
 Args: mode=single, ticker, date=YYYY-MM-DD, include_composite=true. Neu user hoi hom nay/hien nay/khong noi ngay thi dung ngay hien tai trong system prompt; khong de trong date.
 Answer: tieng Viet ngan gon, chi dung so lieu tool. Neu ok=false, noi ly do.
@@ -24,7 +24,7 @@ Args: mode=history, ticker, from_date=YYYY-MM-DD, include_composite=false.
 Answer: tom tat cac moc/ngay theo ket qua tool.
 
 Guide "Loc danh sach ma dung song dung nganh [date]"
-Intent: chi ap dung khi user hoi dung cau: "Cung cap danh sach cac ma dung song dung nganh" (co the co dau tieng Viet/ky tu cau). Khong ap dung cho cau hoi tu nhien nhu "Ma nao dung song dung nganh?".
+Intent: ap dung khi user hoi lay danh sach/danh muc/cac ma theo nhom 4-key, vi du "Cung cap danh sach cac ma dung song dung nganh", "Cung cap danh muc dung song dung nganh", "Liet ke cac ma dung song dung nganh". Khong bat buoc dung nguyen van mot cau.
 Call: getStock4KeyEvaluation.
 Args: mode=screen, date=YYYY-MM-DD, group_4key=Dung song dung nganh, include_composite=false. Neu user khong noi ngay thi dung ngay hien tai trong system prompt; khong de trong date. Khong truyen ticker.
 Answer: chi tra ve danh sach ticker ngan gon, cach nhau bang dau phay. Vi du: AAA, AGG, BCM. Neu khong co ma nao thoa dieu kien thi noi ro khong co ket qua.

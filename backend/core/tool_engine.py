@@ -65,9 +65,9 @@ class ToolRegistry:
                 "name": "getStock4KeyEvaluation",
                 "description": (
                     "Phan tich/score/rating/4-key co phieu. "
-                    "Phan tich/score/rating 1 ma: mode=single, include_composite=true; neu co 4-key thi neu Nhom 4 Key. "
+                    "Phan tich/score/rating 1 ma hoac cau hoi vi sao/tai sao/ly do [ticker] thuoc nhom 4-key: mode=single, include_composite=true; neu co 4-key thi neu Nhom 4 Key. "
                     "Hoi rieng 4-key 1 ma: mode=single, include_composite=false. "
-                    "Chi khi user hoi dung cau 'Cung cap danh sach cac ma dung song dung nganh': mode=screen, date, group_4key=Dung song dung nganh; khong can ticker."
+                    "Khi user hoi lay danh sach/danh muc/cac ma theo nhom 4-key, vi du 'Cung cap danh sach cac ma dung song dung nganh' hoac 'Cung cap danh muc dung song dung nganh': mode=screen, date, group_4key theo nhom duoc hoi; khong can ticker."
                 ),
                 "parameters": {
                     "type": "object",
