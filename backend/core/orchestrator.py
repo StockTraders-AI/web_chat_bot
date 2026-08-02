@@ -101,6 +101,10 @@ def normalize_search_text(text: str) -> str:
 
 
 
+def normalize_intent_text(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", normalize_search_text(text)).strip()
+
+
 def extract_ticker(text: str) -> Optional[str]:
     for token in re.findall(r"\b[A-Z][A-Z0-9]{1,6}\b", text or ""):
         ticker = token.upper()
@@ -492,7 +496,7 @@ REQUESTED_4KEY_GROUPS = (
 
 
 def is_stock_4key_only_query(user_text: str) -> bool:
-    normalized = normalize_search_text(user_text)
+    normalized = normalize_intent_text(user_text)
     if not normalized:
         return False
     if any(phrase in normalized for phrase in FOUR_KEY_DETAIL_PHRASES):
@@ -501,7 +505,7 @@ def is_stock_4key_only_query(user_text: str) -> bool:
 
 
 def requested_4key_groups(user_text: str) -> tuple[str, ...]:
-    normalized = normalize_search_text(user_text)
+    normalized = normalize_intent_text(user_text)
     for phrase, groups in REQUESTED_4KEY_GROUPS:
         if phrase in normalized:
             return groups
@@ -524,7 +528,7 @@ FOUR_KEY_SCREEN_INTENT_PHRASES = (
 
 
 def is_stock_4key_screen_query(user_text: str) -> bool:
-    normalized = normalize_search_text(user_text).strip(" ?.!,;:")
+    normalized = normalize_intent_text(user_text)
     if not normalized:
         return False
     if normalized == FOUR_KEY_SCREEN_QUERY:
@@ -560,7 +564,7 @@ def stock_4key_single_args(user_text: str) -> Optional[Dict[str, Any]]:
     if not ticker:
         return None
 
-    normalized = normalize_search_text(user_text)
+    normalized = normalize_intent_text(user_text)
     groups = requested_4key_groups(user_text)
     has_4key_phrase = any(phrase in normalized for phrase in FOUR_KEY_ONLY_PHRASES)
     has_detail_phrase = any(phrase in normalized for phrase in FOUR_KEY_DETAIL_PHRASES)
