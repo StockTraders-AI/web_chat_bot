@@ -729,7 +729,7 @@ def case_idea_tokens(text: str) -> List[str]:
 
 
 def split_case_idea_indicators(text: str) -> List[str]:
-    parts = re.split(r"[,;\n/|]+", text or "")
+    parts = re.split(r"[?？.!！,;\n/|]+", text or "")
     return [part.strip() for part in parts if part.strip()]
 
 
@@ -788,9 +788,15 @@ def score_case_idea_match(user_text: str, case_idea: Dict[str, Any]) -> int:
         indicator_tokens = set(case_idea_tokens(indicator))
         if not indicator_norm or not indicator_tokens:
             continue
+        overlap = indicator_tokens.intersection(user_token_set)
+        overlap_ratio = len(overlap) / max(1, len(indicator_tokens))
         if indicator_norm in user_norm:
-            score += 40
+            score += 65
         elif indicator_tokens.issubset(user_token_set):
+            score += 55
+        elif len(overlap) >= 3 and overlap_ratio >= 0.60:
+            score += 45
+        elif len(overlap) >= 2 and overlap_ratio >= 0.50:
             score += 25
 
     desc_tokens = set(case_idea_tokens(description))
