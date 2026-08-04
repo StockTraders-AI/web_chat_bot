@@ -150,6 +150,12 @@ def extract_date_value(text: str) -> Optional[str]:
             year += 2000
         return f"{day:02d}/{month:02d}/{year}"
 
+    day_month = re.search(r"\b(3[01]|[12]\d|0?[1-9])[/-](1[0-2]|0?[1-9])\b", normalized)
+    if day_month:
+        day = int(day_month.group(1))
+        month = int(day_month.group(2))
+        return f"{day:02d}/{month:02d}/{datetime.now().year}"
+
     month_year = re.search(r"\b(?:thang\s*)?(1[0-2]|0?[1-9])[/-](20\d{2})\b", normalized)
     if month_year:
         return f"tháng {int(month_year.group(1))}/{month_year.group(2)}"
@@ -707,6 +713,17 @@ def is_definition_query(text: str) -> bool:
     if has_real_ticker(text):
         return False
     return not any(phrase in normalized for phrase in DATA_INTENT_PHRASES)
+
+def should_skip_case_idea(user_text: str) -> bool:
+    normalized = normalize_search_text(user_text)
+    if not normalized or is_definition_query(user_text):
+        return False
+
+    data_words = ("bao nhieu", "so luong", "hom nay", "hom qua", "ngay", "phien", "thong ke")
+    data_topics = ("cho mua", "cho ban", "mua", "ban", "smdt", "dong tien", "gia", "do tin cay", "tin hieu")
+    if has_explicit_calendar_date_text(user_text) and any(topic in normalized for topic in data_topics):
+        return True
+    return any(word in normalized for word in data_words) and any(topic in normalized for topic in data_topics)
 
 CASE_IDEA_STOPWORDS = {
     "anh", "chi", "ban", "toi", "em", "minh", "hay", "noi", "ro", "hoi", "ve",
@@ -1616,7 +1633,7 @@ class Orchestrator:
                 )
 
         matched_case_idea = None
-        if not should_force_rules(raw_user_text):
+        if not should_skip_case_idea(raw_user_text):
             matched_case_idea = await self._find_matching_case_idea(raw_user_text, recent_user_questions)
         if matched_case_idea:
             print("CASE IDEA MATCH:", matched_case_idea.get("id"), matched_case_idea.get("name"))
@@ -2146,7 +2163,9 @@ Yêu cầu:
             await self.memory.add(user_id, "assistant", full)
             yield ("done", done_data(["4-key"]))
             return
-        matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
+        matched_case_idea = None
+        if not should_skip_case_idea(user_text):
+            matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
         if matched_case_idea:
             final_text = clean_chat_output(
                 sanitize_response_text(self._answer_case_idea(matched_case_idea, user_text, model))
