@@ -2145,6 +2145,19 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
+        if is_waitbuy_value_query(user_text):
+            final_text = self._answer_waitbuy_value(user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
+
         stock_4key_single = stock_4key_single_args(user_text)
         if stock_4key_single:
             result = self.executor.call(
@@ -2251,18 +2264,6 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        if is_waitbuy_value_query(user_text):
-            final_text = self._answer_waitbuy_value(user_text)
-            final_text = clean_chat_output(sanitize_response_text(final_text))
-            full = ""
-            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
-                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
-                if chunk:
-                    full += chunk
-                    yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
-            yield ("done", done_data([]))
-            return
 
         if is_waitbuy_explain_query(user_text):
             final_text = await self._answer_waitbuy_explanation(user_text=user_text, model=model)

@@ -144,7 +144,7 @@ class APIExecutor:
                 return False
             domain_keys = (
                 "data", "items", "records", "results", "result", "smdts", "cashFlows",
-                "cashFlowTickers", "totalTradeDatas", "tradeDatas", "stockWaveDatas",
+                "cashFlowTickers", "totalTradeDatas", "tradeDatas", "stockWaveDatas", "waveDatas",
                 "ket_qua", "lich_su",
             )
             present = [value[key] for key in domain_keys if key in value]
