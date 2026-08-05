@@ -1941,18 +1941,12 @@ class Orchestrator:
         if not requested_date:
             return "Anh/chị muốn xem chờ mua ngày nào?"
 
-        print("WAITBUY_VALUE_ROUTE_START:", {"requested_date": requested_date, "user_text": user_text})
         raw_wave = self.executor.call(
             "getStockWave",
             {"date": requested_date},
             user_text=user_text,
         )
-        print("WAITBUY_VALUE_RAW_TYPE:", type(raw_wave).__name__)
-        if isinstance(raw_wave, dict):
-            print("WAITBUY_VALUE_RAW_KEYS:", list(raw_wave.keys()))
         rows = extract_stock_wave_rows(raw_wave)
-        print("WAITBUY_VALUE_ROWS:", len(rows))
-        print("WAITBUY_VALUE_ROWS_SAMPLE:", rows[:3])
         row = next(
             (
                 item for item in rows
@@ -1961,15 +1955,10 @@ class Orchestrator:
             rows[0] if rows else None,
         )
 
-        print("WAITBUY_VALUE_SELECTED_ROW:", row)
         if not row:
-            final_text = f"Phiên {format_vn_date(requested_date)} chưa có dữ liệu chờ mua."
-            print("WAITBUY_VALUE_RESPONSE:", final_text)
-            return final_text
+            return f"Phiên {format_vn_date(requested_date)} chưa có dữ liệu chờ mua."
 
-        final_text = format_waitbuy_value_answer(row, requested_date)
-        print("WAITBUY_VALUE_RESPONSE:", final_text)
-        return final_text
+        return format_waitbuy_value_answer(row, requested_date)
 
     async def _answer_waitbuy_explanation(self, user_text: str, model: str) -> str:
         target = await self._find_waitbuy_target()
@@ -2156,27 +2145,6 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        if is_waitbuy_value_query(user_text):
-            print("WAITBUY_VALUE_BRANCH_MATCHED:", {"user_id": user_id, "user_text": user_text})
-            final_text = self._answer_waitbuy_value(user_text)
-            final_text = clean_chat_output(sanitize_response_text(final_text))
-            print("WAITBUY_VALUE_FINAL_TEXT:", {"len": len(final_text), "text": final_text})
-            full = ""
-            chunk_count = 0
-            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
-                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
-                if chunk:
-                    full += chunk
-                    chunk_count += 1
-                    print("WAITBUY_VALUE_YIELD_DELTA:", {"chunk_index": chunk_count, "chunk_len": len(chunk)})
-                    yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
-            done_payload = done_data(["waitbuy_value"])
-            print("WAITBUY_VALUE_YIELD_DONE:", done_payload)
-            yield ("done", done_payload)
-            print("WAITBUY_VALUE_BRANCH_RETURN")
-            return
-
         stock_4key_single = stock_4key_single_args(user_text)
         if stock_4key_single:
             result = self.executor.call(
@@ -2283,6 +2251,18 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
+        if is_waitbuy_value_query(user_text):
+            final_text = self._answer_waitbuy_value(user_text)
+            final_text = clean_chat_output(sanitize_response_text(final_text))
+            full = ""
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    full += chunk
+                    yield ("delta", {"text": chunk})
+            await self.memory.add(user_id, "assistant", full)
+            yield ("done", done_data([]))
+            return
 
         if is_waitbuy_explain_query(user_text):
             final_text = await self._answer_waitbuy_explanation(user_text=user_text, model=model)

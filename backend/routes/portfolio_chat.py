@@ -163,13 +163,6 @@ async def portfolio_chat(
 ):
     require_portfolio_chat_api_key(x_api_key)
 
-    print("PORTFOLIO_CHAT_REQUEST:", {
-        "user_id": payload.user_id,
-        "conversation_id": payload.conversation_id,
-        "question": payload.question,
-        "language": payload.language,
-        "model": payload.model,
-    })
     question = (payload.question or "").strip()
     if not question:
         raise HTTPException(status_code=400, detail="question is required")
@@ -181,9 +174,7 @@ async def portfolio_chat(
     orchestrator = current_orchestrator()
 
     direct_answer = answer_portfolio_position_4key(question, payload.portfolio)
-    print("PORTFOLIO_CHAT_DIRECT_CHECK:", {"has_direct_answer": direct_answer is not None})
     if direct_answer is not None:
-        print("PORTFOLIO_CHAT_DIRECT_RETURN:", {"answer_len": len(direct_answer)})
         return {
             "answer": direct_answer,
             "sources": [],
@@ -191,7 +182,6 @@ async def portfolio_chat(
             "conversation_id": conversation_id,
         }
 
-    print("PORTFOLIO_CHAT_COLLECT_START:", {"chat_user_id": chat_user_id, "user_text": user_text})
     answer, done_data = await collect_standard_chat(
         orchestrator,
         user_id=chat_user_id,
@@ -200,15 +190,9 @@ async def portfolio_chat(
         selected_model=payload.model
     )
 
-    response_payload = {
+    return {
         "answer": answer,
         "sources": done_data.get("sources") or [],
         "usage": done_data.get("usage") or {},
         "conversation_id": conversation_id,
     }
-    print("PORTFOLIO_CHAT_RETURN:", {
-        "answer_len": len(answer or ""),
-        "sources": response_payload["sources"],
-        "conversation_id": conversation_id,
-    })
-    return response_payload

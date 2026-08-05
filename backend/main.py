@@ -3025,14 +3025,7 @@ async def _agen(payload: ChatIn):
             if state["stage"] == "completed"
             else await sales.classify_turn_route(payload.message, state["targets"])
         )
-        print("SALES_ROUTE_DECISION:", {
-            "user_id": payload.user_id,
-            "stage": state.get("stage"),
-            "route": route,
-            "message": payload.message,
-        })
         if route == "normal":
-            print("SALES_NORMAL_STREAM_START:", {"user_id": payload.user_id, "message": payload.message})
             done_data = {}
             async for event, data in stream_standard_chat(
                 orch,
@@ -3041,38 +3034,18 @@ async def _agen(payload: ChatIn):
                 language=payload.language,
                 selected_model=payload.model,
             ):
-                print("SALES_NORMAL_STREAM_EVENT:", {
-                    "event": event,
-                    "keys": list((data or {}).keys()) if isinstance(data, dict) else [],
-                    "sources": (data or {}).get("sources") if isinstance(data, dict) else None,
-                    "text_len": len(str((data or {}).get("text") or "")) if isinstance(data, dict) else 0,
-                })
                 if event == "done":
                     done_data = data
-                    print("SALES_NORMAL_CAPTURE_DONE:", done_data)
                     continue
                 yield event, data
 
-            done_sources = (done_data or {}).get("sources") or []
-            print("SALES_NORMAL_DONE_SOURCES:", done_sources)
-            if done_sources:
-                print("SALES_NORMAL_RETURN_DONE_EARLY:", done_data)
-                yield "done", done_data
-                return
-
             if state["stage"] != "completed":
-                print("SALES_NORMAL_FOLLOW_UP_START:", {"user_id": payload.user_id, "message": payload.message})
-                try:
-                    follow_up = await sales.next_collection_question_ai(
-                        state["targets"],
-                        state.get("target_configs"),
-                        user_text=payload.message,
-                        history=recent_history,
-                    )
-                except Exception as exc:
-                    print("SALES_FOLLOW_UP_ERROR:", exc)
-                    follow_up = None
-                print("SALES_NORMAL_FOLLOW_UP_RESULT:", {"has_follow_up": bool(follow_up), "len": len(follow_up or "")})
+                follow_up = await sales.next_collection_question_ai(
+                    state["targets"],
+                    state.get("target_configs"),
+                    user_text=payload.message,
+                    history=recent_history,
+                )
                 if follow_up:
                     text = "\n\n" + follow_up
                     for i in range(0, len(text), 60):
@@ -3081,7 +3054,6 @@ async def _agen(payload: ChatIn):
                             yield "delta", {"text": chunk}
                     await memory.add(payload.user_id, "assistant", follow_up)
 
-            print("SALES_NORMAL_RETURN_DONE_FINAL:", done_data)
             yield "done", done_data
             return
 

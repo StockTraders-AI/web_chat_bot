@@ -144,7 +144,7 @@ class APIExecutor:
                 return False
             domain_keys = (
                 "data", "items", "records", "results", "result", "smdts", "cashFlows",
-                "cashFlowTickers", "totalTradeDatas", "tradeDatas", "stockWaveDatas", "waveDatas",
+                "cashFlowTickers", "totalTradeDatas", "tradeDatas", "stockWaveDatas",
                 "ket_qua", "lich_su",
             )
             present = [value[key] for key in domain_keys if key in value]
@@ -490,15 +490,8 @@ class APIExecutor:
 
             if isinstance(data, list):
                 log("RESULT SIZE:", len(data))
-            elif isinstance(data, dict):
-                log("RESULT KEYS:", list(data.keys()))
 
-            sanitized = sanitize_api_result(operation_id, data)
-            if isinstance(sanitized, dict):
-                log("SANITIZED KEYS:", list(sanitized.keys()))
-            elif isinstance(sanitized, list):
-                log("SANITIZED SIZE:", len(sanitized))
-            return sanitized
+            return sanitize_api_result(operation_id, data)
 
         except Exception as e:
 
