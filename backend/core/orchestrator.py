@@ -2161,7 +2161,7 @@ Yêu cầu:
                     full += chunk
                     yield ("delta", {"text": chunk})
             await self.memory.add(user_id, "assistant", full)
-            yield ("done", done_data([]))
+            yield ("done", done_data(["waitbuy_value"]))
             return
 
         stock_4key_single = stock_4key_single_args(user_text)

@@ -3039,13 +3039,17 @@ async def _agen(payload: ChatIn):
                     continue
                 yield event, data
 
-            if state["stage"] != "completed":
-                follow_up = await sales.next_collection_question_ai(
-                    state["targets"],
-                    state.get("target_configs"),
-                    user_text=payload.message,
-                    history=recent_history,
-                )
+            if state["stage"] != "completed" and not (done_data or {}).get("sources"):
+                try:
+                    follow_up = await sales.next_collection_question_ai(
+                        state["targets"],
+                        state.get("target_configs"),
+                        user_text=payload.message,
+                        history=recent_history,
+                    )
+                except Exception as exc:
+                    print("SALES_FOLLOW_UP_ERROR:", exc)
+                    follow_up = None
                 if follow_up:
                     text = "\n\n" + follow_up
                     for i in range(0, len(text), 60):
