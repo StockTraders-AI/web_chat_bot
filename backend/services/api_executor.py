@@ -490,8 +490,15 @@ class APIExecutor:
 
             if isinstance(data, list):
                 log("RESULT SIZE:", len(data))
+            elif isinstance(data, dict):
+                log("RESULT KEYS:", list(data.keys()))
 
-            return sanitize_api_result(operation_id, data)
+            sanitized = sanitize_api_result(operation_id, data)
+            if isinstance(sanitized, dict):
+                log("SANITIZED KEYS:", list(sanitized.keys()))
+            elif isinstance(sanitized, list):
+                log("SANITIZED SIZE:", len(sanitized))
+            return sanitized
 
         except Exception as e:
 

@@ -1941,12 +1941,14 @@ class Orchestrator:
         if not requested_date:
             return "Anh/chị muốn xem chờ mua ngày nào?"
 
+        print("WAITBUY_VALUE_ROUTE_START:", requested_date)
         raw_wave = self.executor.call(
             "getStockWave",
             {"date": requested_date},
             user_text=user_text,
         )
         rows = extract_stock_wave_rows(raw_wave)
+        print("WAITBUY_VALUE_ROWS:", len(rows))
         row = next(
             (
                 item for item in rows
@@ -1956,9 +1958,13 @@ class Orchestrator:
         )
 
         if not row:
-            return f"Phiên {format_vn_date(requested_date)} chưa có dữ liệu chờ mua."
+            final_text = f"Phiên {format_vn_date(requested_date)} chưa có dữ liệu chờ mua."
+            print("WAITBUY_VALUE_RESPONSE:", final_text)
+            return final_text
 
-        return format_waitbuy_value_answer(row, requested_date)
+        final_text = format_waitbuy_value_answer(row, requested_date)
+        print("WAITBUY_VALUE_RESPONSE:", final_text)
+        return final_text
 
     async def _answer_waitbuy_explanation(self, user_text: str, model: str) -> str:
         target = await self._find_waitbuy_target()
