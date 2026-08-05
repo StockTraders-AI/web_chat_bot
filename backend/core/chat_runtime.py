@@ -49,6 +49,7 @@ async def collect_standard_chat(
     language: str = "vi",
     selected_model: Optional[str] = None,
 ) -> tuple[str, Dict[str, Any]]:
+    print("COLLECT_STANDARD_CHAT_START:", {"user_id": user_id, "text": user_text})
     answer_parts: list[str] = []
     done_data: Dict[str, Any] = {}
 
@@ -59,9 +60,19 @@ async def collect_standard_chat(
         language=language,
         selected_model=selected_model
     ):
+        print("COLLECT_STANDARD_CHAT_EVENT:", {
+            "event": event,
+            "keys": list((data or {}).keys()) if isinstance(data, dict) else [],
+            "sources": (data or {}).get("sources") if isinstance(data, dict) else None,
+            "text_len": len(str((data or {}).get("text") or "")) if isinstance(data, dict) else 0,
+        })
         if event == "delta":
             answer_parts.append(str(data.get("text") or ""))
+            print("COLLECT_STANDARD_CHAT_APPEND_DELTA:", {"parts": len(answer_parts), "answer_len": len("".join(answer_parts))})
         elif event == "done":
             done_data = data or {}
+            print("COLLECT_STANDARD_CHAT_CAPTURE_DONE:", done_data)
 
-    return "".join(answer_parts).strip(), done_data
+    answer = "".join(answer_parts).strip()
+    print("COLLECT_STANDARD_CHAT_RETURN:", {"answer_len": len(answer), "sources": done_data.get("sources") or [], "usage": done_data.get("usage") or {}})
+    return answer, done_data
