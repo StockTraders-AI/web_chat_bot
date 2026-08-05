@@ -3039,7 +3039,13 @@ async def _agen(payload: ChatIn):
                     continue
                 yield event, data
 
-            if state["stage"] != "completed" and not (done_data or {}).get("sources"):
+            done_sources = (done_data or {}).get("sources") or []
+            print("SALES_NORMAL_DONE_SOURCES:", done_sources)
+            if done_sources:
+                yield "done", done_data
+                return
+
+            if state["stage"] != "completed":
                 try:
                     follow_up = await sales.next_collection_question_ai(
                         state["targets"],
