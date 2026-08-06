@@ -347,6 +347,24 @@ class APIExecutor:
         args = self._normalize_args(operation_id, args)
         args = self._coerce_implicit_current_date(operation_id, args, user_text)
 
+        smdt_branch_operation_map = {
+            "getSMDTTicker": "getSMDTBranch",
+            "getSMDTTickerCross": "getSMDTBranchCross",
+            "getSMDTTickerDrop": "getSMDTBranchDrop",
+        }
+        if operation_id in smdt_branch_operation_map:
+            branch_path = self._resolve_branch_path(
+                args.get("keyValue"),
+                args.get("keyName"),
+                args.get("name"),
+                user_text,
+            )
+            if branch_path:
+                original_operation = operation_id
+                operation_id = smdt_branch_operation_map[operation_id]
+                args = {"path": branch_path, **({"date": args["date"]} if "date" in args else {})}
+                log("REROUTE SMDT TICKER TOOL TO BRANCH:", original_operation, "->", operation_id, args)
+
         if invalid_api_ticker(operation_id, args):
             log("BLOCKED TICKER OUTSIDE PROJECT ALLOWLIST")
             return {

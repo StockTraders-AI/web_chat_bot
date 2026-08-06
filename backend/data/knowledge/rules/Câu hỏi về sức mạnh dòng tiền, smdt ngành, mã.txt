@@ -3,7 +3,7 @@ Gọi getSMDTBranch với các path ngành chủ lực và truyền date đượ
 Guide SMDT ngành ngân hàng từ [date] đến nay
 Gọi api getSMDTBranch với path ngành ngân hàng, không truyền date lần lượt là tháng-năm được hỏi cho tới tháng-năm hiện tại và lập bảng trả kết quả
 Guide Khi hỏi: "SMDT [ngành] là bao nhiêu?". Gọi getSMDTBranch với ngành và date được hỏi kèm %.
-Guide Khi hỏi: "SMDT [mã] là bao nhiêu?". Gọi getSMDTTicker với mã và date được hỏi kèm %.
+Guide Khi hỏi: "SMDT [mã cổ phiếu] là bao nhiêu?". Chỉ gọi getSMDTTicker khi giá trị là mã cổ phiếu thật như SSI, VCB, HPG. Nếu giá trị là tên ngành như ngân hàng, chứng khoán, thép, bất động sản... thì phải gọi getSMDTBranch, không gọi getSMDTTicker.
 Guide "Lập bảng thống kê mã giá giảm hôm nay mà SMDT tăng dần đều"
 gọi api getTickersPriceDownSMDTIncreasing KHÔNG TRUYỀN DATE và trả lời toàn bộ những mã được trả về, không được 3 chấm...
 Guide SMDT (sức mạnh dòng tiền) cổ phiếu [X] từ tháng [month] đến nay
