@@ -1622,6 +1622,16 @@ class Orchestrator:
             refs = (ctx.get("refs") or "").strip()
             allowed_apis = extract_api_from_context(refs)
 
+            if allowed_apis:
+                system_parts.append(
+                    "QUY TAC BAT BUOC KHI DUNG RULES:\n"
+                    "- Neu guide/rules co nhac API thi bat buoc goi API phu hop truoc khi tra loi.\n"
+                    "- Khong duoc tra loi bang suy luan neu chua co ket qua API.\n"
+                    "- Neu guide noi SMDT nganh thi phai goi API nganh nhu getSMDTBranch, khong goi API ma co phieu.\n"
+                    "- Neu guide noi SMDT ma co phieu thi chi goi getSMDTTicker khi gia tri la ma co phieu that.\n"
+                    "API DUOC PHEP THEO GUIDE: " + ", ".join(allowed_apis)
+                )
+
             if rules:
                 system_parts.append(
                     "QUY TRÌNH XỬ LÝ BẮT BUỘC:\n" + rules
@@ -1749,11 +1759,12 @@ class Orchestrator:
             log("\n================ TOOL LOOP =================")
             log("LOOP:", loops)
 
+            must_call_rule_tool = bool(allowed_apis) and loops == 1
             resp = self.oa.chat(
                 model=model,
                 messages=messages,
                 tools=tools,
-                tool_choice="auto"
+                tool_choice="required" if must_call_rule_tool else "auto"
             )
 
             msg = resp.choices[0].message
@@ -1783,6 +1794,12 @@ class Orchestrator:
 
             # Nếu không có tool call → kết thúc
             if not getattr(msg, "tool_calls", None):
+                if bool(allowed_apis) and loops == 1:
+                    messages.append({
+                        "role": "system",
+                        "content": "Ban chua goi API theo guide. Hay goi dung mot API trong danh sach duoc phep truoc khi tra loi: " + ", ".join(allowed_apis)
+                    })
+                    continue
 
                 final_text = ensure_stock_4key_section(msg.content or "", messages)
                 return messages, final_text
