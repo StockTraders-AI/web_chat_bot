@@ -983,7 +983,9 @@ def should_use_recent_question_context(user_text: str) -> bool:
         )
     )
 
-    return short_question and (asks_confirmation or wave_follow_up)
+    comparative_follow_up = normalized.startswith(("con ", "còn ")) or " con " in f" {normalized} "
+
+    return short_question and (asks_confirmation or wave_follow_up or comparative_follow_up)
 
 
 def build_contextual_user_text(user_text: str, recent_questions: List[str]) -> str:
@@ -1499,11 +1501,9 @@ class Orchestrator:
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool, List[str], Optional[str]]:
 
         raw_user_text = user_text.strip()
-        query_source = self.classify_query_source(raw_user_text)
         allowed_apis: List[str] = []
         current_doc: Optional[str] = None
 
-        print("QUERY SOURCE:", query_source)
         history_all = await self.memory.recent_messages(user_id)
         recent_user_questions = recent_user_questions_from_messages(
             history_all,
@@ -1511,6 +1511,8 @@ class Orchestrator:
             limit=3,
         )
         contextual_user_text = build_contextual_user_text(raw_user_text, recent_user_questions)
+        query_source = self.classify_query_source(contextual_user_text)
+        print("QUERY SOURCE:", query_source)
         history = []
 
         # ======================================
@@ -1612,11 +1614,11 @@ class Orchestrator:
                     )
 
         elif stock_related:
-            doc = await self.rag.pick_doc(raw_user_text)
+            doc = await self.rag.pick_doc(contextual_user_text)
             current_doc = doc
 
             chunks = self.rag.load_chunks(doc)
-            ctx = self.rag.build_context(doc, chunks, raw_user_text)
+            ctx = self.rag.build_context(doc, chunks, contextual_user_text)
 
             rules = (ctx.get("rules") or "").strip()
             refs = (ctx.get("refs") or "").strip()
