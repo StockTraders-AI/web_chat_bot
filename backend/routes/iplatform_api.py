@@ -66,6 +66,8 @@ def temporary_iplatform_identity() -> IPlatformIdentity:
 
 
 def resolve_iplatform_identity(authorization: Optional[str]) -> IPlatformIdentity:
+    if not IPLATFORM_REQUIRE_JWT:
+        return temporary_iplatform_identity()
     if (authorization or "").strip():
         return verify_iplatform_jwt(require_bearer_token(authorization))
     if IPLATFORM_REQUIRE_JWT:
