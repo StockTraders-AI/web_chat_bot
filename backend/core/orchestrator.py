@@ -1519,7 +1519,7 @@ class Orchestrator:
         # STOCK RELATED DETECTION
         # ======================================
 
-        stock_related = is_stock_related(raw_user_text)
+        stock_related = is_stock_related(raw_user_text) or is_stock_related(contextual_user_text)
 
         if not stock_related:
             for h in reversed(history):
