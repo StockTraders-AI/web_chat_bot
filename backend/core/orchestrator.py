@@ -719,6 +719,9 @@ def should_skip_case_idea(user_text: str) -> bool:
     if not normalized or is_definition_query(user_text):
         return False
 
+    if is_stock_4key_screen_query(user_text):
+        return True
+
     data_words = ("bao nhieu", "so luong", "hom nay", "hom qua", "ngay", "phien", "thong ke")
     data_topics = ("cho mua", "cho ban", "mua", "ban", "smdt", "dong tien", "gia", "do tin cay", "tin hieu")
     if has_explicit_calendar_date_text(user_text) and any(topic in normalized for topic in data_topics):

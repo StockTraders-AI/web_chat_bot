@@ -87,6 +87,69 @@ def requested_portfolio_4key_cat(question: str) -> Optional[str]:
     return PORTFOLIO_4KEY_QUESTION_TO_CAT.get(normalize_search_text(question))
 
 
+
+def requested_portfolio_4key_cat_fuzzy(question: str) -> Optional[str]:
+    normalized = normalize_search_text(question)
+    if "dung song" in normalized and "dung nganh" in normalized:
+        return "dd"
+    if "dung song" in normalized and "sai nganh" in normalized:
+        return "ds"
+    if "sai song" in normalized and "dung nganh" in normalized:
+        return "sd"
+    if "dung nganh" in normalized and "sai song" in normalized:
+        return "sd"
+    if "sai song" in normalized and "sai nganh" in normalized:
+        return "ss"
+    return None
+
+
+def is_portfolio_4key_list_question(question: str) -> bool:
+    normalized = normalize_search_text(question)
+    if not requested_portfolio_4key_cat_fuzzy(question):
+        return False
+    return any(
+        phrase in normalized
+        for phrase in (
+            "cung cap",
+            "danh sach",
+            "danh muc",
+            "list",
+            "liet ke",
+            "cac ma",
+            "nhung ma",
+            "loc",
+        )
+    )
+
+
+def extract_portfolio_positions(portfolio: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not isinstance(portfolio, dict):
+        return []
+
+    positions: list[dict[str, Any]] = []
+    for key in ("positions", "items", "rows", "tickers", "data", "portfolio"):
+        value = portfolio.get(key)
+        if isinstance(value, list):
+            positions.extend(item for item in value if isinstance(item, dict))
+
+    position = portfolio.get("position")
+    if isinstance(position, dict):
+        positions.append(position)
+
+    if isinstance(portfolio.get("ticker"), str):
+        positions.append(portfolio)
+
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for position in positions:
+        ticker = position_ticker(position)
+        key = ticker or str(id(position))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(position)
+    return deduped
+
 def extract_portfolio_position(portfolio: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
     if not isinstance(portfolio, dict):
         return None
@@ -104,7 +167,16 @@ def extract_portfolio_position(portfolio: Optional[dict[str, Any]]) -> Optional[
 def position_ticker(position: Optional[dict[str, Any]]) -> str:
     if not isinstance(position, dict):
         return ""
-    return str(position.get("ticker") or position.get("symbol") or position.get("stockCode") or "").strip().upper()
+    return str(
+        position.get("ticker")
+        or position.get("symbol")
+        or position.get("stockCode")
+        or position.get("stock_code")
+        or position.get("code")
+        or position.get("key")
+        or position.get("keyName")
+        or ""
+    ).strip().upper()
 
 
 FOUR_KEY_GROUP_TO_CAT = {
@@ -123,7 +195,15 @@ FOUR_KEY_GROUP_TO_CAT = {
 def position_4key_cat(position: Optional[dict[str, Any]]) -> Optional[str]:
     if not isinstance(position, dict):
         return None
-    raw = position.get("cat") or position.get("group_4key") or position.get("group")
+    raw = (
+        position.get("cat")
+        or position.get("group_4key")
+        or position.get("group")
+        or position.get("fourKey")
+        or position.get("four_key")
+        or position.get("status")
+        or position.get("category")
+    )
     return FOUR_KEY_GROUP_TO_CAT.get(normalize_search_text(str(raw or "")))
 
 
@@ -156,6 +236,35 @@ def answer_portfolio_position_4key(question: str, portfolio: Optional[dict[str, 
     return format_single_position_4key_answer(ticker, actual_cat == requested_cat, requested_cat)
 
 
+
+def answer_portfolio_list_4key(question: str, portfolio: Optional[dict[str, Any]]) -> Optional[str]:
+    if not is_portfolio_4key_list_question(question):
+        return None
+
+    requested_cat = requested_portfolio_4key_cat_fuzzy(question)
+    if not requested_cat:
+        return None
+
+    labels = {
+        "dd": "đúng sóng đúng ngành",
+        "ds": "đúng sóng sai ngành",
+        "sd": "sai sóng đúng ngành",
+        "ss": "sai sóng sai ngành",
+    }
+    label = labels.get(requested_cat, "nhóm 4 Key được hỏi")
+    positions = extract_portfolio_positions(portfolio)
+    if not positions:
+        return None
+
+    tickers = [
+        position_ticker(position)
+        for position in positions
+        if position_ticker(position) and position_4key_cat(position) == requested_cat
+    ]
+    if not tickers:
+        return f"Không có mã nào {label} trong danh mục hiện tại."
+    return ", ".join(tickers)
+
 @router.post("/portfolio-chat")
 async def portfolio_chat(
     payload: PortfolioChatIn,
@@ -173,7 +282,9 @@ async def portfolio_chat(
     user_text, _ = build_chat_input(question, payload.portfolio)
     orchestrator = current_orchestrator()
 
-    direct_answer = answer_portfolio_position_4key(question, payload.portfolio)
+    direct_answer = answer_portfolio_list_4key(question, payload.portfolio)
+    if direct_answer is None:
+        direct_answer = answer_portfolio_position_4key(question, payload.portfolio)
     if direct_answer is not None:
         return {
             "answer": direct_answer,
