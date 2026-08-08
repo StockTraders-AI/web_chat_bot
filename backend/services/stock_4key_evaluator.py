@@ -714,17 +714,7 @@ def evaluate_stock_4key(
         requested_tickers = _parse_ticker_list(args.get("tickers") or args.get("ticker"))
         tickers = requested_tickers or sorted(ALLOWED_TICKERS)
         group_filters = _requested_group_filters(args)
-        try:
-            limit = int(args.get("limit") or 50)
-        except (TypeError, ValueError):
-            limit = 50
-        limit = max(1, min(limit, 200))
-        try:
-            scan_limit = int(args.get("scan_limit") or len(tickers))
-        except (TypeError, ValueError):
-            scan_limit = len(tickers)
-        scan_limit = max(1, min(scan_limit, len(tickers)))
-        tickers_to_scan = tickers[:scan_limit]
+        tickers_to_scan = tickers
 
         matches = []
         errors = []
@@ -751,8 +741,6 @@ def evaluate_stock_4key(
                 )
                 if not group_filters or _canonical_4key_group(result.get("group_4key")) in group_filters:
                     matches.append(result)
-                    if len(matches) >= limit:
-                        break
             except Exception as exc:
                 if len(errors) < 20:
                     errors.append({"ticker": ticker, "error": str(exc)})
@@ -765,9 +753,7 @@ def evaluate_stock_4key(
             "total_screened": len(tickers_to_scan),
             "total_candidates": len(tickers),
             "total_matches": len(matches),
-            "limit": limit,
-            "scan_limit": scan_limit,
-            "results": matches[:limit],
+            "results": matches,
             "errors": errors,
         }
     ticker = normalize_ticker(args.get("ticker"))

@@ -560,7 +560,7 @@ class APIExecutor:
             return requests.post(
                 url,
                 params=payload,
-                timeout=120
+                timeout=300
             )
 
         return requests.get(
