@@ -554,6 +554,8 @@ def stock_4key_screen_args(user_text: str) -> Optional[Dict[str, Any]]:
         "date": requested_date,
         "group_4key": groups[0],
         "include_composite": False,
+        "limit": 30,
+        "scan_limit": 80,
     }
 
 

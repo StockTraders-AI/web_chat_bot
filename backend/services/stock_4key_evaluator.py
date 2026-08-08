@@ -719,11 +719,17 @@ def evaluate_stock_4key(
         except (TypeError, ValueError):
             limit = 50
         limit = max(1, min(limit, 200))
+        try:
+            scan_limit = int(args.get("scan_limit") or len(tickers))
+        except (TypeError, ValueError):
+            scan_limit = len(tickers)
+        scan_limit = max(1, min(scan_limit, len(tickers)))
+        tickers_to_scan = tickers[:scan_limit]
 
         matches = []
         errors = []
         branch_smdt_cache: dict[str, list[SmdtPoint]] = {}
-        for ticker in tickers:
+        for ticker in tickers_to_scan:
             try:
                 branch_name, ticker_smdt, branch_smdt = _load_four_key_inputs(
                     api_call,
@@ -745,6 +751,8 @@ def evaluate_stock_4key(
                 )
                 if not group_filters or _canonical_4key_group(result.get("group_4key")) in group_filters:
                     matches.append(result)
+                    if len(matches) >= limit:
+                        break
             except Exception as exc:
                 if len(errors) < 20:
                     errors.append({"ticker": ticker, "error": str(exc)})
@@ -754,9 +762,11 @@ def evaluate_stock_4key(
             "mode": "screen",
             "date": requested_date,
             "group_filters": group_filters,
-            "total_screened": len(tickers),
+            "total_screened": len(tickers_to_scan),
+            "total_candidates": len(tickers),
             "total_matches": len(matches),
             "limit": limit,
+            "scan_limit": scan_limit,
             "results": matches[:limit],
             "errors": errors,
         }
