@@ -25,8 +25,8 @@ Answer: tom tat cac moc/ngay theo ket qua tool.
 
 Guide "Loc danh sach ma dung song dung nganh [date]"
 Intent: ap dung khi user hoi lay danh sach/danh muc/cac ma theo nhom 4-key, vi du "Cung cap danh sach cac ma dung song dung nganh", "Cung cap danh muc dung song dung nganh", "Liet ke cac ma dung song dung nganh". Khong bat buoc dung nguyen van mot cau.
-Call: getStock4KeyEvaluation.
-Args: mode=screen, date=YYYY-MM-DD, group_4key=Dung song dung nganh, include_composite=false. Neu user khong noi ngay thi dung ngay hien tai trong system prompt; khong de trong date. Khong truyen ticker.
+Call: getStock4KeyScreen.
+Args: date=YYYY-MM-DD, group=dd/ds/sd/ss theo nhom user hoi. Neu user khong noi ngay thi dung ngay hien tai trong system prompt; khong de trong date. Khong truyen ticker.
 Answer: chi tra ve danh sach ticker ngan gon, cach nhau bang dau phay. Vi du: AAA, AGG, BCM. Neu khong co ma nao thoa dieu kien thi noi ro khong co ket qua.
 Guide "Danh gia 4 key nhieu ma [date]"
 Intent: user hoi 4-key cho nhieu ma cu the.

@@ -67,25 +67,46 @@ class ToolRegistry:
                     "Phan tich/score/rating/4-key co phieu. "
                     "Phan tich/score/rating 1 ma hoac cau hoi vi sao/tai sao/ly do [ticker] thuoc nhom 4-key: mode=single, include_composite=true; neu co 4-key thi neu Nhom 4 Key. "
                     "Hoi rieng 4-key 1 ma: mode=single, include_composite=false. "
-                    "Khi user hoi lay danh sach/danh muc/cac ma theo nhom 4-key, vi du 'Cung cap danh sach cac ma dung song dung nganh' hoac 'Cung cap danh muc dung song dung nganh': mode=screen, date, group_4key theo nhom duoc hoi; khong can ticker."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "mode": {"type": "string", "enum": ["single", "batch", "history", "screen"]},
+                        "mode": {"type": "string", "enum": ["single", "batch", "history"]},
                         "ticker": {"type": "string"},
                         "tickers": {"type": "array", "items": {"type": "string"}},
-                        "date": {"type": "string", "description": "YYYY-MM-DD cho single/batch/screen."},
+                        "date": {"type": "string", "description": "YYYY-MM-DD cho single/batch."},
                         "from_date": {"type": "string", "description": "YYYY-MM-DD cho history."},
                         "include_composite": {"type": "boolean"},
                         "lookback_sessions": {"type": "integer"},
-                        "group_4key": {
-                            "type": "string",
-                            "description": "Dung cho mode=screen. Vi du: Dung song dung nganh, Dung song sai nganh, Dung nganh sai song, Sai song sai nganh."
-                        },
-                        "limit": {"type": "integer", "description": "So ma toi da tra ve cho mode=screen."}
                     },
                     "required": [],
+                    "additionalProperties": False,
+                },
+            },
+        })
+
+        self.operations["getStock4KeyScreen"] = {
+            "path": "/service/data/getStock4KeyScreen",
+            "method": "POST",
+            "summary": "Lay danh sach ma theo nhom 4-key tai mot ngay.",
+            "parameters": [],
+        }
+        self.tools.append({
+            "type": "function",
+            "function": {
+                "name": "getStock4KeyScreen",
+                "description": (
+                    "Lay danh sach/cac ma theo nhom 4-key. "
+                    "Dung khi user hoi cung cap/liet ke/danh sach cac ma dung song dung nganh, dung song sai nganh, sai song dung nganh, hoac sai song sai nganh. "
+                    "Chi truyen date=YYYY-MM-DD va group=dd/ds/sd/ss. Khong truyen ticker."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "date": {"type": "string", "description": "YYYY-MM-DD"},
+                        "group": {"type": "string", "enum": ["dd", "ds", "sd", "ss"]}
+                    },
+                    "required": ["date", "group"],
                     "additionalProperties": False,
                 },
             },

@@ -501,6 +501,12 @@ REQUESTED_4KEY_GROUPS = (
     ("sai song sai nganh", ("Sai s\u00f3ng - Sai ng\u00e0nh",)),
 )
 
+FOUR_KEY_GROUP_API_CODES = {
+    "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh": "dd",
+    "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh": "ds",
+    "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng": "sd",
+    "Sai s\u00f3ng - Sai ng\u00e0nh": "ss",
+}
 
 def is_stock_4key_only_query(user_text: str) -> bool:
     normalized = normalize_intent_text(user_text)
@@ -551,14 +557,9 @@ def stock_4key_screen_args(user_text: str) -> Optional[Dict[str, Any]]:
         return None
     requested_date = _normalize_waitbuy_lookup_date(user_text) or datetime.now().strftime("%Y-%m-%d")
     return {
-        "mode": "screen",
         "date": requested_date,
-        "group_4key": groups[0],
-        "include_composite": False,
-        "limit": 30,
-        "scan_limit": 80,
+        "group": FOUR_KEY_GROUP_API_CODES.get(groups[0], groups[0]),
     }
-
 
 def _change_word(now: Any, prev: Any) -> str:
     try:
@@ -610,7 +611,15 @@ def format_stock_4key_list_answer(payload: Dict[str, Any], user_text: str = "") 
     date_text = _fmt_vn_date(payload.get("date") or payload.get("requested_date"))
 
     if mode == "screen":
-        tickers = [str(item.get("ticker") or "").strip().upper() for item in results if isinstance(item, dict) and item.get("ok") and item.get("ticker")]
+        raw_tickers = payload.get("tickers")
+        if isinstance(raw_tickers, list):
+            tickers = [str(item or "").strip().upper() for item in raw_tickers if str(item or "").strip()]
+        else:
+            tickers = [
+                str(item.get("ticker") or "").strip().upper()
+                for item in results
+                if isinstance(item, dict) and item.get("ok", True) is not False and item.get("ticker")
+            ]
         if not tickers:
             return "Khong co ma nao thoa dieu kien."
         return ", ".join(tickers)
@@ -1845,9 +1854,9 @@ class Orchestrator:
             error = result.get("error") if isinstance(result, dict) else None
             return messages, str(error or "Khong lay duoc du lieu 4 Key.")
         direct_4key_args = stock_4key_screen_args(user_text)
-        if direct_4key_args and (not allowed_apis or "getStock4KeyEvaluation" in allowed_apis):
+        if direct_4key_args and (not allowed_apis or "getStock4KeyScreen" in allowed_apis or "getStock4KeyEvaluation" in allowed_apis):
             result = self.executor.call(
-                "getStock4KeyEvaluation",
+                "getStock4KeyScreen",
                 direct_4key_args,
                 doc_name=current_doc,
                 user_text=user_text,
@@ -1969,7 +1978,7 @@ class Orchestrator:
                         log("BRANCH DROP FORMATTER APPLIED")
                         return messages, final_text
 
-                if op_name == "getStock4KeyEvaluation":
+                if op_name in {"getStock4KeyEvaluation", "getStock4KeyScreen"}:
                     stock_4key_payload = _find_stock_4key_payload(result)
                     if stock_4key_payload:
                         final_text = format_stock_4key_answer(stock_4key_payload, user_text=user_text)
@@ -2426,7 +2435,7 @@ Yêu cầu:
         stock_4key_screen = stock_4key_screen_args(user_text)
         if stock_4key_screen:
             result = self.executor.call(
-                "getStock4KeyEvaluation",
+                "getStock4KeyScreen",
                 stock_4key_screen,
                 user_text=user_text,
             )

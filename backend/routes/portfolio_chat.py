@@ -274,7 +274,7 @@ def answer_market_4key_screen(orchestrator: Any, question: str) -> Optional[str]
     if executor is None:
         return None
     result = executor.call(
-        "getStock4KeyEvaluation",
+        "getStock4KeyScreen",
         args,
         user_text=question,
     )

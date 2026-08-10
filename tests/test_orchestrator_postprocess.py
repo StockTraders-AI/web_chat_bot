@@ -538,9 +538,7 @@ class OrchestratorPostprocessTests(unittest.TestCase):
         self.assertFalse(is_stock_4key_screen_query(generic_question))
         self.assertIsNone(stock_4key_screen_args(generic_question))
         self.assertTrue(is_stock_4key_screen_query(exact_question))
-        self.assertEqual(args["mode"], "screen")
-        self.assertEqual(args["group_4key"], "Đúng sóng - Đúng ngành")
-        self.assertFalse(args["include_composite"])
+        self.assertEqual(args["group"], "dd")
         self.assertNotIn("ticker", args)
 
     def test_formats_stock_4key_screen_answer_as_list(self):
@@ -606,16 +604,15 @@ class OrchestratorPostprocessTests(unittest.TestCase):
             model="unused",
             messages=[],
             enable_tools=True,
-            allowed_apis=["getStock4KeyEvaluation"],
+            allowed_apis=["getStock4KeyScreen"],
             current_doc="Cau hoi ve danh gia 4 key co phieu.txt",
             user_text="Cung cap danh sach cac ma dung song dung nganh",
         )
 
         self.assertEqual(answer, "SSI")
         operation, args, _ = orchestrator.executor.calls[0]
-        self.assertEqual(operation, "getStock4KeyEvaluation")
-        self.assertEqual(args["mode"], "screen")
-        self.assertEqual(args["group_4key"], "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh")
+        self.assertEqual(operation, "getStock4KeyScreen")
+        self.assertEqual(args["group"], "dd")
         self.assertNotIn("ticker", args)
 if __name__ == "__main__":
     unittest.main()

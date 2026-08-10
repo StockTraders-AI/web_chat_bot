@@ -21,10 +21,11 @@ class FakeExecutor:
             "ok": True,
             "mode": "screen",
             "date": args.get("date"),
-            "group_filters": [args.get("group_4key")],
+            "group": args.get("group"),
+            "tickers": ["AAA", "SSI"],
             "results": [
-                {"ok": True, "ticker": "AAA"},
-                {"ok": True, "ticker": "SSI"},
+                {"ticker": "AAA"},
+                {"ticker": "SSI"},
             ],
         }
 
@@ -119,10 +120,8 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["answer"], "AAA, SSI")
         self.assertEqual(self.orchestrator.calls, [])
         operation, args, kwargs = self.orchestrator.executor.calls[0]
-        self.assertEqual(operation, "getStock4KeyEvaluation")
-        self.assertEqual(args["mode"], "screen")
-        self.assertEqual(args["date"], "2026-07-28")
-        self.assertEqual(args["group_4key"], "Đúng sóng - Đúng ngành")
+        self.assertEqual(operation, "getStock4KeyScreen")
+        self.assertEqual(args, {"date": "2026-07-28", "group": "dd"})
         self.assertEqual(kwargs["user_text"], payload.question)
 
     async def test_portfolio_chat_answers_single_position_dd(self):
