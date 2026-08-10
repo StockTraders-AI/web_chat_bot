@@ -23,6 +23,16 @@ CREATE TABLE IF NOT EXISTS chat_history (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_chat_user_id ON chat_history(user_id, id);
+CREATE TABLE IF NOT EXISTS conversation_context_states (
+  user_id TEXT PRIMARY KEY,
+  state_json TEXT NOT NULL,
+  last_resolved_query TEXT NOT NULL DEFAULT '',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  expires_at DATETIME NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversation_context_expires
+ON conversation_context_states(expires_at);
 
 CREATE TABLE IF NOT EXISTS ai_token_usage_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1186,6 +1196,22 @@ class MemoryStore:
         rows.reverse()
         return [{"role": r[0], "content": r[1]} for r in rows]
 
+    async def recent_messages_since(self, user_id: str, turns: int, since: datetime):
+        limit = max(2, turns * 2)
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                """
+                SELECT role, content
+                FROM chat_history
+                WHERE user_id=? AND created_at >= ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (user_id, self._format_dt(since), limit),
+            )
+            rows = await cur.fetchall()
+        rows.reverse()
+        return [{"role": r[0], "content": r[1]} for r in rows]
     async def all_messages(self, user_id: str):
         async with aiosqlite.connect(self.db_path) as db:
             cur = await db.execute(
@@ -1657,9 +1683,72 @@ class MemoryStore:
 
         return [dict(row) for row in rows]
 
+    async def get_conversation_context_state(self, user_id: str):
+        async with aiosqlite.connect(self.db_path) as db:
+            cur = await db.execute(
+                """
+                SELECT state_json, last_resolved_query, updated_at, expires_at
+                FROM conversation_context_states
+                WHERE user_id=? AND expires_at > CURRENT_TIMESTAMP
+                """,
+                (user_id,),
+            )
+            row = await cur.fetchone()
+
+        if not row:
+            return None
+
+        try:
+            state = json.loads(row[0] or "{}")
+        except json.JSONDecodeError:
+            state = {}
+
+        return {
+            "state": state,
+            "last_resolved_query": row[1],
+            "updated_at": row[2],
+            "expires_at": row[3],
+        }
+
+    async def upsert_conversation_context_state(
+        self,
+        user_id: str,
+        state: dict,
+        last_resolved_query: str = "",
+        ttl_minutes: int = 120,
+    ):
+        expires_at = self._format_dt(datetime.utcnow() + timedelta(minutes=ttl_minutes))
+        state_json = json.dumps(state or {}, ensure_ascii=False)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """
+                INSERT INTO conversation_context_states(
+                    user_id,
+                    state_json,
+                    last_resolved_query,
+                    expires_at
+                )
+                VALUES(?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    state_json=excluded.state_json,
+                    last_resolved_query=excluded.last_resolved_query,
+                    updated_at=CURRENT_TIMESTAMP,
+                    expires_at=excluded.expires_at
+                """,
+                (user_id, state_json, last_resolved_query or "", expires_at),
+            )
+            await db.commit()
+
+    async def clear_conversation_context_state(self, user_id: str):
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM conversation_context_states WHERE user_id=?", (user_id,))
+            await db.commit()
+
     async def delete_user_data(self, user_id: str):
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("DELETE FROM chat_history WHERE user_id=?", (user_id,))
+            await db.execute("DELETE FROM conversation_context_states WHERE user_id=?", (user_id,))
             await db.execute("DELETE FROM sales_discovery_sessions WHERE user_id=?", (user_id,))
             await db.execute("DELETE FROM customer_profiles WHERE user_id=?", (user_id,))
             await db.execute("DELETE FROM sales_demo_users WHERE user_id=?", (user_id,))
@@ -2522,3 +2611,6 @@ class MemoryStore:
                 )
 
                 await db.commit()
+
+
+

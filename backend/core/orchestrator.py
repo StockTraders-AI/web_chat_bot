@@ -11,6 +11,7 @@ from core.memory import MemoryStore
 from core.rag import RAGStore
 from core.tool_engine import ToolRegistry
 from core.condition_engine import extract_rows, scan_vnindex_waitbuy_reversal
+from core.context_resolver import STATE_TTL_MINUTES, resolve_conversation_context
 
 from services.api_executor import APIExecutor
 from services.branch_map import extract_branch_path
@@ -1507,20 +1508,26 @@ class Orchestrator:
         self,
         user_id: str,
         user_text: str,
-        language: str
+        language: str,
+        context_resolution: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], bool, List[str], Optional[str]]:
 
         raw_user_text = user_text.strip()
         allowed_apis: List[str] = []
         current_doc: Optional[str] = None
 
-        history_all = await self.memory.recent_messages(user_id)
-        recent_user_questions = recent_user_questions_from_messages(
-            history_all,
-            raw_user_text,
-            limit=3,
-        )
-        contextual_user_text = build_contextual_user_text(raw_user_text, recent_user_questions)
+        if context_resolution is None:
+            history_all = await self.memory.recent_messages(user_id)
+            recent_user_questions = recent_user_questions_from_messages(
+                history_all,
+                raw_user_text,
+                limit=3,
+            )
+            contextual_user_text = build_contextual_user_text(raw_user_text, recent_user_questions)
+        else:
+            history_all = []
+            recent_user_questions = []
+            contextual_user_text = raw_user_text
         query_source = self.classify_query_source(contextual_user_text)
         print("QUERY SOURCE:", query_source)
         history = []
@@ -2121,6 +2128,69 @@ Yêu cầu:
         except Exception as exc:
             print("CASE_IDEA_ANSWER_ERROR:", exc)
             return fallback
+    async def _resolve_turn_context(self, user_id: str, user_text: str) -> Dict[str, Any]:
+        state = None
+        if hasattr(self.memory, "get_conversation_context_state"):
+            try:
+                state_row = await self.memory.get_conversation_context_state(user_id)
+                state = (state_row or {}).get("state")
+            except Exception as exc:
+                print("CONTEXT_STATE_LOAD_ERROR:", exc)
+
+        resolution = resolve_conversation_context(
+            current_query=user_text,
+            conversation_state=state,
+            recent_messages=[],
+        )
+        if not resolution.get("need_more_context"):
+            return resolution
+
+        since = datetime.utcnow() - timedelta(minutes=STATE_TTL_MINUTES)
+        for turns in (2, 4):
+            try:
+                if hasattr(self.memory, "recent_messages_since"):
+                    recent = await self.memory.recent_messages_since(user_id, turns=turns, since=since)
+                else:
+                    recent = await self.memory.recent_messages(user_id, turns=turns)
+            except TypeError:
+                recent = await self.memory.recent_messages(user_id)
+            except Exception as exc:
+                print("CONTEXT_RECENT_LOAD_ERROR:", exc)
+                recent = []
+
+            resolution = resolve_conversation_context(
+                current_query=user_text,
+                conversation_state=state,
+                recent_messages=recent,
+            )
+            if not resolution.get("need_more_context"):
+                return resolution
+
+        return resolution
+
+    async def _save_assistant_turn(
+        self,
+        user_id: str,
+        assistant_text: str,
+        context_resolution: Optional[Dict[str, Any]] = None,
+    ):
+        await self.memory.add(user_id, "assistant", assistant_text)
+
+        if not context_resolution or context_resolution.get("need_more_context"):
+            return
+        next_state = context_resolution.get("next_state") or {}
+        if not next_state or not hasattr(self.memory, "upsert_conversation_context_state"):
+            return
+
+        try:
+            await self.memory.upsert_conversation_context_state(
+                user_id=user_id,
+                state=next_state,
+                last_resolved_query=context_resolution.get("resolved_query") or "",
+                ttl_minutes=STATE_TTL_MINUTES,
+            )
+        except Exception as exc:
+            print("CONTEXT_STATE_SAVE_ERROR:", exc)
     async def chat_stream(
         self,
         user_id: str,
@@ -2154,15 +2224,27 @@ Yêu cầu:
         def done_data(sources):
             return {"sources": sources, "usage": current_token_usage()}
 
-        await self.memory.add(user_id, "user", user_text)
-        recent_user_questions = recent_user_questions_from_messages(
-            await self.memory.recent_messages(user_id),
-            user_text,
-            limit=3,
-        )
-        contextual_user_text = build_contextual_user_text(user_text, recent_user_questions)
-        has_user_lookup_date = has_explicit_calendar_date_text(user_text) and _normalize_waitbuy_lookup_date(user_text)
-        tool_policy_user_text = user_text if has_user_lookup_date else contextual_user_text
+        raw_user_text = user_text
+        context_resolution = await self._resolve_turn_context(user_id, raw_user_text)
+        resolved_user_text = (context_resolution.get("resolved_query") or raw_user_text).strip()
+
+        await self.memory.add(user_id, "user", raw_user_text)
+
+        if context_resolution.get("need_more_context"):
+            final_text = "Bạn nói rõ thêm mã, chỉ số hoặc mốc thời gian cần hỏi để mình xử lý đúng ngữ cảnh."
+            for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
+                chunk = final_text[i:i + STREAM_CHUNK_CHARS]
+                if chunk:
+                    yield ("delta", {"text": chunk})
+            await self._save_assistant_turn(user_id, final_text, context_resolution)
+            yield ("done", done_data([]))
+            return
+
+        user_text = resolved_user_text
+        recent_user_questions = []
+        contextual_user_text = resolved_user_text
+        has_user_lookup_date = has_explicit_calendar_date_text(resolved_user_text) and _normalize_waitbuy_lookup_date(resolved_user_text)
+        tool_policy_user_text = resolved_user_text if has_user_lookup_date else contextual_user_text
 
         if find_disallowed_tickers(user_text):
             final_text = "Mã được hỏi không nằm trong danh sách mã được hệ thống hỗ trợ."
@@ -2170,7 +2252,7 @@ Yêu cầu:
                 chunk = final_text[i:i + STREAM_CHUNK_CHARS]
                 if chunk:
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", final_text)
+            await self._save_assistant_turn(user_id, final_text, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2205,7 +2287,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data(["4-key"]))
             return
         matched_case_idea = None
@@ -2221,7 +2303,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2240,7 +2322,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2253,7 +2335,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2266,7 +2348,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2279,7 +2361,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2292,7 +2374,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2305,7 +2387,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2318,7 +2400,7 @@ Yêu cầu:
                 if chunk:
                     full += chunk
                     yield ("delta", {"text": chunk})
-            await self.memory.add(user_id, "assistant", full)
+            await self._save_assistant_turn(user_id, full, context_resolution)
             yield ("done", done_data([]))
             return
 
@@ -2326,6 +2408,7 @@ Yêu cầu:
             user_id,
             user_text,
             language,
+            context_resolution=context_resolution,
         )
         loop_messages, final_text = self._run_tool_loop(
             model,
@@ -2347,5 +2430,11 @@ Yêu cầu:
                 full += chunk
                 yield ("delta", {"text": chunk})
 
-        await self.memory.add(user_id, "assistant", full)
+        await self._save_assistant_turn(user_id, full, context_resolution)
         yield ("done", done_data(sources))
+
+
+
+
+
+
