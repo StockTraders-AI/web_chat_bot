@@ -547,12 +547,15 @@ def _fetch_smdt_last_n(
     n: int,
     ticker: Optional[str] = None,
     path: Optional[str] = None,
+    base_date: Optional[str] = None,
 ) -> list[SmdtPoint]:
     args: dict[str, Any] = {"n": n}
     if ticker:
         args["ticker"] = ticker
     if path:
         args["path"] = path
+    if base_date:
+        args["baseDate"] = base_date[:10]
     return extract_smdt_points(api_call("getSMDTLastN", args))
 
 
@@ -594,6 +597,7 @@ def _load_inputs(
         api_call,
         n=history_buffer_days,
         ticker=ticker,
+        base_date=target,
     )
     ticker_smdt = _filter_smdt_range(ticker_smdt, from_date, target)
 
@@ -601,10 +605,11 @@ def _load_inputs(
         api_call,
         n=history_buffer_days,
         path=branch_path,
+        base_date=target,
     )
     branch_smdt = _filter_smdt_range(branch_smdt, from_date, target)
 
-    price_payload = api_call("getTotalTrade", {"ticker": ticker, "lastDates": history_buffer_days})
+    price_payload = api_call("getTotalTrade", {"ticker": ticker, "lastDates": history_buffer_days, "baseDate": target})
     prices = extract_price_points(price_payload)
     if target == date.today().isoformat():
         real_price_payload = api_call("getTotalTradeReal", {"ticker": ticker})
@@ -647,13 +652,14 @@ def _load_four_key_inputs(
         api_call,
         n=history_buffer_days,
         ticker=ticker,
+        base_date=target,
     )
     ticker_smdt = _filter_smdt_range(ticker_smdt, from_date, target)
 
     branch_smdt_cache = branch_smdt_cache if branch_smdt_cache is not None else {}
     if branch_path not in branch_smdt_cache:
         branch_smdt_cache[branch_path] = _filter_smdt_range(
-            _fetch_smdt_last_n(api_call, n=history_buffer_days, path=branch_path),
+            _fetch_smdt_last_n(api_call, n=history_buffer_days, path=branch_path, base_date=target),
             from_date,
             target,
         )

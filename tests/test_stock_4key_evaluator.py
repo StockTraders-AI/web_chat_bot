@@ -95,8 +95,9 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         smdt_calls = [(operation, args) for operation, args in seen if operation == "getSMDTLastN"]
         self.assertEqual(len(smdt_calls), 2)
         self.assertTrue(all(args["n"] == 45 for _, args in smdt_calls))
+        self.assertTrue(all(args["baseDate"] == "2026-07-01" for _, args in smdt_calls))
         price_calls = [(operation, args) for operation, args in seen if operation == "getTotalTrade"]
-        self.assertEqual(price_calls, [("getTotalTrade", {"ticker": "SSI", "lastDates": 45})])
+        self.assertEqual(price_calls, [("getTotalTrade", {"ticker": "SSI", "lastDates": 45, "baseDate": "2026-07-01"})])
 
     def test_today_adapter_uses_realtime_price_and_cashflow_content(self):
         target = date.today()
@@ -133,6 +134,9 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
 
         result = evaluate_stock_4key(api_call, {"ticker": "SSI", "date": dates[3]})
         self.assertTrue(result["ok"])
+        smdt_calls = [(operation, args) for operation, args in seen if operation == "getSMDTLastN"]
+        self.assertTrue(all(args["baseDate"] == dates[3] for _, args in smdt_calls))
+        self.assertIn(("getTotalTrade", {"ticker": "SSI", "lastDates": 45, "baseDate": dates[3]}), seen)
         self.assertIn(("getTotalTradeReal", {"ticker": "SSI"}), seen)
         self.assertIn("gia_dong_luong", result["composite"]["breakdown"])
         self.assertEqual(result["composite"]["breakdown"]["dong_tien"], 0.0)
@@ -195,6 +199,8 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         self.assertEqual(result["total_screened"], 2)
         self.assertEqual(result["total_matches"], 1)
         self.assertEqual([item["ticker"] for item in result["results"]], ["SSI"])
+        smdt_calls = [(operation, args) for operation, args in seen if operation == "getSMDTLastN"]
+        self.assertTrue(all(args["baseDate"] == target for _, args in smdt_calls))
         self.assertEqual(result["group_filters"], ["\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh"])
 
 if __name__ == "__main__":
