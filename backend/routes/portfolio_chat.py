@@ -9,6 +9,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from core.chat_runtime import collect_standard_chat
+from core.orchestrator import format_stock_4key_answer, stock_4key_screen_args
 
 
 class PortfolioChatIn(BaseModel):
@@ -265,6 +266,21 @@ def answer_portfolio_list_4key(question: str, portfolio: Optional[dict[str, Any]
         return f"Không có mã nào {label} trong danh mục hiện tại."
     return ", ".join(tickers)
 
+def answer_market_4key_screen(orchestrator: Any, question: str) -> Optional[str]:
+    args = stock_4key_screen_args(question)
+    if not args:
+        return None
+    executor = getattr(orchestrator, "executor", None)
+    if executor is None:
+        return None
+    result = executor.call(
+        "getStock4KeyEvaluation",
+        args,
+        user_text=question,
+    )
+    return format_stock_4key_answer(result, user_text=question)
+
+
 @router.post("/portfolio-chat")
 async def portfolio_chat(
     payload: PortfolioChatIn,
@@ -282,7 +298,9 @@ async def portfolio_chat(
     user_text, _ = build_chat_input(question, payload.portfolio)
     orchestrator = current_orchestrator()
 
-    direct_answer = answer_portfolio_list_4key(question, payload.portfolio)
+    direct_answer = answer_market_4key_screen(orchestrator, question)
+    if direct_answer is None:
+        direct_answer = answer_portfolio_list_4key(question, payload.portfolio)
     if direct_answer is None:
         direct_answer = answer_portfolio_position_4key(question, payload.portfolio)
     if direct_answer is not None:

@@ -11,9 +11,28 @@ sys.path.insert(0, str(ROOT / "backend"))
 from routes import portfolio_chat as route
 
 
+class FakeExecutor:
+    def __init__(self):
+        self.calls = []
+
+    def call(self, operation, args, **kwargs):
+        self.calls.append((operation, args, kwargs))
+        return {
+            "ok": True,
+            "mode": "screen",
+            "date": args.get("date"),
+            "group_filters": [args.get("group_4key")],
+            "results": [
+                {"ok": True, "ticker": "AAA"},
+                {"ok": True, "ticker": "SSI"},
+            ],
+        }
+
+
 class FakeOrchestrator:
     def __init__(self):
         self.calls = []
+        self.executor = FakeExecutor()
 
     async def chat_stream(self, **kwargs):
         self.calls.append(kwargs)
@@ -87,6 +106,24 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
 
         call = self.orchestrator.calls[0]
         self.assertEqual(call["user_text"], "SMDT GEX hien nay la bao nhieu?")
+
+    async def test_portfolio_chat_market_4key_screen_bypasses_chat_runtime(self):
+        payload = route.PortfolioChatIn(
+            question="cung cấp các mã đúng sóng đúng ngành ngày 28/7/2026",
+            user_id="u1",
+            conversation_id="p1",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        self.assertEqual(result["answer"], "AAA, SSI")
+        self.assertEqual(self.orchestrator.calls, [])
+        operation, args, kwargs = self.orchestrator.executor.calls[0]
+        self.assertEqual(operation, "getStock4KeyEvaluation")
+        self.assertEqual(args["mode"], "screen")
+        self.assertEqual(args["date"], "2026-07-28")
+        self.assertEqual(args["group_4key"], "Đúng sóng - Đúng ngành")
+        self.assertEqual(kwargs["user_text"], payload.question)
 
     async def test_portfolio_chat_answers_single_position_dd(self):
         payload = route.PortfolioChatIn(
