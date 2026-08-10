@@ -13,6 +13,8 @@ from services.stock_4key_evaluator import Stock4KeyError, evaluate_stock_4key
 from services.ticker_policy import invalid_api_ticker, sanitize_api_result
 
 DEBUG_API = True
+POST_REQUEST_TIMEOUT_SECONDS = 900
+GET_REQUEST_TIMEOUT_SECONDS = 300
 
 def _configure_console_encoding():
     for stream_name in ("stdout", "stderr"):
@@ -560,13 +562,13 @@ class APIExecutor:
             return requests.post(
                 url,
                 params=payload,
-                timeout=300
+                timeout=POST_REQUEST_TIMEOUT_SECONDS
             )
 
         return requests.get(
             url,
             params=payload,
-            timeout=120
+            timeout=GET_REQUEST_TIMEOUT_SECONDS
         )
 
 
