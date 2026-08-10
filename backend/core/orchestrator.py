@@ -639,7 +639,12 @@ def format_stock_4key_answer(payload: Dict[str, Any], user_text: str = "") -> st
     if str(payload.get("mode") or "").strip().lower() in {"screen", "batch", "history"}:
         return format_stock_4key_list_answer(payload, user_text=user_text)
 
-    ticker = str(payload.get("ticker") or "mã").strip().upper()
+    ticker = str(payload.get("ticker") or "").strip().upper()
+    if not ticker:
+        return str(
+            payload.get("error")
+            or "Không xác định được mã cổ phiếu cần phân tích."
+        )
     branch = str(payload.get("branch") or "ngành").strip()
     date_text = _fmt_vn_date(payload.get("date") or payload.get("requested_date"))
     composite = payload.get("composite") or {}
@@ -2176,8 +2181,24 @@ Yêu cầu:
                 stock_4key_single,
                 user_text=user_text,
             )
-            final_text = format_stock_4key_answer(result, user_text=user_text)
-            final_text = clean_chat_output(sanitize_response_text(final_text))
+
+            if isinstance(result, dict) and result.get("ok"):
+                final_text = format_stock_4key_answer(
+                    result,
+                    user_text=user_text
+                )
+            else:
+                error = result.get("error") if isinstance(result, dict) else None
+                ticker = stock_4key_single.get("ticker") or ""
+
+                final_text = (
+                    f"Không lấy được dữ liệu 4 Key của {ticker}. "
+                    f"{error or ''}"
+                ).strip()
+
+            final_text = clean_chat_output(
+                sanitize_response_text(final_text)
+            )
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):
                 chunk = final_text[i:i + STREAM_CHUNK_CHARS]
