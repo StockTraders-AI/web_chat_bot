@@ -178,6 +178,9 @@ const CONDITION_PAGE_SIZE = 7;
 let currentView = "chat";
 let lastRenderedHistorySignature = "";
 let isChatStreaming = false;
+let currentChatController = null;
+let currentChatStreamId = 0;
+let activeAiBubble = null;
 
 const TARGET_LABELS = {
   investment_experience: "Thâm niên đầu tư",
@@ -295,13 +298,13 @@ function canViewProgress() {
 
 function setChatAccessState() {
   const allowed = canUseChat();
-  msgEl.disabled = !allowed || isChatStreaming;
-  sendBtn.disabled = !allowed || isChatStreaming;
+  msgEl.disabled = !allowed;
+  sendBtn.disabled = !allowed;
   newUserBtn.disabled = !allowed;
   profileSubmitBtn.disabled = !allowed;
   document.body.classList.toggle("chat-locked", !allowed);
   msgEl.placeholder = isChatStreaming
-    ? "Đang xử lý câu hỏi..."
+    ? "Đang xử lý; câu mới sẽ thay câu đang chờ..."
     : allowed
       ? "Nhap cau hoi..."
       : "Tài khoản này chưa có quyền sử dụng chatbot";
@@ -3588,7 +3591,7 @@ function parseSSEChunk(buffer) {
    Payload Builder
 ========================= */
 
-function buildPayload(user_id, message) {
+function buildPayload(user_id, message, requestId) {
   return {
     user_id,
     message,
@@ -3596,6 +3599,7 @@ function buildPayload(user_id, message) {
     model: modelSelect?.value || null,
     meta: {
       mode: "sales_discovery",
+      request_id: requestId,
     },
   };
 }
@@ -3639,11 +3643,27 @@ function handleSSEEvent(evt, aiBubble) {
   }
 }
 
+function cancelActiveChatStream() {
+  currentChatStreamId += 1;
+
+  if (currentChatController) {
+    currentChatController.abort();
+  }
+
+  if (activeAiBubble && activeAiBubble.isConnected) {
+    activeAiBubble.remove();
+  }
+
+  currentChatController = null;
+  activeAiBubble = null;
+  isChatStreaming = false;
+}
+
 /* =========================
    Stream Chat
 ========================= */
 
-async function streamChat(payload, aiBubble) {
+async function streamChat(payload, aiBubble, signal, streamId) {
   let res;
   aiBubble.innerHTML = `
     <div class="typing">
@@ -3656,11 +3676,15 @@ async function streamChat(payload, aiBubble) {
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
       body: JSON.stringify(payload),
+      signal,
     });
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") return false;
     aiBubble.textContent = "Không thể kết nối server.";
     return false;
   }
+
+  if (streamId !== currentChatStreamId || signal?.aborted) return false;
 
   if (res.status === 403) {
     const data = await res.json().catch(() => ({}));
@@ -3680,6 +3704,11 @@ async function streamChat(payload, aiBubble) {
   let doneReading = false;
 
   while (!doneReading) {
+    if (streamId !== currentChatStreamId || signal?.aborted) {
+      try { await reader.cancel(); } catch {}
+      return false;
+    }
+
     const { done, value } = await reader.read();
     doneReading = done;
 
@@ -3690,15 +3719,17 @@ async function streamChat(payload, aiBubble) {
     const parsed = parseSSEChunk(buffer);
     buffer = parsed.buffer;
 
-    parsed.out.forEach((evt) => {
+    for (const evt of parsed.out) {
+      if (streamId !== currentChatStreamId || signal?.aborted) return false;
+      if (evt.event === "done" && evt.data?.cancelled) return false;
       if (aiBubble.querySelector(".typing")) {
         aiBubble.innerHTML = "";
       }
       handleSSEEvent(evt, aiBubble);
-    });
+    }
   }
 
-  return true;
+  return streamId === currentChatStreamId && !signal?.aborted;
 }
 
 /* =========================
@@ -3719,7 +3750,15 @@ async function send() {
     return;
   }
 
-  if (!message || isChatStreaming) return;
+  if (!message) return;
+
+  if (isChatStreaming) {
+    cancelActiveChatStream();
+  }
+
+  const streamId = currentChatStreamId + 1;
+  currentChatStreamId = streamId;
+  currentChatController = new AbortController();
 
   isChatStreaming = true;
   setChatAccessState();
@@ -3727,17 +3766,22 @@ async function send() {
   msgEl.value = "";
 
   const aiBubble = addBubble("", "ai");
+  activeAiBubble = aiBubble;
 
   let streamCompleted = false;
   try {
-    const payload = buildPayload(user_id, message);
-    streamCompleted = await streamChat(payload, aiBubble);
+    const payload = buildPayload(user_id, message, `chat-${Date.now()}-${streamId}`);
+    streamCompleted = await streamChat(payload, aiBubble, currentChatController.signal, streamId);
     if (streamCompleted) await refreshProgress(user_id);
   } finally {
-    isChatStreaming = false;
-    setChatAccessState();
-    if (streamCompleted) await refreshVisibleChatHistory();
-    msgEl.focus();
+    if (streamId === currentChatStreamId) {
+      isChatStreaming = false;
+      currentChatController = null;
+      activeAiBubble = null;
+      setChatAccessState();
+      if (streamCompleted) await refreshVisibleChatHistory();
+      msgEl.focus();
+    }
   }
 }
 

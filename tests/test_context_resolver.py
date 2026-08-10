@@ -95,5 +95,35 @@ class ContextResolverTests(unittest.TestCase):
         self.assertIn("time", result["overridden_fields"])
 
 
+    def test_market_wave_date_followup_inherits_metric_without_entity(self):
+        cases = [
+            ("chờ mua ngày 22-7 bao nhiêu", "waitbuy", "chờ mua ngày 28/07/2026 bao nhiêu?"),
+            ("chờ bán phiên 22/7 bao nhiêu", "waitsell", "chờ bán ngày 28/07/2026 bao nhiêu?"),
+            ("độ tin cậy ngày 22/7 bao nhiêu", "reliability", "độ tin cậy ngày 28/07/2026 bao nhiêu?"),
+        ]
+
+        for first_query, metric, expected in cases:
+            with self.subTest(metric=metric):
+                first = resolve_conversation_context(first_query, now=self.now)
+                self.assertFalse(first["need_more_context"])
+                self.assertEqual(first["next_state"]["topic"], "market_wave")
+                self.assertEqual(first["next_state"]["metric"], metric)
+
+                second = resolve_conversation_context(
+                    "28/7 bao nhiêu",
+                    conversation_state=first["next_state"],
+                    now=self.now,
+                )
+
+                self.assertTrue(second["used_history"])
+                self.assertEqual(second["resolved_query"], expected)
+
+    def test_market_wave_definition_is_not_saved_as_metric_lookup(self):
+        result = resolve_conversation_context("Chờ mua là gì?", now=self.now)
+
+        self.assertFalse(result["need_more_context"])
+        self.assertNotEqual(result["next_state"].get("topic"), "market_wave")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1099,7 +1099,85 @@ def format_vn_date(value: Any) -> str:
         return str(value or "")
 
 
-def _normalize_waitbuy_lookup_date(text: str) -> Optional[str]:
+STOCK_WAVE_METRICS = {
+    "waitbuy": {
+        "label": "chờ mua",
+        "aliases": ("cho mua", "waitbuy", "wait buy"),
+        "keys": ("waitbuy", "waitBuy", "wait_buy", "choMua", "cho_mua", "cm"),
+        "unit": "stocks_after",
+    },
+    "waitsell": {
+        "label": "chờ bán",
+        "aliases": ("cho ban", "waitsell", "wait sell"),
+        "keys": ("waitsell", "waitSell", "wait_sell", "choBan", "cho_ban", "cb"),
+        "unit": "stocks_after",
+    },
+    "buy": {
+        "label": "mua",
+        "aliases": ("tin hieu mua", "mua"),
+        "keys": ("buy", "mua", "mu"),
+        "unit": "stocks_after",
+    },
+    "sell": {
+        "label": "bán",
+        "aliases": ("tin hieu ban", "ban"),
+        "keys": ("sell", "ban"),
+        "unit": "stocks_after",
+    },
+    "total": {
+        "label": "tổng",
+        "aliases": ("tong so", "tong"),
+        "keys": ("total", "tong"),
+        "unit": "stocks_before",
+    },
+    "reliability": {
+        "label": "độ tin cậy",
+        "aliases": ("do tin cay", "reliability"),
+        "keys": ("reliability", "confidence", "doTinCay", "do_tin_cay"),
+        "unit": "percent",
+    },
+}
+STOCK_WAVE_LOOKUP_CUES = (
+    "bao nhieu",
+    "ngay",
+    "phien",
+    "hom nay",
+    "hien nay",
+    "hien tai",
+    "so lieu",
+    "moc",
+    "dat moc",
+)
+STOCK_WAVE_EXPLAIN_CUES = ("la gi", "nghia la gi", "giai thich", "thuyet minh", "vi sao", "tai sao")
+
+
+def _has_normalized_phrase(normalized: str, phrase: str) -> bool:
+    return re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])", normalized) is not None
+
+
+def extract_stock_wave_metric(text: str) -> Optional[str]:
+    normalized = normalize_search_text(text)
+    aliases: List[tuple[str, str]] = []
+    for metric, config in STOCK_WAVE_METRICS.items():
+        for alias in config["aliases"]:
+            aliases.append((alias, metric))
+
+    for alias, metric in sorted(aliases, key=lambda item: len(item[0]), reverse=True):
+        if _has_normalized_phrase(normalized, alias):
+            return metric
+    return None
+
+
+def _stock_wave_metric_value(row: Dict[str, Any], metric: str) -> Any:
+    config = STOCK_WAVE_METRICS.get(metric) or {}
+    for key in config.get("keys", (metric,)):
+        value = row.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _normalize_stock_wave_lookup_date(text: str) -> Optional[str]:
     value = extract_date_value(text)
     if not value:
         return None
@@ -1123,16 +1201,25 @@ def _normalize_waitbuy_lookup_date(text: str) -> Optional[str]:
     return None
 
 
-def is_waitbuy_value_query(text: str) -> bool:
+def _normalize_waitbuy_lookup_date(text: str) -> Optional[str]:
+    return _normalize_stock_wave_lookup_date(text)
+
+
+def is_stock_wave_value_query(text: str) -> bool:
     normalized = normalize_search_text(text)
     if is_definition_query(text):
         return False
-    if not ("cho mua" in normalized or "waitbuy" in normalized):
+    if any(_has_normalized_phrase(normalized, cue) for cue in STOCK_WAVE_EXPLAIN_CUES):
         return False
-    if any(k in normalized for k in ("thuyet minh", "giai thich", "vi sao", "tai sao")):
+    if not extract_stock_wave_metric(text):
         return False
-    return _normalize_waitbuy_lookup_date(text) is not None
+    if not any(_has_normalized_phrase(normalized, cue) for cue in STOCK_WAVE_LOOKUP_CUES):
+        return False
+    return _normalize_stock_wave_lookup_date(text) is not None
 
+
+def is_waitbuy_value_query(text: str) -> bool:
+    return extract_stock_wave_metric(text) == "waitbuy" and is_stock_wave_value_query(text)
 
 def extract_stock_wave_rows(raw: Any) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
@@ -1155,13 +1242,24 @@ def extract_stock_wave_rows(raw: Any) -> List[Dict[str, Any]]:
     return rows
 
 
-def format_waitbuy_value_answer(row: Dict[str, Any], requested_date: str) -> str:
+def format_stock_wave_value_answer(row: Dict[str, Any], requested_date: str, metric: str) -> str:
     date_text = format_vn_date(row.get("date") or requested_date)
-    waitbuy = row.get("waitbuy")
-    if waitbuy in (None, ""):
-        return f"Phiên {date_text} chưa có dữ liệu chờ mua."
-    return f"Phiên {date_text} có {waitbuy} cổ phiếu chờ mua."
+    config = STOCK_WAVE_METRICS.get(metric) or {}
+    label = config.get("label") or metric
+    value = _stock_wave_metric_value(row, metric)
+    if value in (None, ""):
+        return f"Phiên {date_text} chưa có dữ liệu {label}."
 
+    unit = config.get("unit")
+    if unit == "percent":
+        return f"Phiên {date_text} có {label} {value}%."
+    if unit == "stocks_before":
+        return f"Phiên {date_text} có {label} {value} cổ phiếu."
+    return f"Phiên {date_text} có {value} cổ phiếu {label}."
+
+
+def format_waitbuy_value_answer(row: Dict[str, Any], requested_date: str) -> str:
+    return format_stock_wave_value_answer(row, requested_date, "waitbuy")
 
 def is_cashflow_range_query(text: str) -> bool:
     normalized = normalize_search_text(text)
@@ -1443,6 +1541,8 @@ class Orchestrator:
         self.executor = APIExecutor(registry)
         self.oa = OpenAIClient()
         self._user_chat_locks: Dict[str, asyncio.Lock] = {}
+        self._user_chat_generations: Dict[str, int] = {}
+        self._chat_generation = 0
 
     # =====================================================
     # BUILD BASE MESSAGES
@@ -1972,10 +2072,12 @@ class Orchestrator:
             request["lastDates"],
         )
 
-    def _answer_waitbuy_value(self, user_text: str) -> str:
-        requested_date = _normalize_waitbuy_lookup_date(user_text)
+    def _answer_stock_wave_value(self, user_text: str) -> str:
+        metric = extract_stock_wave_metric(user_text)
+        requested_date = _normalize_stock_wave_lookup_date(user_text)
+        label = (STOCK_WAVE_METRICS.get(metric or "") or {}).get("label") or "dữ liệu dò sóng"
         if not requested_date:
-            return "Anh/chị muốn xem chờ mua ngày nào?"
+            return f"Anh/chị muốn xem {label} ngày nào?"
 
         raw_wave = self.executor.call(
             "getStockWave",
@@ -1992,9 +2094,12 @@ class Orchestrator:
         )
 
         if not row:
-            return f"Phiên {format_vn_date(requested_date)} chưa có dữ liệu chờ mua."
+            return f"Phiên {format_vn_date(requested_date)} chưa có dữ liệu {label}."
 
-        return format_waitbuy_value_answer(row, requested_date)
+        return format_stock_wave_value_answer(row, requested_date, metric or "")
+
+    def _answer_waitbuy_value(self, user_text: str) -> str:
+        return self._answer_stock_wave_value(user_text)
 
     async def _answer_waitbuy_explanation(self, user_text: str, model: str) -> str:
         target = await self._find_waitbuy_target()
@@ -2199,14 +2304,25 @@ Yêu cầu:
         selected_model: Optional[str]
     ):
 
+        self._chat_generation += 1
+        generation = self._chat_generation
+        self._user_chat_generations[user_id] = generation
+
         lock = self._user_chat_locks.setdefault(user_id, asyncio.Lock())
         async with lock:
+            if self._user_chat_generations.get(user_id) != generation:
+                yield "done", {"cancelled": True, "superseded": True}
+                return
+
             async for event, data in self._chat_stream_unlocked(
                 user_id=user_id,
                 user_text=user_text,
                 language=language,
                 selected_model=selected_model
             ):
+                if self._user_chat_generations.get(user_id) != generation:
+                    yield "done", {"cancelled": True, "superseded": True}
+                    return
 
                 yield event, data
 
@@ -2378,8 +2494,8 @@ Yêu cầu:
             yield ("done", done_data([]))
             return
 
-        if is_waitbuy_value_query(user_text):
-            final_text = self._answer_waitbuy_value(user_text)
+        if is_stock_wave_value_query(user_text):
+            final_text = self._answer_stock_wave_value(user_text)
             final_text = clean_chat_output(sanitize_response_text(final_text))
             full = ""
             for i in range(0, len(final_text), STREAM_CHUNK_CHARS):

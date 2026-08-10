@@ -8,6 +8,44 @@ from services.ticker_policy import ALLOWED_TICKERS
 
 STATE_TTL_MINUTES = 120
 NON_TICKER_SYMBOLS = {"RSI", "NAV", "SMDT", "GPT", "AI", "API", "MACD"}
+MARKET_WAVE_METRICS = {
+    "waitbuy": {
+        "label": "chờ mua",
+        "aliases": ("cho mua", "waitbuy", "wait buy"),
+    },
+    "waitsell": {
+        "label": "chờ bán",
+        "aliases": ("cho ban", "waitsell", "wait sell"),
+    },
+    "buy": {
+        "label": "mua",
+        "aliases": ("tin hieu mua", "mua"),
+    },
+    "sell": {
+        "label": "bán",
+        "aliases": ("tin hieu ban", "ban"),
+    },
+    "reliability": {
+        "label": "độ tin cậy",
+        "aliases": ("do tin cay", "reliability"),
+    },
+    "total": {
+        "label": "tổng",
+        "aliases": ("tong", "tong so"),
+    },
+}
+MARKET_WAVE_LOOKUP_CUES = (
+    "bao nhieu",
+    "ngay",
+    "phien",
+    "hom nay",
+    "hien nay",
+    "hien tai",
+    "so lieu",
+    "moc",
+    "dat moc",
+)
+MARKET_WAVE_EXPLAIN_CUES = ("la gi", "nghia la gi", "giai thich", "thuyet minh", "vi sao", "tai sao")
 
 
 def normalize_text(text: str) -> str:
@@ -84,6 +122,36 @@ def extract_tickers(text: str) -> List[str]:
     return tickers
 
 
+def text_has_phrase(normalized: str, phrase: str) -> bool:
+    return re.search(rf"(?<![a-z0-9]){re.escape(phrase)}(?![a-z0-9])", normalized) is not None
+
+
+def extract_market_wave_metric(normalized: str, has_tickers: bool = False) -> Optional[str]:
+    aliases: List[tuple[str, str]] = []
+    for metric, config in MARKET_WAVE_METRICS.items():
+        for alias in config["aliases"]:
+            aliases.append((alias, metric))
+
+    for alias, metric in sorted(aliases, key=lambda item: len(item[0]), reverse=True):
+        if metric in {"buy", "sell"} and has_tickers and alias in {"mua", "ban"}:
+            continue
+        if text_has_phrase(normalized, alias):
+            return metric
+    return None
+
+
+def is_market_wave_lookup(normalized: str, parsed: Dict[str, Any], metric: Optional[str]) -> bool:
+    if not metric:
+        return False
+    if any(text_has_phrase(normalized, cue) for cue in MARKET_WAVE_EXPLAIN_CUES):
+        return False
+    return bool(
+        parsed.get("time_context")
+        or parsed.get("time_relation")
+        or any(text_has_phrase(normalized, cue) for cue in MARKET_WAVE_LOOKUP_CUES)
+    )
+
+
 def extract_branch_entity(text: str) -> Optional[str]:
     normalized = normalize_text(text)
     candidates = list(MAIN_BRANCHES) + list(MAIN_BRANCH_ALIASES.keys())
@@ -130,7 +198,12 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
     elif any(phrase in normalized for phrase in ("ngay hom truoc", "hom truoc", "phien truoc", "ngay truoc")):
         parsed["time_relation"] = "prev_day"
 
-    if "smdt" in normalized or "suc manh dong tien" in normalized:
+    market_wave_metric = extract_market_wave_metric(normalized, has_tickers=bool(tickers))
+    if is_market_wave_lookup(normalized, parsed, market_wave_metric):
+        parsed["intent"] = "metric_lookup"
+        parsed["topic"] = "market_wave"
+        parsed["metric"] = market_wave_metric
+    elif "smdt" in normalized or "suc manh dong tien" in normalized:
         parsed["intent"] = "metric_lookup"
         parsed["topic"] = "stock_metric" if tickers else "branch_metric"
         parsed["metric"] = "SMDT"
@@ -161,7 +234,10 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
     )
     parsed["is_followup_like"] = only_entity or only_date or comparative or vague_reference
 
-    for field in ("intent", "topic", "entities"):
+    required_fields = ["intent", "topic"]
+    if parsed.get("topic") != "market_wave":
+        required_fields.append("entities")
+    for field in required_fields:
         if not parsed.get(field):
             parsed["missing_fields"].append(field)
     if parsed.get("intent") == "metric_lookup" and not parsed.get("metric"):
@@ -175,10 +251,12 @@ def state_has_enough_context(state: Optional[Dict[str, Any]]) -> bool:
         return False
     if not state.get("intent") or not state.get("topic"):
         return False
+    if state.get("intent") == "metric_lookup" and not state.get("metric"):
+        return False
+    if state.get("topic") == "market_wave":
+        return True
     entities = state.get("entities") or []
     if not entities:
-        return False
-    if state.get("intent") == "metric_lookup" and not state.get("metric"):
         return False
     return True
 
@@ -261,6 +339,9 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
         return f"So sánh dòng tiền {entity_text}{date_part}.".strip()
     if len(entities) >= 2 and metric:
         return f"So sánh {metric} {entity_text}{date_part}.".strip()
+    if intent == "metric_lookup" and topic == "market_wave" and metric in MARKET_WAVE_METRICS:
+        label = MARKET_WAVE_METRICS[metric]["label"]
+        return f"{label}{date_part} bao nhiêu?".strip()
     if intent == "metric_lookup" and metric and entity_text:
         return f"{metric} {entity_text}{date_part} bao nhiêu?".strip()
     if topic == "cashflow" and entity_text:
