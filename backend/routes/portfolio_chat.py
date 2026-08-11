@@ -9,7 +9,9 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from core.chat_runtime import collect_standard_chat
+from core.model_router import pick_model
 from core.orchestrator import format_stock_4key_answer, stock_4key_screen_args
+from services.openai_client import current_token_usage, reset_token_usage
 
 
 class PortfolioChatIn(BaseModel):
@@ -145,7 +147,9 @@ def extract_portfolio_positions(portfolio: Optional[dict[str, Any]]) -> list[dic
             positions.extend(item for item in value if isinstance(item, dict))
 
     position = portfolio.get("position")
-    if isinstance(position, dict):
+    if isinstance(position, list):
+        positions.extend(item for item in position if isinstance(item, dict))
+    elif isinstance(position, dict):
         positions.append(position)
 
     if isinstance(portfolio.get("ticker"), str):
@@ -332,6 +336,50 @@ def answer_portfolio_compare_4key(question: str, portfolio: Optional[dict[str, A
     ])
     return "\n".join(lines)
 
+def polish_portfolio_compare_answer(
+    orchestrator: Any,
+    question: str,
+    base_answer: str,
+    selected_model: Optional[str],
+) -> tuple[str, dict[str, Any]]:
+    oa = getattr(orchestrator, "oa", None)
+    if oa is None:
+        return base_answer, {}
+
+    reset_token_usage()
+    prompt = f"""
+Cau hoi user:
+{question}
+
+Du lieu so sanh bat buoc dung, da tinh san:
+{base_answer}
+
+Yeu cau:
+- Viet lai thanh cau tra loi tieng Viet tu nhien, de doc hon.
+- Chi dung dung so lieu va thu tu trong du lieu tren, khong them ma moi, khong bia gia/volume/tin tuc.
+- Khong khuyen nghi mua ban tuyet doi; chi noi ma nao noi bat hon theo 4-key.
+- Neu co ma dung song dung nganh, neu ro ma do dang uu tien hon trong danh muc theo 4-key.
+- Tra loi ngan gon, co the dung bullet ngan, khong can bang markdown.
+""".strip()
+    try:
+        resp = oa.chat(
+            model=pick_model(selected_model),
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Ban la tro ly StockTraders AI. Tra loi tieng Viet tu nhien, ngan gon, bam sat so lieu duoc dua.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            tools=None,
+            tool_choice="auto",
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        return text or base_answer, current_token_usage()
+    except Exception as exc:
+        print("PORTFOLIO_COMPARE_POLISH_ERROR:", exc)
+        return base_answer, current_token_usage()
+
 def format_single_position_4key_answer(ticker: str, is_match: bool, requested_cat: str) -> str:
     if is_match:
         return ticker
@@ -422,7 +470,21 @@ async def portfolio_chat(
     user_text, _ = build_chat_input(question, payload.portfolio)
     orchestrator = current_orchestrator()
 
+    direct_usage: dict[str, Any] = {}
     direct_answer = answer_portfolio_compare_4key(question, payload.portfolio)
+    if direct_answer is not None and is_portfolio_compare_question(question):
+        compare_positions = [
+            position
+            for position in extract_portfolio_positions(payload.portfolio)
+            if position_ticker(position)
+        ]
+        if len(compare_positions) >= 2:
+            direct_answer, direct_usage = polish_portfolio_compare_answer(
+                orchestrator,
+                question,
+                direct_answer,
+                payload.model,
+            )
     if direct_answer is None:
         direct_answer = answer_market_4key_screen(orchestrator, question)
     if direct_answer is None:
@@ -433,7 +495,7 @@ async def portfolio_chat(
         return {
             "answer": direct_answer,
             "sources": [],
-            "usage": {},
+            "usage": direct_usage,
             "conversation_id": conversation_id,
         }
 

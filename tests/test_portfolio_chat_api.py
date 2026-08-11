@@ -11,6 +11,29 @@ sys.path.insert(0, str(ROOT / "backend"))
 from routes import portfolio_chat as route
 
 
+class FakeMessage:
+    def __init__(self, content):
+        self.content = content
+
+
+class FakeChoice:
+    def __init__(self, content):
+        self.message = FakeMessage(content)
+
+
+class FakeChatResponse:
+    def __init__(self, content):
+        self.choices = [FakeChoice(content)]
+
+
+class FakeOpenAIClient:
+    def __init__(self):
+        self.calls = []
+
+    def chat(self, **kwargs):
+        self.calls.append(kwargs)
+        return FakeChatResponse("PVT n\u1ed5i b\u1eadt h\u01a1n SSI v\u00e0 BVS theo 4-key v\u00ec \u0111ang \u0111\u00fang s\u00f3ng \u0111\u00fang ng\u00e0nh, v\u1edbi \u0111\u1ed9ng l\u01b0\u1ee3ng m\u00e3 +59.9 v\u00e0 \u0111\u1ed9ng l\u01b0\u1ee3ng ng\u00e0nh +56.1.")
+
 class FakeExecutor:
     def __init__(self):
         self.calls = []
@@ -34,6 +57,7 @@ class FakeOrchestrator:
     def __init__(self):
         self.calls = []
         self.executor = FakeExecutor()
+        self.oa = FakeOpenAIClient()
 
     async def chat_stream(self, **kwargs):
         self.calls.append(kwargs)
@@ -128,7 +152,7 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         payload = route.PortfolioChatIn(
             question="So sanh cac ma?",
             portfolio={
-                "positions": [
+                "position": [
                     {
                         "ticker": "SSI",
                         "industry": "Chung khoan",
@@ -165,16 +189,13 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         result = await route.portfolio_chat(payload, x_api_key=None)
 
         answer = result["answer"]
-        self.assertIn("PVT", answer)
-        self.assertIn("SSI", answer)
-        self.assertIn("BVS", answer)
+        self.assertIn("PVT nổi bật hơn SSI và BVS", answer)
         self.assertIn("+59.9", answer)
         self.assertIn("+56.1", answer)
-        self.assertLess(answer.index("| PVT "), answer.index("| BVS "))
-        self.assertLess(answer.index("| BVS "), answer.index("| SSI "))
-        self.assertEqual(result["usage"], {})
+        self.assertEqual(len(self.orchestrator.oa.calls), 1)
         self.assertEqual(self.orchestrator.calls, [])
         self.assertEqual(self.orchestrator.executor.calls, [])
+
     async def test_portfolio_chat_answers_single_position_dd(self):
         payload = route.PortfolioChatIn(
             question="Mã nào đúng sóng, đúng ngành?",
