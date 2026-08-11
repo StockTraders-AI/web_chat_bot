@@ -123,6 +123,17 @@ def is_portfolio_4key_list_question(question: str) -> bool:
     )
 
 
+def is_portfolio_compare_question(question: str) -> bool:
+    normalized = normalize_search_text(question)
+    if not normalized:
+        return False
+    return (
+        normalized == "so sanh"
+        or normalized.startswith("so sanh ")
+        or normalized == "compare"
+        or normalized.startswith("compare ")
+    )
+
 def extract_portfolio_positions(portfolio: Optional[dict[str, Any]]) -> list[dict[str, Any]]:
     if not isinstance(portfolio, dict):
         return []
@@ -207,6 +218,119 @@ def position_4key_cat(position: Optional[dict[str, Any]]) -> Optional[str]:
     )
     return FOUR_KEY_GROUP_TO_CAT.get(normalize_search_text(str(raw or "")))
 
+
+FOUR_KEY_CAT_LABELS = {
+    "dd": "\u0111\u00fang s\u00f3ng \u0111\u00fang ng\u00e0nh",
+    "ds": "\u0111\u00fang s\u00f3ng sai ng\u00e0nh",
+    "sd": "sai s\u00f3ng \u0111\u00fang ng\u00e0nh",
+    "ss": "sai s\u00f3ng sai ng\u00e0nh",
+}
+
+
+FOUR_KEY_CAT_PRIORITY = {
+    "dd": 0,
+    "ds": 1,
+    "sd": 2,
+    "ss": 3,
+}
+
+
+def _position_number(position: dict[str, Any], *keys: str) -> Optional[float]:
+    for key in keys:
+        value = position.get(key)
+        if value is None or value == "":
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _format_delta(value: Optional[float]) -> str:
+    if value is None:
+        return "-"
+    formatted = f"{value:+.1f}"
+    return formatted.rstrip("0").rstrip(".")
+
+
+def position_stock_delta(position: dict[str, Any]) -> Optional[float]:
+    current = _position_number(position, "smdt", "smdtCurrent", "stockSmdt")
+    previous = _position_number(position, "smdtPrev", "smdtPrevious", "stockSmdtPrev")
+    if current is None or previous is None:
+        return None
+    return current - previous
+
+
+def position_branch_delta(position: dict[str, Any]) -> Optional[float]:
+    current = _position_number(position, "branchSmdt", "industrySmdt")
+    previous = _position_number(position, "branchSmdtPrev", "industrySmdtPrev")
+    if current is None or previous is None:
+        return None
+    return current - previous
+
+
+def _compare_sort_key(position: dict[str, Any]) -> tuple[float, float, float, str]:
+    cat = position_4key_cat(position)
+    stock_delta = position_stock_delta(position)
+    branch_delta = position_branch_delta(position)
+    return (
+        FOUR_KEY_CAT_PRIORITY.get(cat or "", 99),
+        -(stock_delta if stock_delta is not None else float("-inf")),
+        -(branch_delta if branch_delta is not None else float("-inf")),
+        position_ticker(position),
+    )
+
+
+def answer_portfolio_compare_4key(question: str, portfolio: Optional[dict[str, Any]]) -> Optional[str]:
+    if not is_portfolio_compare_question(question):
+        return None
+
+    positions = [
+        position
+        for position in extract_portfolio_positions(portfolio)
+        if position_ticker(position)
+    ]
+    if not positions:
+        return "Vui l\u00f2ng g\u1eedi danh m\u1ee5c c\u00e1c m\u00e3 c\u1ea7n so s\u00e1nh."
+
+    if len(positions) == 1:
+        position = positions[0]
+        ticker = position_ticker(position)
+        cat = position_4key_cat(position)
+        cat_label = FOUR_KEY_CAT_LABELS.get(cat or "", "ch\u01b0a c\u00f3 nh\u00f3m 4-key")
+        return (
+            f"Hi\u1ec7n ch\u1ec9 c\u00f3 1 m\u00e3 {ticker} trong danh m\u1ee5c g\u1eedi l\u00ean, "
+            "ch\u01b0a \u0111\u1ee7 \u0111\u1ec3 so s\u00e1nh gi\u1eefa nhi\u1ec1u m\u00e3.\n"
+            f"{ticker}: {cat_label}, \u0111\u1ed9ng l\u01b0\u1ee3ng m\u00e3 {_format_delta(position_stock_delta(position))}, "
+            f"\u0111\u1ed9ng l\u01b0\u1ee3ng ng\u00e0nh {_format_delta(position_branch_delta(position))}."
+        )
+
+    ranked = sorted(positions, key=_compare_sort_key)
+    lines = [
+        "So s\u00e1nh c\u00e1c m\u00e3 trong danh m\u1ee5c theo 4-key:",
+        "",
+        "| M\u00e3 | Nh\u00f3m 4-key | \u0110\u1ed9ng l\u01b0\u1ee3ng m\u00e3 | \u0110\u1ed9ng l\u01b0\u1ee3ng ng\u00e0nh |",
+        "|---|---|---:|---:|",
+    ]
+    for position in ranked:
+        ticker = position_ticker(position)
+        cat = position_4key_cat(position)
+        cat_label = FOUR_KEY_CAT_LABELS.get(cat or "", "ch\u01b0a c\u00f3 nh\u00f3m 4-key")
+        lines.append(
+            f"| {ticker} | {cat_label} | {_format_delta(position_stock_delta(position))} | "
+            f"{_format_delta(position_branch_delta(position))} |"
+        )
+
+    best = ranked[0]
+    best_ticker = position_ticker(best)
+    best_cat = position_4key_cat(best)
+    best_label = FOUR_KEY_CAT_LABELS.get(best_cat or "", "c\u00f3 d\u1eef li\u1ec7u 4-key t\u1ed1t nh\u1ea5t trong danh m\u1ee5c")
+    lines.extend([
+        "",
+        f"K\u1ebft lu\u1eadn: {best_ticker} \u0111ang \u0111\u1ee9ng \u0111\u1ea7u trong danh m\u1ee5c theo 4-key ({best_label}).",
+    ])
+    return "\n".join(lines)
 
 def format_single_position_4key_answer(ticker: str, is_match: bool, requested_cat: str) -> str:
     if is_match:
@@ -298,7 +422,9 @@ async def portfolio_chat(
     user_text, _ = build_chat_input(question, payload.portfolio)
     orchestrator = current_orchestrator()
 
-    direct_answer = answer_market_4key_screen(orchestrator, question)
+    direct_answer = answer_portfolio_compare_4key(question, payload.portfolio)
+    if direct_answer is None:
+        direct_answer = answer_market_4key_screen(orchestrator, question)
     if direct_answer is None:
         direct_answer = answer_portfolio_list_4key(question, payload.portfolio)
     if direct_answer is None:

@@ -124,6 +124,57 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args, {"date": "2026-07-28", "group": "dd"})
         self.assertEqual(kwargs["user_text"], payload.question)
 
+    async def test_portfolio_chat_compares_positions_directly(self):
+        payload = route.PortfolioChatIn(
+            question="So sanh cac ma?",
+            portfolio={
+                "positions": [
+                    {
+                        "ticker": "SSI",
+                        "industry": "Chung khoan",
+                        "smdt": 80.1,
+                        "smdtPrev": 90.2,
+                        "branchSmdt": 50.0,
+                        "branchSmdtPrev": 60.0,
+                        "cat": "ss",
+                    },
+                    {
+                        "ticker": "PVT",
+                        "industry": "Van tai",
+                        "smdt": 128.3,
+                        "smdtPrev": 68.4,
+                        "branchSmdt": 96.2,
+                        "branchSmdtPrev": 40.1,
+                        "cat": "dd",
+                    },
+                    {
+                        "ticker": "BVS",
+                        "industry": "Chung khoan",
+                        "smdt": 100.0,
+                        "smdtPrev": 90.0,
+                        "branchSmdt": 70.0,
+                        "branchSmdtPrev": 80.0,
+                        "cat": "ds",
+                    },
+                ]
+            },
+            user_id="u1",
+            conversation_id="p1",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        answer = result["answer"]
+        self.assertIn("PVT", answer)
+        self.assertIn("SSI", answer)
+        self.assertIn("BVS", answer)
+        self.assertIn("+59.9", answer)
+        self.assertIn("+56.1", answer)
+        self.assertLess(answer.index("| PVT "), answer.index("| BVS "))
+        self.assertLess(answer.index("| BVS "), answer.index("| SSI "))
+        self.assertEqual(result["usage"], {})
+        self.assertEqual(self.orchestrator.calls, [])
+        self.assertEqual(self.orchestrator.executor.calls, [])
     async def test_portfolio_chat_answers_single_position_dd(self):
         payload = route.PortfolioChatIn(
             question="Mã nào đúng sóng, đúng ngành?",

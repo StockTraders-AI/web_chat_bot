@@ -546,13 +546,12 @@ class OrchestratorPostprocessTests(unittest.TestCase):
             "ok": True,
             "mode": "screen",
             "date": "2026-07-01",
-            "group_filters": ["Dung song dung nganh"],
+            "group": "dd",
             "total_screened": 2,
             "total_matches": 1,
-            "results": [self.sample_4key_payload()],
+            "tickers": ["SSI"],
+            "results": [{"ticker": "SSI"}],
         }
-        payload["results"][0]["ticker"] = "SSI"
-
         answer = format_stock_4key_answer(payload, user_text="Ma nao dung song dung nganh")
 
         self.assertEqual(answer, "SSI")
@@ -577,13 +576,12 @@ class OrchestratorPostprocessTests(unittest.TestCase):
             "ok": True,
             "mode": "screen",
             "date": "2026-07-29",
-            "group_filters": ["Dung song dung nganh"],
+            "group": "dd",
             "total_screened": 1,
             "total_matches": 1,
-            "results": [self.sample_4key_payload()],
+            "tickers": ["SSI"],
+            "results": [{"ticker": "SSI"}],
         }
-        payload["results"][0]["ticker"] = "SSI"
-
         class FakeExecutor:
             def __init__(self):
                 self.calls = []

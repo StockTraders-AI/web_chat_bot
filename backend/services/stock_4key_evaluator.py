@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 import re
-import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any, Callable, Iterable, Optional
@@ -54,21 +53,6 @@ CASHFLOW_SCORE_MAP = {
     "B\u1eaft \u0111\u1ea7u tho\u00e1t ra": -0.5,
 }
 
-GROUP_LABELS = {
-    "dung song dung nganh": "\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh",
-    "dung song sai nganh": "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh",
-    "sai nganh dung song": "\u0110\u00fang s\u00f3ng - Sai ng\u00e0nh",
-    "dung nganh sai song": "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng",
-    "sai song dung nganh": "\u0110\u00fang ng\u00e0nh - Sai s\u00f3ng",
-    "sai song sai nganh": "Sai s\u00f3ng - Sai ng\u00e0nh",
-}
-
-def _year_from_date(value: Optional[str]) -> int:
-    if value and re.match(r"^20\d{2}", str(value)):
-        return int(str(value)[:4])
-    return date.today().year
-
-
 def _to_float(value: Any) -> Optional[float]:
     try:
         if value is None or value == "":
@@ -79,36 +63,6 @@ def _to_float(value: Any) -> Optional[float]:
         return number
     except (TypeError, ValueError):
         return None
-
-def _normalize_text(value: Any) -> str:
-    text = unicodedata.normalize("NFD", str(value or ""))
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    text = text.replace("\u0111", "d").replace("\u0110", "D").lower()
-    return re.sub(r"[^a-z0-9]+", " ", text).strip()
-
-
-def _canonical_4key_group(value: Any) -> str:
-    normalized = _normalize_text(value)
-    if normalized in GROUP_LABELS:
-        return GROUP_LABELS[normalized]
-    for alias, label in GROUP_LABELS.items():
-        if alias in normalized:
-            return label
-    return str(value or "").strip()
-
-
-def _requested_group_filters(args: dict[str, Any]) -> list[str]:
-    raw = args.get("group_4key") or args.get("group") or args.get("groups")
-    if raw is None or raw == "":
-        return []
-    values = raw if isinstance(raw, (list, tuple, set)) else [raw]
-    filters = []
-    for value in values:
-        label = _canonical_4key_group(value)
-        if label and label not in filters:
-            filters.append(label)
-    return filters
-
 
 def _parse_ticker_list(value: Any) -> list[str]:
     if isinstance(value, str):
@@ -502,24 +456,6 @@ def _month_filter(year: int, month: int) -> str:
     return f"{year:04d}-{month:02d}"
 
 
-def _month_filters_for_target(value: Optional[str]) -> list[str]:
-    raw = str(value or "").strip()
-    if re.match(r"^20\d{2}-\d{2}-\d{2}$", raw):
-        dt = datetime.strptime(raw, "%Y-%m-%d")
-        prev_year, prev_month = _month_shift(dt.year, dt.month, -1)
-        return [_month_filter(prev_year, prev_month), _month_filter(dt.year, dt.month)]
-    if re.match(r"^20\d{2}-\d{2}$", raw):
-        year, month = int(raw[:4]), int(raw[5:7])
-        prev_year, prev_month = _month_shift(year, month, -1)
-        return [_month_filter(prev_year, prev_month), _month_filter(year, month)]
-    if re.match(r"^20\d{2}$", raw):
-        year = int(raw)
-        today = date.today()
-        month = today.month if year == today.year else 12
-        prev_year, prev_month = _month_shift(year, month, -1)
-        return [_month_filter(prev_year, prev_month), _month_filter(year, month)]
-    return []
-
 
 def _month_filters_between(start: str, end: str) -> list[str]:
     start_dt = datetime.strptime(start[:10], "%Y-%m-%d")
@@ -531,14 +467,6 @@ def _month_filters_between(start: str, end: str) -> list[str]:
         year, month = _month_shift(year, month, 1)
     return values
 
-
-def _fetch_months(api_call: Callable[[str, dict[str, Any]], Any], operation: str, base_args: dict[str, Any], months: list[str]) -> list[Any]:
-    payloads = []
-    for value in dict.fromkeys(months):
-        args = dict(base_args)
-        args["date"] = value
-        payloads.append(api_call(operation, args))
-    return payloads
 
 
 def _fetch_smdt_last_n(
@@ -588,7 +516,6 @@ def _load_inputs(
     target = requested_date[:10]
     target_dt = datetime.strptime(target, "%Y-%m-%d")
     from_date = (target_dt - timedelta(days=history_buffer_days)).strftime("%Y-%m-%d")
-    months = _month_filters_between(from_date, target)
 
     branch_name = str(branch.get("name") or branch.get("path") or "")
     branch_path = branch.get("path")
@@ -675,6 +602,9 @@ def evaluate_stock_4key(
     lookback = int(args.get("lookback_sessions") or 3)
     include_composite = bool(args.get("include_composite", True))
 
+    if mode in {"screen", "filter", "list"}:
+        raise Stock4KeyError("Screen 4-key da chuyen sang getStock4KeyScreen")
+
     if mode == "batch":
         if not requested_date:
             raise Stock4KeyError("Thieu ngay danh gia")
@@ -714,54 +644,7 @@ def evaluate_stock_4key(
                 results.append({"ok": False, "ticker": ticker, "error": str(exc)})
         return {"ok": True, "mode": "batch", "date": requested_date, "results": results}
 
-    if mode in {"screen", "filter", "list"}:
-        if not requested_date:
-            raise Stock4KeyError("Thieu ngay danh gia")
-        requested_tickers = _parse_ticker_list(args.get("tickers") or args.get("ticker"))
-        tickers = requested_tickers or sorted(ALLOWED_TICKERS)
-        group_filters = _requested_group_filters(args)
-        tickers_to_scan = tickers
 
-        matches = []
-        errors = []
-        branch_smdt_cache: dict[str, list[SmdtPoint]] = {}
-        for ticker in tickers_to_scan:
-            try:
-                branch_name, ticker_smdt, branch_smdt = _load_four_key_inputs(
-                    api_call,
-                    ticker,
-                    requested_date,
-                    FOUR_KEY_HISTORY_BUFFER_DAYS,
-                    branch_smdt_cache,
-                )
-                result = evaluate_four_key_from_records(
-                    ticker=ticker,
-                    branch_name=branch_name,
-                    ticker_smdt=ticker_smdt,
-                    branch_smdt=branch_smdt,
-                    requested_date=requested_date,
-                    lookback_sessions=lookback,
-                    price_points=[],
-                    cashflow_points=[],
-                    include_composite=False,
-                )
-                if not group_filters or _canonical_4key_group(result.get("group_4key")) in group_filters:
-                    matches.append(result)
-            except Exception as exc:
-                if len(errors) < 20:
-                    errors.append({"ticker": ticker, "error": str(exc)})
-
-        return {
-            "ok": True,
-            "mode": "screen",
-            "date": requested_date,
-            "group_filters": group_filters,
-            "total_screened": len(tickers_to_scan),
-            "total_candidates": len(tickers),
-            "total_matches": len(matches),
-            "results": matches,
-            "errors": errors,
-        }
     ticker = normalize_ticker(args.get("ticker"))
     if not ticker:
         raise Stock4KeyError("Thieu ticker")

@@ -165,43 +165,19 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
                 include_composite=False,
             )
 
-    def test_screen_filters_tickers_by_requested_4key_group(self):
-        seen = []
-        target = "2026-07-01"
-        dates = ["2026-06-26", "2026-06-29", "2026-06-30", target]
-
-        def smdts(values):
-            return [{"date": item_date, "smdt": value} for item_date, value in zip(dates, values)]
-
+    def test_screen_mode_is_no_longer_supported_by_evaluator(self):
         def api_call(operation, args):
-            seen.append((operation, dict(args)))
-            if operation == "getSMDTLastN" and args.get("ticker") == "SSI":
-                return {"smdts": smdts([50, 55, 61, 70])}
-            if operation == "getSMDTLastN" and args.get("ticker") == "VCB":
-                return {"smdts": smdts([60, 57, 53, 40])}
-            if operation == "getSMDTLastN" and args.get("path") == "9-246-250-257-271-":
-                return {"smdts": smdts([45, 47, 48, 52])}
-            if operation == "getSMDTLastN" and args.get("path") == "7-211-212-213-214-":
-                return {"smdts": smdts([35, 36, 37, 42])}
-            if operation in {"getTotalTrade", "getTotalTradeReal", "getCashFlowTicker"}:
-                self.fail("screen mode must not fetch composite inputs")
-            return {}
+            self.fail("legacy screen mode should call getStock4KeyScreen instead")
 
-        result = evaluate_stock_4key(api_call, {
-            "mode": "screen",
-            "tickers": ["SSI", "VCB"],
-            "date": target,
-            "group_4key": "dung song dung nganh",
-        })
+        with self.assertRaises(Stock4KeyError) as ctx:
+            evaluate_stock_4key(api_call, {
+                "mode": "screen",
+                "tickers": ["SSI", "VCB"],
+                "date": "2026-07-01",
+                "group_4key": "dung song dung nganh",
+            })
 
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["mode"], "screen")
-        self.assertEqual(result["total_screened"], 2)
-        self.assertEqual(result["total_matches"], 1)
-        self.assertEqual([item["ticker"] for item in result["results"]], ["SSI"])
-        smdt_calls = [(operation, args) for operation, args in seen if operation == "getSMDTLastN"]
-        self.assertTrue(all(args["baseDate"] == target for _, args in smdt_calls))
-        self.assertEqual(result["group_filters"], ["\u0110\u00fang s\u00f3ng - \u0110\u00fang ng\u00e0nh"])
+        self.assertEqual(str(ctx.exception), "Screen 4-key da chuyen sang getStock4KeyScreen")
 
 if __name__ == "__main__":
     unittest.main()
