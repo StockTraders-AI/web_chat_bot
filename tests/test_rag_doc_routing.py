@@ -151,6 +151,21 @@ class RAGDocumentRoutingTests(unittest.IsolatedAsyncioTestCase):
             "Câu hỏi về mã, cổ phiếu, đạt chuẩn mã mạnh.txt",
         )
 
+    async def test_branch_leader_timeline_question_selects_branch_leader_rule_doc(self):
+        rag = RAGStore.__new__(RAGStore)
+        rag.rule_docs = {
+            "Câu hỏi về sức mạnh dòng tiền, smdt ngành, mã.txt": {},
+            "Câu hỏi về ngành, dẫn sóng, đạt chuẩn ngành mạnh.txt": {},
+            "Hiệu suất cổ phiếu khi dẫn sóng.txt": {},
+        }
+
+        selected = await rag.pick_doc("Lộ trình các dòng dẫn sóng 7-2026")
+
+        self.assertEqual(
+            selected,
+            "Câu hỏi về ngành, dẫn sóng, đạt chuẩn ngành mạnh.txt",
+        )
+
     async def test_strong_branch_question_selects_strong_branch_rule(self):
         rag = RAGStore.__new__(RAGStore)
         rag.rule_docs = {

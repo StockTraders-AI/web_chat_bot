@@ -210,7 +210,7 @@ class RAGStore:
             return title_containing("dat chuan ma manh")
 
         strong_branch_intent = (
-            "nganh" in normalized
+            ("nganh" in normalized or "dong" in normalized)
             and any(
                 phrase in normalized
                 for phrase in (
