@@ -894,7 +894,9 @@ class RAGStore:
             top_score, top_heading_score, _ = scored[0]
             second_score = scored[1][0] if len(scored) > 1 else 0
 
-            if top_heading_score >= 18 and top_score >= second_score * 1.25:
+            if top_heading_score >= 45:
+                selected_scored = [scored[0]]
+            elif top_heading_score >= 18 and top_score >= second_score * 1.25:
                 selected_scored = [scored[0]]
 
         selected = [c for _, _, c in selected_scored]

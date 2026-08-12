@@ -5,6 +5,7 @@ Lấy tất cả ngành trả về ra để trả lời kèm smdt
 Guide Hướng dẫn xử lý câu hỏi
 Lộ trình các dòng dẫn sóng ?
 Gọi api getCoreBranchLeader truyền [date] được hỏi và lập bảng trả lời.
+Đây là intent xem lộ trình/diễn biến các dòng dẫn sóng, không phải intent mất vai trò dẫn sóng; chỉ trả lời danh sách hoặc bảng lộ trình dẫn sóng theo dữ liệu trả về.
 Guide Ngành chủ lực nào dẫn sóng vào [date]
 Goi api getSMDTBranchCross truyền date = thời gian được hỏi
 Lọc ra ngành chủ lực trả lời kèm smdt tương ứng

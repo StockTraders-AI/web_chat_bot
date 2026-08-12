@@ -93,6 +93,26 @@ class RAGDocumentRoutingTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("keyValue=[mã]", context["refs"])
         self.assertIn("không truyền date", context["refs"])
         self.assertNotIn("getTotalTradeWithSMDT", context["refs"])
+
+    def test_branch_leader_timeline_selects_core_leader_chunk_only(self):
+        rag = RAGStore.__new__(RAGStore)
+        chunks = [
+            'Guide Huong dan xu ly cau hoi\nLo trinh cac dong dan song ?\nGoi api getCoreBranchLeader truyen [date] duoc hoi va lap bang tra loi. Day la intent xem lo trinh/dien bien cac dong dan song, khong phai intent mat vai tro dan song.',
+            'Guide "[Nganh] mat vai tro dan song khi nao"\nGoi api getBrandPath truyen ticker de lay path nganh. Goi api getSMDTBranchDrop truyen path nganh va lay lastDate tra loi.',
+            'Guide Nganh chu luc nao dan song vao [date]\nGoi api getSMDTBranchCross truyen date = thoi gian duoc hoi.',
+        ]
+
+        context = rag.build_context(
+            "Cau hoi ve nganh, dan song, dat chuan nganh manh.txt",
+            chunks,
+            "lo trinh cac dong dan song thang 7/2026",
+            max_chunks=3,
+        )
+
+        self.assertIn("getCoreBranchLeader", context["refs"])
+        self.assertNotIn("getSMDTBranchDrop", context["refs"])
+        self.assertNotIn("getSMDTBranchCross", context["refs"])
+
     async def test_stock_analysis_question_selects_composite_rule(self):
         rag = RAGStore.__new__(RAGStore)
         rag.rule_docs = {
