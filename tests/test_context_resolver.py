@@ -124,6 +124,13 @@ class ContextResolverTests(unittest.TestCase):
         self.assertFalse(result["need_more_context"])
         self.assertNotEqual(result["next_state"].get("topic"), "market_wave")
 
+    def test_stock_4key_reason_query_keeps_reason_intent(self):
+        result = resolve_conversation_context("Tai sao EVF dung song dung nganh?", now=self.now)
+
+        self.assertFalse(result["need_more_context"])
+        self.assertEqual(result["next_state"].get("topic"), "stock_4key")
+        self.assertEqual(result["resolved_query"], "Tai sao EVF dung song dung nganh?")
+
 
 if __name__ == "__main__":
     unittest.main()

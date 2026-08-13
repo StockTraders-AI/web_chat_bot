@@ -46,6 +46,21 @@ MARKET_WAVE_LOOKUP_CUES = (
     "dat moc",
 )
 MARKET_WAVE_EXPLAIN_CUES = ("la gi", "nghia la gi", "giai thich", "thuyet minh", "vi sao", "tai sao")
+STOCK_4KEY_DETAIL_CUES = (
+    "vi sao",
+    "tai sao",
+    "ly do",
+    "giai thich",
+    "chi tiet",
+    "smdt",
+    "composite",
+    "score",
+    "diem",
+    "phan ky",
+    "bonus",
+    "dong luc",
+    "khuyen nghi",
+)
 
 
 def normalize_text(text: str) -> str:
@@ -334,6 +349,7 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
     intent = state.get("intent")
     topic = state.get("topic")
     metric = state.get("metric")
+    normalized_fallback = normalize_text(fallback)
 
     if len(entities) >= 2 and topic == "cashflow":
         return f"So sánh dòng tiền {entity_text}{date_part}.".strip()
@@ -347,7 +363,11 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
     if topic == "cashflow" and entity_text:
         return f"Dòng tiền {entity_text}{date_part} thế nào?".strip()
     if topic == "stock_4key" and entity_text:
-        return f"{entity_text} thuộc nhóm 4 Key nào?".strip()
+        if entity_text.lower() in (fallback or "").lower():
+            return (fallback or "").strip()
+        if any(cue in normalized_fallback for cue in STOCK_4KEY_DETAIL_CUES):
+            return f"Vi sao {entity_text} thuoc nhom 4 Key{date_part}?".strip()
+        return f"{entity_text} thuoc nhom 4 Key nao?".strip()
     if topic == "stock_analysis" and entity_text:
         return f"Phân tích {entity_text}{date_part}.".strip()
     return (fallback or "").strip()
