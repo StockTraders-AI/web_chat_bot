@@ -249,6 +249,65 @@ class PortfolioChatAPITests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result["answer"], "BVS")
         self.assertEqual(self.orchestrator.calls, [])
+    async def test_portfolio_chat_reason_question_corrects_false_premise(self):
+        payload = route.PortfolioChatIn(
+            question="tại sao gas lại sai sóng sai ngành",
+            portfolio={
+                "positions": [
+                    {"ticker": "BSR", "smdt": 80.0, "smdtPrev": 60.0, "branchSmdt": 70.0, "branchSmdtPrev": 50.0, "cat": "dd"},
+                    {"ticker": "GAS", "smdt": 90.0, "smdtPrev": 70.0, "branchSmdt": 65.0, "branchSmdtPrev": 60.0, "cat": "dd"},
+                    {"ticker": "GEX", "smdt": 40.0, "smdtPrev": 55.0, "branchSmdt": 30.0, "branchSmdtPrev": 45.0, "cat": "ss"},
+                    {"ticker": "PLX", "smdt": 50.0, "smdtPrev": 50.0, "branchSmdt": 20.0, "branchSmdtPrev": 30.0, "cat": "sd"},
+                ]
+            },
+            user_id="u1",
+            conversation_id="p1",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        answer = result["answer"]
+        self.assertIn("GAS", answer)
+        self.assertIn("KHÔNG ở trạng thái", answer)
+        self.assertIn("đúng sóng đúng ngành", answer)
+        self.assertEqual(self.orchestrator.calls, [])
+
+    async def test_portfolio_chat_reason_question_confirms_true_premise(self):
+        payload = route.PortfolioChatIn(
+            question="vì sao GEX sai sóng sai ngành vậy?",
+            portfolio={
+                "positions": [
+                    {"ticker": "GEX", "smdt": 40.0, "smdtPrev": 55.0, "branchSmdt": 30.0, "branchSmdtPrev": 45.0, "cat": "ss"},
+                ]
+            },
+            user_id="u1",
+            conversation_id="p1",
+        )
+
+        result = await route.portfolio_chat(payload, x_api_key=None)
+
+        answer = result["answer"]
+        self.assertIn("GEX", answer)
+        self.assertIn("sai sóng sai ngành", answer)
+        self.assertNotIn("KHÔNG ở trạng thái", answer)
+        self.assertEqual(self.orchestrator.calls, [])
+
+    async def test_portfolio_chat_reason_question_without_ticker_match_falls_back(self):
+        payload = route.PortfolioChatIn(
+            question="tại sao thị trường sai sóng sai ngành?",
+            portfolio={
+                "positions": [
+                    {"ticker": "GEX", "smdt": 40.0, "smdtPrev": 55.0, "branchSmdt": 30.0, "branchSmdtPrev": 45.0, "cat": "ss"},
+                ]
+            },
+            user_id="u1",
+            conversation_id="p1",
+        )
+
+        await route.portfolio_chat(payload, x_api_key=None)
+
+        self.assertEqual(len(self.orchestrator.calls), 1)
+
     async def test_portfolio_chat_api_key_is_optional_but_enforced_when_set(self):
         payload = route.PortfolioChatIn(
             question="BVS thuoc nhom 4 key nao?",

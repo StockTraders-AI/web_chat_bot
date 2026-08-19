@@ -409,6 +409,75 @@ def answer_portfolio_position_4key(question: str, portfolio: Optional[dict[str, 
     return format_single_position_4key_answer(ticker, actual_cat == requested_cat, requested_cat)
 
 
+REASON_TRIGGER_PHRASES = ("tai sao", "vi sao", "sao lai", "ly do", "giai thich")
+
+
+def is_portfolio_4key_reason_question(question: str) -> bool:
+    normalized = normalize_search_text(question)
+    if not any(phrase in normalized for phrase in REASON_TRIGGER_PHRASES):
+        return False
+    return requested_portfolio_4key_cat_fuzzy(question) is not None
+
+
+def find_portfolio_position_by_question_ticker(
+    question: str, portfolio: Optional[dict[str, Any]]
+) -> Optional[dict[str, Any]]:
+    positions = extract_portfolio_positions(portfolio)
+    if not positions:
+        return None
+    mentioned = set(re.findall(r"[A-Za-z]{2,5}", (question or "").upper()))
+    for position in positions:
+        ticker = position_ticker(position)
+        if ticker and ticker in mentioned:
+            return position
+    return None
+
+
+def format_portfolio_4key_reason_answer(
+    ticker: str,
+    actual_cat: Optional[str],
+    claimed_cat: str,
+    position: dict[str, Any],
+) -> str:
+    if actual_cat is None:
+        return f"Chưa có đủ dữ liệu 4-key của {ticker} để xác nhận nhóm hiện tại."
+
+    stock_delta_txt = _format_delta(position_stock_delta(position))
+    branch_delta_txt = _format_delta(position_branch_delta(position))
+    actual_label = FOUR_KEY_CAT_LABELS.get(actual_cat, "chưa rõ nhóm")
+
+    if actual_cat != claimed_cat:
+        claimed_label = FOUR_KEY_CAT_LABELS.get(claimed_cat, "nhóm được hỏi")
+        return (
+            f"{ticker} hiện KHÔNG ở trạng thái \"{claimed_label}\". "
+            f"Theo dữ liệu 4-key hiện tại, {ticker} đang ở nhóm \"{actual_label}\" "
+            f"(động lượng mã {stock_delta_txt}, động lượng ngành {branch_delta_txt})."
+        )
+
+    return (
+        f"{ticker} đang ở nhóm \"{actual_label}\" vì động lượng SMDT của mã là {stock_delta_txt} "
+        f"và động lượng SMDT của ngành là {branch_delta_txt}."
+    )
+
+
+def answer_portfolio_position_4key_reason(
+    question: str, portfolio: Optional[dict[str, Any]]
+) -> Optional[str]:
+    if not is_portfolio_4key_reason_question(question):
+        return None
+    claimed_cat = requested_portfolio_4key_cat_fuzzy(question)
+    if not claimed_cat:
+        return None
+
+    position = find_portfolio_position_by_question_ticker(question, portfolio)
+    if position is None:
+        return None
+
+    ticker = position_ticker(position)
+    actual_cat = position_4key_cat(position)
+    return format_portfolio_4key_reason_answer(ticker, actual_cat, claimed_cat, position)
+
+
 
 def answer_portfolio_list_4key(question: str, portfolio: Optional[dict[str, Any]]) -> Optional[str]:
     if not is_portfolio_4key_list_question(question):
@@ -491,6 +560,8 @@ async def portfolio_chat(
         direct_answer = answer_portfolio_list_4key(question, payload.portfolio)
     if direct_answer is None:
         direct_answer = answer_portfolio_position_4key(question, payload.portfolio)
+    if direct_answer is None:
+        direct_answer = answer_portfolio_position_4key_reason(question, payload.portfolio)
     if direct_answer is not None:
         return {
             "answer": direct_answer,
