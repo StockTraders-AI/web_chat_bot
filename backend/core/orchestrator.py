@@ -2243,13 +2243,23 @@ Yêu cầu:
             print("CASE_IDEA_ANSWER_ERROR:", exc)
             return fallback
     async def _resolve_turn_context(self, user_id: str, user_text: str) -> Dict[str, Any]:
-        # Recompute from the real chat transcript first: it is written on every
-        # turn regardless of which handler answered, so it self-heals if a
-        # single-slot cache write (upsert_conversation_context_state) was ever
-        # missed and would otherwise keep re-serving a stale, older topic.
+        # Fast path: a self-sufficient query (has its own intent/topic/entities
+        # and isn't a follow-up) resolves without touching history at all —
+        # same as before, no extra DB round-trip for the common case.
+        resolution = resolve_conversation_context(
+            current_query=user_text,
+            conversation_state=None,
+            recent_messages=[],
+        )
+        if not resolution.get("need_more_context") and not resolution.get("is_followup"):
+            return resolution
+
+        # Otherwise recompute from the real chat transcript: it is written on
+        # every turn regardless of which handler answered, so it self-heals if
+        # a single-slot cache write (upsert_conversation_context_state) was
+        # ever missed and would otherwise keep re-serving a stale, older topic.
         since = datetime.utcnow() - timedelta(minutes=STATE_TTL_MINUTES)
         recent: List[Dict[str, Any]] = []
-        resolution: Dict[str, Any] = {}
         for turns in (2, 4, 8):
             try:
                 if hasattr(self.memory, "recent_messages_since"):
