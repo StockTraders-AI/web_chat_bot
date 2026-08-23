@@ -109,6 +109,10 @@ def normalize_date(text: str, now: datetime) -> Optional[str]:
     normalized = normalize_text(text)
     if any(phrase in normalized for phrase in ("hom nay", "hien nay", "hien tai", "bay gio")):
         return now.strftime("%Y-%m-%d")
+    if "hom kia" in normalized:
+        return (now - timedelta(days=2)).strftime("%Y-%m-%d")
+    if "hom qua" in normalized:
+        return (now - timedelta(days=1)).strftime("%Y-%m-%d")
 
     match = re.search(r"\b(20\d{2})[-/](\d{1,2})(?:[-/](\d{1,2}))?\b", normalized)
     if match:
@@ -397,9 +401,11 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
         return f"Cung cấp danh mục {label}{date_part}.".strip()
     if intent == "metric_lookup" and topic == "market_wave" and metric in MARKET_WAVE_METRICS:
         label = MARKET_WAVE_METRICS[metric]["label"]
-        return f"{label}{date_part} bao nhiêu?".strip()
+        prefix = f"{entity_text} " if entity_text else ""
+        return f"{prefix}{label}{date_part} bao nhiêu?".strip()
     if intent == "metric_lookup" and metric and entity_text:
-        return f"{metric} {entity_text}{date_part} bao nhiêu?".strip()
+        metric_label = "giá" if metric == "price" else metric
+        return f"{metric_label} {entity_text}{date_part} bao nhiêu?".strip()
     if topic == "cashflow" and entity_text:
         return f"Dòng tiền {entity_text}{date_part} thế nào?".strip()
     if topic == "stock_4key" and entity_text:
@@ -407,7 +413,7 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
             return (fallback or "").strip()
         if any(cue in normalized_fallback for cue in STOCK_4KEY_DETAIL_CUES):
             return f"Vi sao {entity_text} thuoc nhom 4 Key{date_part}?".strip()
-        return f"{entity_text} thuoc nhom 4 Key nao?".strip()
+        return f"{entity_text} thuoc nhom 4 Key nao{date_part}?".strip()
     if topic == "stock_analysis" and entity_text:
         return f"Phân tích {entity_text}{date_part}.".strip()
     return (fallback or "").strip()
