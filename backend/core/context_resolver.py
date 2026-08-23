@@ -46,6 +46,28 @@ MARKET_WAVE_LOOKUP_CUES = (
     "dat moc",
 )
 MARKET_WAVE_EXPLAIN_CUES = ("la gi", "nghia la gi", "giai thich", "thuyet minh", "vi sao", "tai sao")
+FOUR_KEY_GROUP_PHRASES = (
+    ("dung song dung nganh", "dd"),
+    ("dung song sai nganh", "ds"),
+    ("sai song dung nganh", "sd"),
+    ("dung nganh sai song", "sd"),
+    ("sai song sai nganh", "ss"),
+)
+FOUR_KEY_GROUP_LABELS = {
+    "dd": "đúng sóng đúng ngành",
+    "ds": "đúng sóng sai ngành",
+    "sd": "sai sóng đúng ngành",
+    "ss": "sai sóng sai ngành",
+}
+FOUR_KEY_SCREEN_LIST_CUES = (
+    "cung cap",
+    "danh sach",
+    "danh muc",
+    "cac ma",
+    "nhung ma",
+    "liet ke",
+    "loc",
+)
 STOCK_4KEY_DETAIL_CUES = (
     "vi sao",
     "tai sao",
@@ -178,11 +200,22 @@ def extract_branch_entity(text: str) -> Optional[str]:
     if not match:
         return None
     value = re.split(
-        r"\b(?:hom nay|hien nay|ngay|the nao|bao nhieu|co nen|khong|ko)\b",
+        r"\b(?:hom nay|hien nay|ngay|phien|the nao|bao nhieu|co nen|khong|ko)\b",
         match.group(1),
         maxsplit=1,
     )[0].strip()
     return value or None
+
+
+def extract_4key_screen_group(normalized: str) -> Optional[str]:
+    for phrase, code in FOUR_KEY_GROUP_PHRASES:
+        if phrase in normalized:
+            return code
+    return None
+
+
+def is_4key_screen_list_query(normalized: str) -> bool:
+    return any(text_has_phrase(normalized, cue) for cue in FOUR_KEY_SCREEN_LIST_CUES)
 
 
 def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
@@ -225,6 +258,10 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
     elif "dong tien" in normalized:
         parsed["intent"] = "analysis"
         parsed["topic"] = "cashflow"
+    elif extract_4key_screen_group(normalized) and is_4key_screen_list_query(normalized):
+        parsed["intent"] = "analysis"
+        parsed["topic"] = "stock_4key_screen"
+        parsed["metric"] = extract_4key_screen_group(normalized)
     elif any(phrase in normalized for phrase in ("4 key", "four key", "key nao", "key gi", "thuoc key", "dung song", "sai song")):
         parsed["intent"] = "analysis"
         parsed["topic"] = "stock_4key"
@@ -250,7 +287,7 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
     parsed["is_followup_like"] = only_entity or only_date or comparative or vague_reference
 
     required_fields = ["intent", "topic"]
-    if parsed.get("topic") != "market_wave":
+    if parsed.get("topic") not in ("market_wave", "stock_4key_screen"):
         required_fields.append("entities")
     for field in required_fields:
         if not parsed.get(field):
@@ -268,7 +305,7 @@ def state_has_enough_context(state: Optional[Dict[str, Any]]) -> bool:
         return False
     if state.get("intent") == "metric_lookup" and not state.get("metric"):
         return False
-    if state.get("topic") == "market_wave":
+    if state.get("topic") in ("market_wave", "stock_4key_screen"):
         return True
     entities = state.get("entities") or []
     if not entities:
@@ -355,6 +392,9 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
         return f"So sánh dòng tiền {entity_text}{date_part}.".strip()
     if len(entities) >= 2 and metric:
         return f"So sánh {metric} {entity_text}{date_part}.".strip()
+    if topic == "stock_4key_screen" and metric in FOUR_KEY_GROUP_LABELS:
+        label = FOUR_KEY_GROUP_LABELS[metric]
+        return f"Cung cấp danh mục {label}{date_part}.".strip()
     if intent == "metric_lookup" and topic == "market_wave" and metric in MARKET_WAVE_METRICS:
         label = MARKET_WAVE_METRICS[metric]["label"]
         return f"{label}{date_part} bao nhiêu?".strip()

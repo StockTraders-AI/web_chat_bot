@@ -9,9 +9,36 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from core.chat_runtime import collect_standard_chat
+from core.context_resolver import STATE_TTL_MINUTES, compact_state, parse_query, state_has_enough_context
 from core.model_router import pick_model
 from core.orchestrator import format_stock_4key_answer, stock_4key_screen_args
 from services.openai_client import current_token_usage, reset_token_usage
+
+
+async def _save_direct_answer_turn(orchestrator: Any, user_id: str, question: str, answer: str) -> None:
+    memory = getattr(orchestrator, "memory", None)
+    if memory is None:
+        return
+
+    try:
+        await memory.add(user_id, "user", question)
+        await memory.add(user_id, "assistant", answer)
+    except Exception as exc:
+        print("PORTFOLIO_CHAT_MEMORY_SAVE_ERROR:", exc)
+
+    if not hasattr(memory, "upsert_conversation_context_state"):
+        return
+    try:
+        state = compact_state(parse_query(question))
+        if state_has_enough_context(state):
+            await memory.upsert_conversation_context_state(
+                user_id=user_id,
+                state=state,
+                last_resolved_query=question.strip(),
+                ttl_minutes=STATE_TTL_MINUTES,
+            )
+    except Exception as exc:
+        print("PORTFOLIO_CHAT_CONTEXT_STATE_SAVE_ERROR:", exc)
 
 
 class PortfolioChatIn(BaseModel):
@@ -563,6 +590,7 @@ async def portfolio_chat(
     if direct_answer is None:
         direct_answer = answer_portfolio_position_4key_reason(question, payload.portfolio)
     if direct_answer is not None:
+        await _save_direct_answer_turn(orchestrator, chat_user_id, question, direct_answer)
         return {
             "answer": direct_answer,
             "sources": [],
