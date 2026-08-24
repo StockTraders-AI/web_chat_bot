@@ -736,6 +736,9 @@ def should_skip_case_idea(user_text: str) -> bool:
     if not normalized or is_definition_query(user_text):
         return False
 
+    if should_force_rules(user_text):
+        return True
+
     if is_stock_4key_screen_query(user_text):
         return True
 
@@ -2447,6 +2450,7 @@ Yêu cầu:
         log("TRACE _chat_stream_unlocked: matched_case_idea=", (matched_case_idea or {}).get("id") if matched_case_idea else None)
         if matched_case_idea:
             log("TRACE _chat_stream_unlocked: SHORT-CIRCUIT via case_idea, skipping RULES/tool pipeline entirely")
+            log("TRACE matched_case_idea full:", matched_case_idea)
             final_text = clean_chat_output(
                 sanitize_response_text(self._answer_case_idea(matched_case_idea, user_text, model))
             )
