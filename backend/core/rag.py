@@ -922,11 +922,9 @@ class RAGStore:
 
         debug("CONTEXT BUILT")
 
-        joined_refs = "\n\n".join(refs)
-
         return {
             "doc_name": doc_name,
-            "rules": joined_refs,
-            "refs": joined_refs
+            "rules": "",
+            "refs": "\n\n".join(refs)
         }
 

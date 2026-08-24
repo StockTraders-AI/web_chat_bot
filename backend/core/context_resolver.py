@@ -46,6 +46,13 @@ MARKET_WAVE_LOOKUP_CUES = (
     "dat moc",
 )
 MARKET_WAVE_EXPLAIN_CUES = ("la gi", "nghia la gi", "giai thich", "thuyet minh", "vi sao", "tai sao")
+WAVE_CLASSIFICATION_CUES = (
+    "song lon",
+    "song hoi",
+    "chan song",
+    "xac nhan tao day",
+    "chuan bi tao day",
+)
 STOCK_4KEY_DETAIL_CUES = (
     "vi sao",
     "tai sao",
@@ -213,8 +220,19 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
     elif any(phrase in normalized for phrase in ("ngay hom truoc", "hom truoc", "phien truoc", "ngay truoc")):
         parsed["time_relation"] = "prev_day"
 
+    is_wave_classification_query = any(
+        phrase in normalized for phrase in WAVE_CLASSIFICATION_CUES
+    ) and (
+        bool(parsed.get("time_context"))
+        or "gan nhat" in normalized
+        or "thang" in normalized
+    )
+
     market_wave_metric = extract_market_wave_metric(normalized, has_tickers=bool(tickers))
-    if is_market_wave_lookup(normalized, parsed, market_wave_metric):
+    if is_wave_classification_query:
+        parsed["intent"] = "wave_classification"
+        parsed["topic"] = "wave_classification"
+    elif is_market_wave_lookup(normalized, parsed, market_wave_metric):
         parsed["intent"] = "metric_lookup"
         parsed["topic"] = "market_wave"
         parsed["metric"] = market_wave_metric
@@ -250,7 +268,7 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
     parsed["is_followup_like"] = only_entity or only_date or comparative or vague_reference
 
     required_fields = ["intent", "topic"]
-    if parsed.get("topic") != "market_wave":
+    if parsed.get("topic") not in ("market_wave", "wave_classification"):
         required_fields.append("entities")
     for field in required_fields:
         if not parsed.get(field):
@@ -268,7 +286,7 @@ def state_has_enough_context(state: Optional[Dict[str, Any]]) -> bool:
         return False
     if state.get("intent") == "metric_lookup" and not state.get("metric"):
         return False
-    if state.get("topic") == "market_wave":
+    if state.get("topic") in ("market_wave", "wave_classification"):
         return True
     entities = state.get("entities") or []
     if not entities:
