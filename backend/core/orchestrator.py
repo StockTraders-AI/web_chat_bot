@@ -1558,7 +1558,10 @@ class Orchestrator:
     # =====================================================
 
     def classify_query_source(self, user_text: str) -> str:
-        if should_force_rules(user_text):
+        forced = should_force_rules(user_text)
+        log("TRACE classify_query_source: user_text=", user_text, "| should_force_rules=", forced)
+        if forced:
+            log("TRACE classify_query_source: -> RULES (forced, no LLM classifier call)")
             return "RULES"
 
         prompt = f"""
@@ -1595,9 +1598,13 @@ class Orchestrator:
 
         raw = normalize_label(resp.choices[0].message.content or "")
 
+        log("TRACE classify_query_source: LLM classifier raw output=", raw)
+
         if raw not in {"RULES", "BOOKS"}:
+            log("TRACE classify_query_source: -> RULES (invalid LLM output fallback)")
             return "RULES"
 
+        log("TRACE classify_query_source: -> ", raw, "(LLM classifier)")
         return raw
 
     async def _find_matching_case_idea(
@@ -1638,6 +1645,7 @@ class Orchestrator:
             recent_user_questions = []
             contextual_user_text = raw_user_text
         query_source = self.classify_query_source(contextual_user_text)
+        log("TRACE build_base_messages: raw_user_text=", raw_user_text, "| contextual_user_text=", contextual_user_text)
         print("QUERY SOURCE:", query_source)
         history = []
 
@@ -1646,6 +1654,7 @@ class Orchestrator:
         # ======================================
 
         stock_related = is_stock_related(raw_user_text) or is_stock_related(contextual_user_text)
+        log("TRACE build_base_messages: stock_related=", stock_related)
 
         if not stock_related:
             for h in reversed(history):
@@ -1742,6 +1751,7 @@ class Orchestrator:
         elif stock_related:
             doc = await self.rag.pick_doc(contextual_user_text)
             current_doc = doc
+            log("TRACE build_base_messages: RULES branch, picked doc=", doc)
 
             chunks = self.rag.load_chunks(doc)
             ctx = self.rag.build_context(doc, chunks, contextual_user_text)
@@ -1749,6 +1759,7 @@ class Orchestrator:
             rules = (ctx.get("rules") or "").strip()
             refs = (ctx.get("refs") or "").strip()
             allowed_apis = extract_api_from_context(refs)
+            log("TRACE build_base_messages: chunks=", len(chunks), "| rules_len=", len(rules), "| refs_len=", len(refs), "| allowed_apis=", allowed_apis)
 
             if allowed_apis:
                 system_parts.append(
@@ -1804,6 +1815,7 @@ class Orchestrator:
         })
 
         enable_tools = (query_source == "RULES" and stock_related)
+        log("TRACE build_base_messages: query_source=", query_source, "| stock_related=", stock_related, "| enable_tools=", enable_tools, "| allowed_apis=", allowed_apis, "| current_doc=", current_doc)
         return messages, sources, enable_tools, allowed_apis, current_doc
 
     # =====================================================
@@ -1822,6 +1834,8 @@ class Orchestrator:
 
         if not enable_tools:
 
+            log("TRACE _run_tool_loop: enable_tools=False -> answering WITHOUT any tool call (no API will be invoked)")
+
             resp = self.oa.chat(
                 model=model,
                 messages=messages
@@ -1835,6 +1849,8 @@ class Orchestrator:
             })
 
             return messages, final_text
+
+        log("TRACE _run_tool_loop: enable_tools=True | allowed_apis=", allowed_apis, "| user_text=", user_text)
 
         direct_4key_single_args = stock_4key_single_args(user_text)
         if direct_4key_single_args and (not allowed_apis or "getStock4KeyEvaluation" in allowed_apis):
@@ -1954,6 +1970,9 @@ class Orchestrator:
                         args = dict(args)
                         args["date"] = carried_date
 
+                if op_name == "getAnalyzeWave":
+                    log("TRACE getAnalyzeWave FINAL ARGS:", args)
+
                 result = self.executor.call(op_name, args, doc_name=current_doc, user_text=user_text)
 
                 log("API RESULT TYPE:", type(result))
@@ -1962,7 +1981,9 @@ class Orchestrator:
                     log("API RESULT SIZE:", len(result))
 
                 if op_name == "getAnalyzeWave":
+                    log("TRACE getAnalyzeWave RESULT:", result)
                     if isinstance(result, dict) and "message" in result:
+                        log("TRACE getAnalyzeWave: returning result['message'] directly")
                         return messages, result["message"]
     
                 messages.append({
@@ -2353,6 +2374,11 @@ Yêu cầu:
         context_resolution = await self._resolve_turn_context(user_id, raw_user_text)
         resolved_user_text = (context_resolution.get("resolved_query") or raw_user_text).strip()
 
+        log("\n================ TRACE: TURN START =================")
+        log("TRACE raw_user_text:", raw_user_text)
+        log("TRACE context_resolution:", context_resolution)
+        log("TRACE resolved_user_text:", resolved_user_text)
+
         await self.memory.add(user_id, "user", raw_user_text)
 
         if context_resolution.get("need_more_context"):
@@ -2418,7 +2444,9 @@ Yêu cầu:
         matched_case_idea = None
         if not should_skip_case_idea(user_text):
             matched_case_idea = await self._find_matching_case_idea(user_text, recent_user_questions)
+        log("TRACE _chat_stream_unlocked: matched_case_idea=", (matched_case_idea or {}).get("id") if matched_case_idea else None)
         if matched_case_idea:
+            log("TRACE _chat_stream_unlocked: SHORT-CIRCUIT via case_idea, skipping RULES/tool pipeline entirely")
             final_text = clean_chat_output(
                 sanitize_response_text(self._answer_case_idea(matched_case_idea, user_text, model))
             )
