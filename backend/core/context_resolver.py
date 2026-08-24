@@ -288,7 +288,15 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
         phrase in normalized
         for phrase in ("cai luc nay", "luc nay", "cai nay", "ngay do", "phien do", "hom do", "thi sao", "con")
     )
-    parsed["is_followup_like"] = only_entity or only_date or comparative or vague_reference
+    is_followup_like = only_entity or only_date or comparative or vague_reference
+    # A message that is already self-sufficient (its own intent/topic/metric/
+    # entities fully answer the question) must never be treated as a
+    # follow-up just because it's short or happens to mention a date — doing
+    # so would blindly merge it with unrelated prior context (e.g. tickers
+    # from an earlier, different topic) and corrupt the answer.
+    if is_followup_like and state_has_enough_context(compact_state(parsed)):
+        is_followup_like = False
+    parsed["is_followup_like"] = is_followup_like
 
     required_fields = ["intent", "topic"]
     if parsed.get("topic") not in ("market_wave", "stock_4key_screen"):
@@ -341,7 +349,13 @@ def merge_state(current: Dict[str, Any], previous: Dict[str, Any]) -> tuple[Dict
 
     current_entities = current.get("entities") or []
     previous_entities = previous.get("entities") or []
-    if current.get("comparison_entity") and previous_entities:
+    topic_changed = bool(current.get("topic")) and bool(previous.get("topic")) and current.get("topic") != previous.get("topic")
+    if topic_changed and not current_entities:
+        # The current message introduced a brand-new topic on its own (e.g.
+        # switching from cashflow to market_wave); don't drag along entities
+        # that belonged to the old, now-irrelevant topic.
+        merged.pop("entities", None)
+    elif current.get("comparison_entity") and previous_entities:
         merged_entities = previous_entities[:]
         for entity in current_entities:
             if entity not in merged_entities:
