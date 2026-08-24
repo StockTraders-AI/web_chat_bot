@@ -46,6 +46,13 @@ MARKET_WAVE_LOOKUP_CUES = (
     "dat moc",
 )
 MARKET_WAVE_EXPLAIN_CUES = ("la gi", "nghia la gi", "giai thich", "thuyet minh", "vi sao", "tai sao")
+WAVE_CLASSIFICATION_CUES = (
+    "chan song",
+    "song lon",
+    "song hoi",
+    "xac nhan tao day",
+    "chuan bi tao day",
+)
 FOUR_KEY_GROUP_PHRASES = (
     ("dung song dung nganh", "dd"),
     ("dung song sai nganh", "ds"),
@@ -266,6 +273,9 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
         parsed["intent"] = "analysis"
         parsed["topic"] = "stock_4key_screen"
         parsed["metric"] = extract_4key_screen_group(normalized)
+    elif any(phrase in normalized for phrase in WAVE_CLASSIFICATION_CUES):
+        parsed["intent"] = "analysis"
+        parsed["topic"] = "wave_classification"
     elif any(phrase in normalized for phrase in ("4 key", "four key", "key nao", "key gi", "thuoc key", "dung song", "sai song")):
         parsed["intent"] = "analysis"
         parsed["topic"] = "stock_4key"
@@ -288,19 +298,26 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
         phrase in normalized
         for phrase in ("cai luc nay", "luc nay", "cai nay", "ngay do", "phien do", "hom do", "thi sao", "con")
     )
-    is_followup_like = only_entity or only_date or comparative or vague_reference
+    # wave_classification always needs a date (the API call requires one); if
+    # this message doesn't carry its own, it must still look at history for
+    # one instead of silently defaulting to today.
+    missing_required_date = parsed["topic"] == "wave_classification" and not parsed["time_context"]
+
+    is_followup_like = only_entity or only_date or comparative or vague_reference or missing_required_date
     # A message that is already self-sufficient (its own intent/topic/metric/
     # entities fully answer the question) must never be treated as a
     # follow-up just because it's short or happens to mention a date — doing
     # so would blindly merge it with unrelated prior context (e.g. tickers
     # from an earlier, different topic) and corrupt the answer.
-    if is_followup_like and state_has_enough_context(compact_state(parsed)):
+    if is_followup_like and not missing_required_date and state_has_enough_context(compact_state(parsed)):
         is_followup_like = False
     parsed["is_followup_like"] = is_followup_like
 
     required_fields = ["intent", "topic"]
-    if parsed.get("topic") not in ("market_wave", "stock_4key_screen"):
+    if parsed.get("topic") not in ("market_wave", "stock_4key_screen", "wave_classification"):
         required_fields.append("entities")
+    if parsed.get("topic") == "wave_classification" and not parsed.get("time_context"):
+        required_fields.append("time_context")
     for field in required_fields:
         if not parsed.get(field):
             parsed["missing_fields"].append(field)
@@ -317,6 +334,8 @@ def state_has_enough_context(state: Optional[Dict[str, Any]]) -> bool:
         return False
     if state.get("intent") == "metric_lookup" and not state.get("metric"):
         return False
+    if state.get("topic") == "wave_classification":
+        return bool(state.get("time_context"))
     if state.get("topic") in ("market_wave", "stock_4key_screen"):
         return True
     entities = state.get("entities") or []
@@ -347,9 +366,14 @@ def merge_state(current: Dict[str, Any], previous: Dict[str, Any]) -> tuple[Dict
         elif merged.get(key):
             inherited.append(key)
 
+    topic_changed = bool(current.get("topic")) and bool(previous.get("topic")) and current.get("topic") != previous.get("topic")
+    if topic_changed and not current.get("metric"):
+        # A stray metric from the old topic (e.g. market_wave's "waitbuy")
+        # means nothing once the topic itself has switched to something else.
+        merged.pop("metric", None)
+
     current_entities = current.get("entities") or []
     previous_entities = previous.get("entities") or []
-    topic_changed = bool(current.get("topic")) and bool(previous.get("topic")) and current.get("topic") != previous.get("topic")
     if topic_changed and not current_entities:
         # The current message introduced a brand-new topic on its own (e.g.
         # switching from cashflow to market_wave); don't drag along entities
@@ -413,6 +437,9 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
     if topic == "stock_4key_screen" and metric in FOUR_KEY_GROUP_LABELS:
         label = FOUR_KEY_GROUP_LABELS[metric]
         return f"Cung cấp danh mục {label}{date_part}.".strip()
+    if topic == "wave_classification":
+        date_label = date_text or "hôm nay"
+        return f"Ngày {date_label} là sóng lớn hay sóng hồi?".strip()
     if intent == "metric_lookup" and topic == "market_wave" and metric in MARKET_WAVE_METRICS:
         label = MARKET_WAVE_METRICS[metric]["label"]
         prefix = f"{entity_text} " if entity_text else ""
