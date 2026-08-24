@@ -2243,24 +2243,24 @@ Yêu cầu:
             print("CASE_IDEA_ANSWER_ERROR:", exc)
             return fallback
     async def _resolve_turn_context(self, user_id: str, user_text: str) -> Dict[str, Any]:
-        # Fast path: a self-sufficient query (has its own intent/topic/entities
-        # and isn't a follow-up) resolves without touching history at all —
-        # same as before, no extra DB round-trip for the common case.
+        state = None
+        if hasattr(self.memory, "get_conversation_context_state"):
+            try:
+                state_row = await self.memory.get_conversation_context_state(user_id)
+                state = (state_row or {}).get("state")
+            except Exception as exc:
+                print("CONTEXT_STATE_LOAD_ERROR:", exc)
+
         resolution = resolve_conversation_context(
             current_query=user_text,
-            conversation_state=None,
+            conversation_state=state,
             recent_messages=[],
         )
-        if not resolution.get("need_more_context") and not resolution.get("is_followup"):
+        if not resolution.get("need_more_context"):
             return resolution
 
-        # Otherwise recompute from the real chat transcript: it is written on
-        # every turn regardless of which handler answered, so it self-heals if
-        # a single-slot cache write (upsert_conversation_context_state) was
-        # ever missed and would otherwise keep re-serving a stale, older topic.
         since = datetime.utcnow() - timedelta(minutes=STATE_TTL_MINUTES)
-        recent: List[Dict[str, Any]] = []
-        for turns in (2, 4, 8):
+        for turns in (2, 4):
             try:
                 if hasattr(self.memory, "recent_messages_since"):
                     recent = await self.memory.recent_messages_since(user_id, turns=turns, since=since)
@@ -2274,26 +2274,11 @@ Yêu cầu:
 
             resolution = resolve_conversation_context(
                 current_query=user_text,
-                conversation_state=None,
+                conversation_state=state,
                 recent_messages=recent,
             )
             if not resolution.get("need_more_context"):
                 return resolution
-
-        state = None
-        if hasattr(self.memory, "get_conversation_context_state"):
-            try:
-                state_row = await self.memory.get_conversation_context_state(user_id)
-                state = (state_row or {}).get("state")
-            except Exception as exc:
-                print("CONTEXT_STATE_LOAD_ERROR:", exc)
-
-        if state:
-            resolution = resolve_conversation_context(
-                current_query=user_text,
-                conversation_state=state,
-                recent_messages=recent,
-            )
 
         return resolution
 
