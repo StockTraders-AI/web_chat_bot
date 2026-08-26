@@ -266,6 +266,21 @@ def parse_query(text: str, now: Optional[datetime] = None) -> Dict[str, Any]:
     # one instead of silently defaulting to today.
     missing_required_date = parsed["topic"] == "wave_classification" and not parsed["time_context"]
 
+    # A "vì sao/tại sao X thuộc nhóm 4-key" follow-up (e.g. right after asking
+    # for the list on a specific past date) means "vì sao X thuộc nhóm đó
+    # VÀO NGÀY ĐÓ", not "vào ngày hôm nay". Without this, state_has_enough_context()
+    # only requires intent+topic+entities for stock_4key (no date), so a
+    # message that just names the ticker looks "self-sufficient" and the
+    # early-return path in resolve_conversation_context() never even
+    # considers merging with the previous turn's time_context - silently
+    # defaulting the API call to today instead of the date being discussed.
+    is_stock_4key_detail_question = parsed["topic"] == "stock_4key" and any(
+        cue in normalized for cue in STOCK_4KEY_DETAIL_CUES
+    )
+    missing_required_date = missing_required_date or (
+        is_stock_4key_detail_question and not parsed["time_context"]
+    )
+
     is_followup_like = only_entity or only_date or comparative or vague_reference or missing_required_date
     # A message that is already self-sufficient (its own intent/topic/metric/
     # entities/date fully answer the question) must never be treated as a
@@ -407,6 +422,14 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
         return f"Dòng tiền {entity_text}{date_part} thế nào?".strip()
     if topic == "stock_4key" and entity_text:
         if entity_text.lower() in (fallback or "").lower():
+            # Keep the user's own wording (it's already clear), but a
+            # date_part inherited from a prior turn (e.g. "phiên 2/7/2025")
+            # must not get silently dropped just because the ticker was
+            # already named explicitly - that's exactly what caused a
+            # follow-up like "vì sao VIX là đúng sóng đúng ngành" to
+            # default to today's date instead of the date being discussed.
+            if date_part:
+                return f"{(fallback or '').strip()} (tại{date_part})".strip()
             return (fallback or "").strip()
         if any(cue in normalized_fallback for cue in STOCK_4KEY_DETAIL_CUES):
             return f"Vi sao {entity_text} thuoc nhom 4 Key{date_part}?".strip()
