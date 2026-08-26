@@ -125,19 +125,22 @@ class ToolRegistry:
                 "description": (
                     "Lay lich su cac moc ngay ma [ticker] dat dung nhom 4-key [group] "
                     "(dd=dung song dung nganh, ds=dung song sai nganh, sd=sai song dung nganh/dung nganh sai "
-                    "song, ss=sai song sai nganh). Tra ve mang 'matches' sap theo thoi gian. "
+                    "song, ss=sai song sai nganh). Tra ve mang 'matches'. "
                     "Cau hoi '[ticker] dat chuan [nhom 4-key] khi nao?' (khong noi thang/nam): goi khong "
-                    "truyen dateFrom/dateTo, lay phan tu CUOI CUNG (moi nhat) trong matches de tra loi. "
-                    "Cau hoi '...trong thang/nam X': truyen dateFrom/dateTo tuong ung, liet ke TAT CA phan tu "
-                    "trong matches."
+                    "truyen date, lay phan tu co ngay MOI NHAT trong matches de tra loi. "
+                    "Cau hoi '...trong thang X/nam Y': truyen date=YYYY-MM. "
+                    "Cau hoi '...trong nam Y': truyen date=YYYY. "
+                    "Ca 2 truong hop tren: liet ke TAT CA phan tu trong matches tra ve."
                 ),
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "ticker": {"type": "string"},
                         "group": {"type": "string", "enum": ["dd", "ds", "sd", "ss"]},
-                        "dateFrom": {"type": "string", "description": "YYYY-MM-DD"},
-                        "dateTo": {"type": "string", "description": "YYYY-MM-DD"},
+                        "date": {
+                            "type": "string",
+                            "description": "YYYY-MM-DD (1 ngay), YYYY-MM (1 thang), hoac YYYY (1 nam). Bo trong de lay toan bo lich su.",
+                        },
                     },
                     "required": ["ticker", "group"],
                     "additionalProperties": False,

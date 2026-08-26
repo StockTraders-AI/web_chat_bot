@@ -585,38 +585,31 @@ def is_stock_4key_history_query(user_text: str) -> bool:
     return any(phrase.rstrip("?") in normalized for phrase in FOUR_KEY_HISTORY_TIME_PHRASES)
 
 
-def extract_4key_history_month_range(user_text: str) -> tuple[Optional[str], Optional[str]]:
-    """"...trong tháng 7" / "...trong tháng 7/2026" / "...trong năm 2026" ->
-    (dateFrom, dateTo) as YYYY-MM-DD, or (None, None) if no month/year
-    mentioned (caller should then fetch full history and take the latest
-    match)."""
+def extract_4key_history_date_param(user_text: str) -> Optional[str]:
+    """"...trong tháng 7" -> "YYYY-07", "...trong tháng 7/2026" -> "2026-07",
+    "...trong năm 2026" -> "2026". Matches getStock4KeyHistory's single
+    `date` param (same YYYY-MM-DD / YYYY-MM / YYYY convention as
+    getTotalTrade/getSMDTBranch elsewhere in this API). None if no
+    month/year mentioned (caller should then fetch full history and take
+    the latest match)."""
     normalized = normalize_search_text(user_text)
     now = datetime.now()
 
     month_year = re.search(r"\bthang\s*(1[0-2]|0?[1-9])[/-](20\d{2})\b", normalized)
     if month_year:
         month, year = int(month_year.group(1)), int(month_year.group(2))
-    else:
-        month_only = re.search(r"\bthang\s*(1[0-2]|0?[1-9])\b", normalized)
-        if month_only:
-            month, year = int(month_only.group(1)), now.year
-        else:
-            month = None
-            year_only = re.search(r"\bnam\s*(20\d{2})\b", normalized)
-            year = int(year_only.group(1)) if year_only else None
+        return f"{year:04d}-{month:02d}"
 
-    if month is None and year is None:
-        return None, None
+    month_only = re.search(r"\bthang\s*(1[0-2]|0?[1-9])\b", normalized)
+    if month_only:
+        month = int(month_only.group(1))
+        return f"{now.year:04d}-{month:02d}"
 
-    if month is not None:
-        date_from = datetime(year, month, 1)
-        next_month = datetime(year + 1, 1, 1) if month == 12 else datetime(year, month + 1, 1)
-        date_to = next_month - timedelta(days=1)
-    else:
-        date_from = datetime(year, 1, 1)
-        date_to = datetime(year, 12, 31)
+    year_only = re.search(r"\bnam\s*(20\d{2})\b", normalized)
+    if year_only:
+        return year_only.group(1)
 
-    return date_from.strftime("%Y-%m-%d"), date_to.strftime("%Y-%m-%d")
+    return None
 
 
 def stock_4key_history_args(user_text: str) -> Optional[Dict[str, Any]]:
@@ -629,15 +622,13 @@ def stock_4key_history_args(user_text: str) -> Optional[Dict[str, Any]]:
     if not groups:
         return None
 
-    date_from, date_to = extract_4key_history_month_range(user_text)
     args: Dict[str, Any] = {
         "ticker": ticker,
         "group": FOUR_KEY_GROUP_API_CODES.get(groups[0], groups[0]),
     }
-    if date_from:
-        args["dateFrom"] = date_from
-    if date_to:
-        args["dateTo"] = date_to
+    date_param = extract_4key_history_date_param(user_text)
+    if date_param:
+        args["date"] = date_param
     return args
 
 
@@ -649,12 +640,11 @@ def format_stock_4key_history_answer(result: Dict[str, Any], user_text: str) -> 
     if not matches:
         return f"{ticker} chưa có mốc nào đạt chuẩn \"{group_label}\" trong khoảng được hỏi."
 
-    date_from, date_to = extract_4key_history_month_range(user_text)
-    if date_from or date_to:
-        dates = [str(m.get("date") or "") for m in matches if m.get("date")]
+    if extract_4key_history_date_param(user_text):
+        dates = sorted(str(m.get("date") or "") for m in matches if m.get("date"))
         return f"{ticker} đạt chuẩn \"{group_label}\" vào các ngày: " + ", ".join(dates) + "."
 
-    latest = matches[-1]
+    latest = max(matches, key=lambda m: str(m.get("date") or ""))
     return f"{ticker} đạt chuẩn \"{group_label}\" gần nhất vào ngày {latest.get('date')}."
 
 
