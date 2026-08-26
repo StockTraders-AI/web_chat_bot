@@ -33,3 +33,15 @@ Intent: user hoi 4-key cho nhieu ma cu the.
 Call: getStock4KeyEvaluation.
 Args: mode=batch, tickers, date=YYYY-MM-DD, include_composite=false.
 Answer: bang ngan gon tung ma, nhom 4-key va khuyen nghi.
+
+Guide "[ticker] dat chuan [nhom 4-key] khi nao?"
+Intent: user hoi moc thoi gian 1 ma dat DUNG 1 nhom 4-key cu the, vi du "TCB dat chuan dung song dung nganh khi nao?", "TCB dung song dung nganh khi nao?". Luu y: khac voi huong dan "Lich su 4 key [ticker] tu [date]" o phia tren (do la lich su TOAN BO cac lan danh gia, con day la loc theo DUNG 1 nhom group cu the).
+Call: getStock4KeyHistory.
+Args: ticker, group=dd/ds/sd/ss theo nhom user hoi (dd=dung song dung nganh, ds=dung song sai nganh, sd=sai song dung nganh, ss=sai song sai nganh). Khong noi thang/nam: khong truyen dateFrom/dateTo.
+Answer: lay phan tu CUOI CUNG (moi nhat) trong mang "matches" tra ve, tra loi ngan gon ngay do. Neu matches rong, noi ro chua co moc nao thoa dieu kien.
+
+Guide "[ticker] dat chuan [nhom 4-key] khi nao trong thang/nam X?"
+Intent: giong guide tren nhung gioi han trong 1 thang/nam cu the, vi du "TCB dung song dung nganh khi nao trong thang 7?".
+Call: getStock4KeyHistory.
+Args: ticker, group=dd/ds/sd/ss, dateFrom va dateTo tuong ung voi thang/nam duoc hoi (vi du thang 7/2026 -> dateFrom=2026-07-01, dateTo=2026-07-31).
+Answer: liet ke TAT CA cac ngay trong mang "matches" tra ve theo thu tu thoi gian. Neu rong, noi ro khong co moc nao trong khoang do.

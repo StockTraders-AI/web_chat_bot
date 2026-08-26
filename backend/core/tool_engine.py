@@ -112,6 +112,39 @@ class ToolRegistry:
             },
         })
 
+        self.operations["getStock4KeyHistory"] = {
+            "path": "/service/data/getStock4KeyHistory",
+            "method": "POST",
+            "summary": "Lay lich su cac moc ngay 1 ma dat dung 1 nhom 4-key cu the (dd/ds/sd/ss).",
+            "parameters": [],
+        }
+        self.tools.append({
+            "type": "function",
+            "function": {
+                "name": "getStock4KeyHistory",
+                "description": (
+                    "Lay lich su cac moc ngay ma [ticker] dat dung nhom 4-key [group] "
+                    "(dd=dung song dung nganh, ds=dung song sai nganh, sd=sai song dung nganh/dung nganh sai "
+                    "song, ss=sai song sai nganh). Tra ve mang 'matches' sap theo thoi gian. "
+                    "Cau hoi '[ticker] dat chuan [nhom 4-key] khi nao?' (khong noi thang/nam): goi khong "
+                    "truyen dateFrom/dateTo, lay phan tu CUOI CUNG (moi nhat) trong matches de tra loi. "
+                    "Cau hoi '...trong thang/nam X': truyen dateFrom/dateTo tuong ung, liet ke TAT CA phan tu "
+                    "trong matches."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "ticker": {"type": "string"},
+                        "group": {"type": "string", "enum": ["dd", "ds", "sd", "ss"]},
+                        "dateFrom": {"type": "string", "description": "YYYY-MM-DD"},
+                        "dateTo": {"type": "string", "description": "YYYY-MM-DD"},
+                    },
+                    "required": ["ticker", "group"],
+                    "additionalProperties": False,
+                },
+            },
+        })
+
     def _parse_operations(self) -> Dict[str, Dict[str, Any]]:
         ops: Dict[str, Dict[str, Any]] = {}
         paths = self.schema.get("paths", {})
