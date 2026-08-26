@@ -315,6 +315,15 @@ def state_has_enough_context(state: Optional[Dict[str, Any]]) -> bool:
         return bool(state.get("time_context"))
     if state.get("topic") == "market_wave":
         return True
+    if state.get("topic") == "stock_4key":
+        # A screening/list question ("cung cấp danh mục đúng sóng đúng
+        # ngành ngày X") has no ticker entity at all - it's a list of many.
+        # Requiring entities here (like every other topic) meant that
+        # state - including its time_context - got discarded entirely
+        # before a later ticker-specific follow-up ("vì sao VIX...") ever
+        # got a chance to inherit the date from it. A date alone is enough
+        # to be worth keeping/merging.
+        return bool(state.get("time_context")) or bool(state.get("entities"))
     entities = state.get("entities") or []
     if not entities:
         return False
@@ -433,7 +442,7 @@ def render_resolved_query(state: Dict[str, Any], fallback: str) -> str:
             return (fallback or "").strip()
         if any(cue in normalized_fallback for cue in STOCK_4KEY_DETAIL_CUES):
             return f"Vi sao {entity_text} thuoc nhom 4 Key{date_part}?".strip()
-        return f"{entity_text} thuoc nhom 4 Key nao?".strip()
+        return f"{entity_text} thuoc nhom 4 Key nao{date_part}?".strip()
     if topic == "stock_analysis" and entity_text:
         return f"Phân tích {entity_text}{date_part}.".strip()
     return (fallback or "").strip()
