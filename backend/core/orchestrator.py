@@ -625,6 +625,7 @@ def stock_4key_history_args(user_text: str) -> Optional[Dict[str, Any]]:
     args: Dict[str, Any] = {
         "ticker": ticker,
         "group": FOUR_KEY_GROUP_API_CODES.get(groups[0], groups[0]),
+        "transition": True,
     }
     date_param = extract_4key_history_date_param(user_text)
     if date_param:
@@ -633,19 +634,20 @@ def stock_4key_history_args(user_text: str) -> Optional[Dict[str, Any]]:
 
 
 def format_stock_4key_history_answer(result: Dict[str, Any], user_text: str) -> str:
+    """transition=true (always sent, see stock_4key_history_args) makes the
+    API pre-filter matches down to only "chuyen giao" dates - the day a
+    streak in this group STARTS, not every day still inside that streak -
+    so both the bare "khi nao" case and the "trong thang X" case just take
+    the latest entry in matches; no client-side adjacent-date logic needed."""
     ticker = str(result.get("ticker") or "").strip().upper()
     group_label = str(result.get("group_4key") or "").strip()
     matches = result.get("matches") if isinstance(result.get("matches"), list) else []
 
     if not matches:
-        return f"{ticker} chưa có mốc nào đạt chuẩn \"{group_label}\" trong khoảng được hỏi."
-
-    if extract_4key_history_date_param(user_text):
-        dates = sorted(str(m.get("date") or "") for m in matches if m.get("date"))
-        return f"{ticker} đạt chuẩn \"{group_label}\" vào các ngày: " + ", ".join(dates) + "."
+        return f"{ticker} chưa có mốc chuyển giao nào sang \"{group_label}\" trong khoảng được hỏi."
 
     latest = max(matches, key=lambda m: str(m.get("date") or ""))
-    return f"{ticker} đạt chuẩn \"{group_label}\" gần nhất vào ngày {latest.get('date')}."
+    return f"{ticker} bắt đầu đạt chuẩn \"{group_label}\" gần nhất từ ngày {latest.get('date')}."
 
 
 def stock_4key_single_args(user_text: str) -> Optional[Dict[str, Any]]:
