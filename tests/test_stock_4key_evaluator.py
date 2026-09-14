@@ -56,6 +56,35 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         self.assertTrue(result["composite"]["co_phan_ky"])
         self.assertIn("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay", result["composite"]["notes"])
 
+    def test_composite_uses_peer_smdt_for_rank_when_available(self):
+        ticker_points = [
+            SmdtPoint("2026-06-26", 50),
+            SmdtPoint("2026-06-29", 55),
+            SmdtPoint("2026-06-30", 61),
+            SmdtPoint("2026-07-01", 70),
+        ]
+        branch_points = [
+            SmdtPoint("2026-06-26", 45),
+            SmdtPoint("2026-06-29", 47),
+            SmdtPoint("2026-06-30", 48),
+            SmdtPoint("2026-07-01", 52),
+        ]
+
+        result = evaluate_four_key_from_records(
+            ticker="SSI",
+            branch_name="Moi gioi chung khoan",
+            ticker_smdt=ticker_points,
+            branch_smdt=branch_points,
+            requested_date="2026-07-01",
+            peer_smdt={"VND": 40, "HCM": 20, "VCI": 10},
+        )
+
+        notes = result["composite"]["notes"]
+        self.assertNotIn("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay", notes)
+        self.assertIn("smdt_rank", result["composite"]["breakdown"])
+        # SSI (70) is the strongest among {SSI:70, VND:40, HCM:20, VCI:10} -> top of the peer range.
+        self.assertEqual(result["composite"]["breakdown"]["smdt_rank"], 100.0)
+
     def test_api_adapter_single(self):
         seen = []
 
@@ -75,6 +104,8 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
                     {"date": "2026-06-30", "smdt": 48},
                     {"date": "2026-07-01", "smdt": 52},
                 ]}
+            if operation == "getSMDTLastN" and args.get("ticker"):
+                return {"smdts": [{"date": "2026-07-01", "smdt": 30}]}
             if operation == "getTotalTradeWithSMDT":
                 self.fail("4-key adapter must not fetch price with getTotalTradeWithSMDT")
             if operation == "getTotalTrade":
@@ -92,10 +123,18 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["ticker"], "SSI")
         self.assertEqual(result["date"], "2026-07-01")
-        smdt_calls = [(operation, args) for operation, args in seen if operation == "getSMDTLastN"]
-        self.assertEqual(len(smdt_calls), 2)
-        self.assertTrue(all(args["n"] == 45 for _, args in smdt_calls))
-        self.assertTrue(all(args["baseDate"] == "2026-07-01" for _, args in smdt_calls))
+        history_smdt_calls = [
+            (operation, args) for operation, args in seen
+            if operation == "getSMDTLastN" and args.get("n") == 45
+        ]
+        self.assertEqual(len(history_smdt_calls), 2)
+        self.assertTrue(all(args["baseDate"] == "2026-07-01" for _, args in history_smdt_calls))
+        peer_smdt_calls = [
+            (operation, args) for operation, args in seen
+            if operation == "getSMDTLastN" and args.get("n") == 1
+        ]
+        self.assertTrue(peer_smdt_calls)
+        self.assertIn("smdt_rank", result["composite"]["breakdown"])
         price_calls = [(operation, args) for operation, args in seen if operation == "getTotalTrade"]
         self.assertEqual(price_calls, [("getTotalTrade", {"ticker": "SSI", "lastDates": 45, "baseDate": "2026-07-01"})])
 
@@ -120,6 +159,8 @@ class Stock4KeyEvaluatorTests(unittest.TestCase):
                     {"date": dates[2], "smdt": 48},
                     {"date": dates[3], "smdt": 52},
                 ]}
+            if operation == "getSMDTLastN" and args.get("ticker"):
+                return {"smdts": [{"date": dates[3], "smdt": 30}]}
             if operation == "getTotalTrade":
                 return [
                     {"date": dates[0], "close": 100},

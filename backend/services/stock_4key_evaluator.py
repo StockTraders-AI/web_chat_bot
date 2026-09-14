@@ -42,6 +42,7 @@ WEIGHTS_V2 = {
 }
 MAX_DIVERGENCE_BONUS = 8.0
 PRICE_FLAT_THRESHOLD = 0.005
+MAX_PEER_TICKERS = 25
 FOUR_KEY_HISTORY_BUFFER_DAYS = 30
 COMPOSITE_HISTORY_BUFFER_DAYS = 45
 CASHFLOW_SCORE_MAP = {
@@ -286,6 +287,7 @@ def evaluate_four_key_from_records(
     price_points: Optional[list[PricePoint]] = None,
     cashflow_points: Optional[list[CashFlowPoint]] = None,
     include_composite: bool = True,
+    peer_smdt: Optional[dict[str, float]] = None,
 ) -> dict[str, Any]:
     ticker = normalize_ticker(ticker)
     ticker_smdt = _dedupe_smdt(ticker_smdt)
@@ -327,22 +329,42 @@ def evaluate_four_key_from_records(
     if include_composite:
         result["composite"] = _composite_score(
             target=target,
+            target_ticker=ticker,
             ticker_smdt=ticker_smdt,
             branch_smdt=branch_smdt,
             price_points=price_points,
             cashflow_points=cashflow_points,
             lookback_sessions=lookback_sessions,
+            peer_smdt=peer_smdt,
         )
     return _attach_answer_contract(result)
 
 
+def _peer_rank_score(
+    peer_smdt: Optional[dict[str, float]],
+    self_ticker: str,
+    self_value: float,
+) -> Optional[float]:
+    if not peer_smdt:
+        return None
+    values = dict(peer_smdt)
+    values[self_ticker] = self_value
+    if len(values) < 2:
+        return None
+    tickers = sorted(values)
+    scores = _normalize_series([values[t] for t in tickers])
+    return scores[tickers.index(self_ticker)]
+
+
 def _composite_score(
     target: str,
+    target_ticker: str,
     ticker_smdt: list[SmdtPoint],
     branch_smdt: list[SmdtPoint],
     price_points: list[PricePoint],
     cashflow_points: list[CashFlowPoint],
     lookback_sessions: int,
+    peer_smdt: Optional[dict[str, float]] = None,
 ) -> dict[str, Any]:
     notes: list[str] = []
     branch_by_date = {point.date: point.smdt for point in branch_smdt}
@@ -357,6 +379,7 @@ def _composite_score(
             "date": point.date,
             "smdt_vs_nganh": point.smdt - branch_by_date[point.date],
             "smdt_delta": delta,
+            "smdt_ticker": point.smdt,
         })
     if not rows or target not in {str(row["date"]) for row in rows}:
         raise Stock4KeyError("Khong du du lieu de tinh composite score")
@@ -425,8 +448,13 @@ def _composite_score(
         notes.append(f"Dong tien: '{cashflow.content}' -> {round(cash_score, 1)} diem")
 
     if "smdt_rank" in active_weights:
-        notes.append("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay")
-        active_weights.pop("smdt_rank", None)
+        rank_score = _peer_rank_score(peer_smdt, target_ticker, float(row["smdt_ticker"]))
+        if rank_score is None:
+            notes.append("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay")
+            active_weights.pop("smdt_rank", None)
+        else:
+            weighted_sum += active_weights["smdt_rank"] * rank_score
+            breakdown["smdt_rank"] = round(rank_score, 1)
 
     total_weight = sum(active_weights.values())
     score = max(0.0, min(100.0, weighted_sum / total_weight + bonus)) if total_weight else 0.0
@@ -502,6 +530,28 @@ def _filter_smdt_range(points: list[SmdtPoint], start: str, end: str) -> list[Sm
     return [point for point in _dedupe_smdt(points) if start <= point.date <= end]
 
 
+def _fetch_peer_smdt(
+    api_call: Callable[[str, dict[str, Any]], Any],
+    branch: dict[str, Any],
+    ticker: str,
+    target: str,
+) -> Optional[dict[str, float]]:
+    peers = [normalize_ticker(item) for item in branch.get("tickers", [])]
+    peers = [item for item in dict.fromkeys(peers) if item and item != ticker]
+    if not peers:
+        return None
+    peer_smdt: dict[str, float] = {}
+    for peer in peers[:MAX_PEER_TICKERS]:
+        try:
+            points = _fetch_smdt_last_n(api_call, n=1, ticker=peer, base_date=target)
+        except Exception:
+            continue
+        match = next((point for point in points if point.date == target), None)
+        if match is not None:
+            peer_smdt[peer] = match.smdt
+    return peer_smdt or None
+
+
 def _filter_price_range(points: list[PricePoint], start: str, end: str) -> list[PricePoint]:
     return [point for point in _dedupe_price(points) if start <= point.date <= end]
 
@@ -511,7 +561,8 @@ def _load_inputs(
     ticker: str,
     requested_date: Optional[str],
     history_buffer_days: int,
-) -> tuple[str, list[SmdtPoint], list[SmdtPoint], list[PricePoint], list[CashFlowPoint]]:
+    include_peer: bool = True,
+) -> tuple[str, list[SmdtPoint], list[SmdtPoint], list[PricePoint], list[CashFlowPoint], Optional[dict[str, float]]]:
     if not requested_date:
         raise Stock4KeyError("Thieu ngay danh gia")
 
@@ -556,7 +607,9 @@ def _load_inputs(
 
     cash_payload = api_call("getCashFlowTicker", {"ticker": ticker, "date": target})
     cashflows = extract_cashflow_points(cash_payload)
-    return branch_name, ticker_smdt, branch_smdt, prices, cashflows
+
+    peer_smdt = _fetch_peer_smdt(api_call, branch, ticker, target) if include_peer else None
+    return branch_name, ticker_smdt, branch_smdt, prices, cashflows, peer_smdt
 
 def _load_four_key_inputs(
     api_call: Callable[[str, dict[str, Any]], Any],
@@ -624,8 +677,9 @@ def evaluate_stock_4key(
         branch_smdt_cache: dict[str, list[SmdtPoint]] = {}
         for ticker in tickers[:30]:
             try:
+                peer_smdt = None
                 if include_composite:
-                    branch_name, ticker_smdt, branch_smdt, prices, cashflows = _load_inputs(
+                    branch_name, ticker_smdt, branch_smdt, prices, cashflows, peer_smdt = _load_inputs(
                         api_call,
                         ticker,
                         requested_date,
@@ -650,6 +704,7 @@ def evaluate_stock_4key(
                     price_points=prices,
                     cashflow_points=cashflows,
                     include_composite=include_composite,
+                    peer_smdt=peer_smdt,
                 ))
             except Exception as exc:
                 results.append({"ok": False, "ticker": ticker, "error": str(exc)})
@@ -664,11 +719,12 @@ def evaluate_stock_4key(
         if not from_date:
             raise Stock4KeyError("Thieu from_date cho mode history")
         end_date = date.today().isoformat()
-        branch_name, ticker_smdt, branch_smdt, prices, cashflows = _load_inputs(
+        branch_name, ticker_smdt, branch_smdt, prices, cashflows, _peer_smdt = _load_inputs(
             api_call,
             ticker,
             end_date,
             FOUR_KEY_HISTORY_BUFFER_DAYS,
+            include_peer=False,
         )
         # FourKeyEvaluator.evaluate_history in the source module returns 4-key history only.
         common_dates = sorted({p.date for p in ticker_smdt} & {p.date for p in branch_smdt})
@@ -695,11 +751,12 @@ def evaluate_stock_4key(
     if not requested_date:
         raise Stock4KeyError("Thieu ngay danh gia")
     history_buffer_days = COMPOSITE_HISTORY_BUFFER_DAYS if include_composite else FOUR_KEY_HISTORY_BUFFER_DAYS
-    branch_name, ticker_smdt, branch_smdt, prices, cashflows = _load_inputs(
+    branch_name, ticker_smdt, branch_smdt, prices, cashflows, peer_smdt = _load_inputs(
         api_call,
         ticker,
         requested_date,
         history_buffer_days,
+        include_peer=include_composite,
     )
     result = evaluate_four_key_from_records(
         ticker=ticker,
@@ -711,6 +768,7 @@ def evaluate_stock_4key(
         price_points=prices,
         cashflow_points=cashflows,
         include_composite=include_composite,
+        peer_smdt=peer_smdt,
     )
     result["mode"] = "single"
     return result
