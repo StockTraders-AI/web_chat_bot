@@ -794,7 +794,15 @@ def format_stock_4key_answer(payload: Dict[str, Any], user_text: str = "") -> st
             "gia_return_1d_pct": "Lợi nhuận 1 ngày (%)",
             "dong_tien": "Dòng tiền",
         }
-        parts = [f"{labels.get(key, key)} {_fmt_metric(value)}" for key, value in breakdown.items()]
+        parts = []
+        for key, value in breakdown.items():
+            if key.endswith("_label"):
+                continue
+            text = f"{labels.get(key, key)} {_fmt_metric(value)}"
+            detail = breakdown.get(f"{key}_label")
+            if detail:
+                text += f" ({detail})"
+            parts.append(text)
         lines.append(" - Breakdown: " + "; ".join(parts) + ".")
     for note in notes:
         lines.append(f" - {note}.")
