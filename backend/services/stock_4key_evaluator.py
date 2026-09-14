@@ -420,6 +420,9 @@ def _composite_score(
     cash_score = _cashflow_score(cashflow, notes)
     weighted_sum += active_weights["dong_tien"] * cash_score
     breakdown["dong_tien"] = round(cash_score, 1)
+    if cashflow and cashflow.content:
+        breakdown["dong_tien_label"] = cashflow.content
+        notes.append(f"Dong tien: '{cashflow.content}' -> {round(cash_score, 1)} diem")
 
     if "smdt_rank" in active_weights:
         notes.append("Chua co du lieu peer de tinh xep hang nganh -> bo factor nay")
