@@ -20,6 +20,7 @@ BACKUP_DIR = Path("/root/chatdb-backups")
 DB_PATH_FILE = Path("/root/.chatdb_path")
 RETENTION_DAYS = 365
 
+BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
