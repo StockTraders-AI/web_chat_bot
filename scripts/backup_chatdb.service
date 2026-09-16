@@ -1,0 +1,12 @@
+[Unit]
+Description=chat.db daily backup service
+After=network.target docker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /root/web_chat_bot/scripts/backup_chatdb.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
