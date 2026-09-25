@@ -251,6 +251,21 @@ async def bootstrap_wave_history_snapshot(date: str | None = None) -> bool:
     return False
 
 
+async def ensure_wave_history_rows(date: str | None = None) -> list[dict]:
+    """Tra ve TOAN BO cac dong wave (khong loc theo dung 1 ngay) tinh den va
+    bao gom `date`, da sap xep tang dan theo ngay. Dung cho cac phep tinh can
+    thay ca chuoi lich su (vd hysteresis cua do_song S0-S7), khac voi
+    latest_wave_snapshot/history_wave_snapshot chi tra ve dung 1 ngay."""
+    await bootstrap_wave_history_snapshot(date)
+    rows = [row for row in _wave_history_cache["rows"] if isinstance(row, dict)]
+
+    requested_date = str(date or "")[:10]
+    if requested_date:
+        rows = [row for row in rows if _row_date(row) and _row_date(row) <= requested_date]
+
+    return sorted(rows, key=_row_date)
+
+
 def history_wave_snapshot(date: str | None = None) -> dict | None:
     rows = [row for row in _wave_history_cache["rows"] if isinstance(row, dict)]
     if not rows:

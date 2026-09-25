@@ -2,7 +2,7 @@ import json
 import httpx
 
 from services.ticker_policy import invalid_api_ticker, sanitize_api_result
-from core.realtime_wave import ensure_wave_snapshot
+from core.realtime_wave import ensure_wave_snapshot, ensure_wave_history_rows
 from datetime import datetime
 import re
 import unicodedata
@@ -788,9 +788,19 @@ async def condition_do_song_state(context: dict, condition_key: str):
             "message": f"Thieu date de kiem tra trang thai do song {target_state}",
         }
 
-    raw = await ensure_wave_snapshot(date)
+    # Dung ham lay CA CHUOI lich su (khong phai ensure_wave_snapshot - ham do
+    # uu tien tra ve snapshot 1 ngay hien tai, thieu du lieu de tinh phaTruoc
+    # cho hysteresis, se lam ket qua sai lech ve SN).
+    rows = await ensure_wave_history_rows(date)
+    source = "stock_wave_history"
 
-    if not raw:
+    if not rows:
+        raw = await ensure_wave_snapshot(date)
+        rows = [row for row in (raw or {}).get("waveDatas", []) if isinstance(row, dict)]
+        rows = sorted(rows, key=row_date)
+        source = (raw or {}).get("_source") or "realtime_wave"
+
+    if not rows:
         return {
             "ok": False,
             "matched": False,
@@ -801,18 +811,6 @@ async def condition_do_song_state(context: dict, condition_key: str):
                 "channel": "wave",
                 "date": str(date)[:10],
             },
-        }
-
-    rows = [row for row in (raw.get("waveDatas") or []) if isinstance(row, dict)]
-    rows = sorted(rows, key=row_date)
-
-    if not rows:
-        return {
-            "ok": False,
-            "matched": False,
-            "condition_key": condition_key,
-            "message": "Realtime wave chua co du lieu de tinh trang thai do song",
-            "raw": raw,
         }
 
     state = do_song_compute_state_chain(rows)
@@ -827,8 +825,8 @@ async def condition_do_song_state(context: dict, condition_key: str):
             "date": state["date"] or str(date)[:10],
             "maTrangThai": state["maTrangThai"],
             "pha": state["pha"],
-            "source": raw.get("_source"),
-            "used_fallback_latest": bool(raw.get("_usedFallbackLatest")),
+            "source": source,
+            "row_count": len(rows),
         },
         "message": (
             f"Trang thai hien tai la {state['maTrangThai']} ({state['pha']})"
