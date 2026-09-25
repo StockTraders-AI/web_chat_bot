@@ -25,6 +25,25 @@ WAITBUY_THRESHOLD_LEGACY_KEY_PREFIX = "waitbuy_over_"
 BUY_THRESHOLD_CONDITION_KEY = "buy_over_threshold"
 BUY_THRESHOLD_LEGACY_KEY_PREFIX = "buy_over_"
 
+DO_SONG_ENGINE_KEY = "do_song_engine"
+DO_SONG_STATE_KEYS = {
+    "do_song_state_s0", "do_song_state_s1", "do_song_state_s4",
+    "do_song_state_s5", "do_song_state_s6", "do_song_state_s7",
+    "do_song_state_sn",
+}
+DO_SONG_PHASE_KEYS = {
+    "do_song_phase_dieu_chinh", "do_song_phase_tich_luy",
+    "do_song_phase_chan_song", "do_song_phase_song_tang",
+    "do_song_phase_phan_phoi",
+}
+DO_SONG_PHASE_ALIASES = {
+    "dieu chinh": "dieu_chinh",
+    "tich luy": "tich_luy",
+    "chan song": "chan_song",
+    "song tang": "song_tang",
+    "phan phoi": "phan_phoi",
+}
+
 
 async def post_data_api(endpoint: str, params: dict | None = None):
     params = params or {}
@@ -336,9 +355,50 @@ def is_buy_threshold_key(condition_key: str) -> bool:
     return raw == BUY_THRESHOLD_CONDITION_KEY or buy_threshold_from_key(raw) is not None
 
 
+def is_do_song_state_key(condition_key: str) -> bool:
+    raw = str(condition_key or "").strip()
+    return (
+        raw == DO_SONG_ENGINE_KEY
+        or raw in DO_SONG_STATE_KEYS
+        or raw in DO_SONG_PHASE_KEYS
+    )
+
+
+def resolve_do_song_state_key(text: str) -> str | None:
+    """Nhan dien dieu kien Do Song engine (do_song_state_s0..s7, phase, engine)
+    tu chuoi Ten mau + Dieu kien da gop lai. Dung chung normalize_condition_text
+    (bo dau gach duoi thanh khoang trang) nen "do_song_state_s0" -> "do song state s0".
+    """
+    normalized = normalize_condition_text(text)
+    if not normalized:
+        return None
+
+    words = normalized.split()
+
+    if "do" in words and "song" in words and "engine" in words:
+        return DO_SONG_ENGINE_KEY
+
+    if ("do" in words and "song" in words) or ("ma" in words and "trang" in words and "thai" in words):
+        for state in ("s0", "s1", "s4", "s5", "s6", "s7", "sn"):
+            if state in words:
+                return f"do_song_state_{state}"
+
+        for label, key in DO_SONG_PHASE_ALIASES.items():
+            if label in normalized:
+                return f"do_song_phase_{key}"
+
+    if "pha" in words:
+        for label, key in DO_SONG_PHASE_ALIASES.items():
+            if label in normalized:
+                return f"do_song_phase_{key}"
+
+    return None
+
+
 def is_supported_condition_key(condition_key: str) -> bool:
     return (
         condition_key in SUPPORTED_CONDITION_KEYS
+        or is_do_song_state_key(condition_key)
         or is_waitbuy_threshold_key(condition_key)
         or is_buy_threshold_key(condition_key)
     )
@@ -355,6 +415,13 @@ def resolve_condition_key(condition_logic: str) -> str:
 
     if raw in SUPPORTED_CONDITION_KEYS:
         return raw
+
+    if is_do_song_state_key(raw):
+        return raw
+
+    do_song_key = resolve_do_song_state_key(raw)
+    if do_song_key:
+        return do_song_key
 
     if raw == WAITBUY_THRESHOLD_CONDITION_KEY or waitbuy_threshold_from_key(raw) is not None:
         return WAITBUY_THRESHOLD_CONDITION_KEY
