@@ -44,6 +44,145 @@ DO_SONG_PHASE_ALIASES = {
     "phan phoi": "phan_phoi",
 }
 
+# Port tu embedded/stocktraders-web/src/utils/doSongEngine.js (source that dang
+# chay tren production, KHONG phai ban de xuat co S2/S3) - dung de tinh S0-S7
+# ngay trong Python cho luong realtime wave (WAITBUY/BUY da co san, S0-S7 thi
+# chua vi truoc gio logic nay chi ton tai ben Node.js).
+DO_SONG_CAU_HINH = {
+    "NGUONG_XAC_NHAN": 25,
+    "CHO_BAN_CAO": 0.20,
+    "BAN_CAO": 0.10,
+    "BIEN_NGHIENG": 0.05,
+}
+
+DO_SONG_PHA = {
+    "DIEU_CHINH": "Điều chỉnh",
+    "TICH_LUY": "Tích lũy",
+    "CHAN_SONG": "Chân sóng",
+    "SONG_TANG": "Sóng tăng",
+    "PHAN_PHOI": "Phân phối",
+}
+
+DO_SONG_STATE_PHASE = {
+    "S0": DO_SONG_PHA["DIEU_CHINH"],
+    "S1": DO_SONG_PHA["TICH_LUY"],
+    "S4": DO_SONG_PHA["SONG_TANG"],
+    "S5": DO_SONG_PHA["SONG_TANG"],
+    "S6": DO_SONG_PHA["PHAN_PHOI"],
+    "S7": DO_SONG_PHA["PHAN_PHOI"],
+    "SN": None,
+}
+
+
+def do_song_wave_row_metrics(row: dict) -> dict:
+    def num(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    cho_mua = (
+        row.get("waitbuy") or row.get("waitBuy") or row.get("wait_buy")
+        or row.get("cho_mua") or row.get("cm") or 0
+    )
+    mua = row.get("buy") or row.get("mua") or row.get("mu") or 0
+    cho_ban = (
+        row.get("waitsell") or row.get("waitSell") or row.get("wait_sell")
+        or row.get("cho_ban") or row.get("cb") or 0
+    )
+    ban = row.get("sell") or row.get("ban") or row.get("ba") or 0
+    tong = row.get("total") or row.get("tong") or 0
+
+    metrics = {
+        "choMua": num(cho_mua),
+        "mua": num(mua),
+        "choBan": num(cho_ban),
+        "ban": num(ban),
+        "tong": num(tong),
+    }
+    if not metrics["tong"]:
+        metrics["tong"] = (
+            metrics["choMua"] + metrics["mua"] + metrics["choBan"] + metrics["ban"]
+        )
+    return metrics
+
+
+def do_song_tinh_dac_trung(p: dict, truoc: dict | None) -> dict:
+    tong = p["tong"] or 1
+
+    def delta(key):
+        return (p[key] - truoc[key]) if truoc else 0
+
+    return {
+        "choMua": p["choMua"], "mua": p["mua"], "choBan": p["choBan"], "ban": p["ban"],
+        "tong": p["tong"],
+        "tlChoMua": p["choMua"] / tong,
+        "tlMua": p["mua"] / tong,
+        "tlChoBan": p["choBan"] / tong,
+        "tlBan": p["ban"] / tong,
+        "dChoMua": delta("choMua"), "dMua": delta("mua"),
+        "dChoBan": delta("choBan"), "dBan": delta("ban"),
+    }
+
+
+def do_song_phan_loai(f: dict, pha_truoc: str | None) -> str:
+    N = DO_SONG_CAU_HINH
+
+    if f["ban"] >= N["NGUONG_XAC_NHAN"]:
+        return "S7"
+
+    if f["mua"] >= N["NGUONG_XAC_NHAN"]:
+        return "S4"
+
+    if f["tlChoBan"] >= N["CHO_BAN_CAO"]:
+        return "S6" if pha_truoc in (DO_SONG_PHA["SONG_TANG"], DO_SONG_PHA["PHAN_PHOI"]) else "S0"
+
+    if (
+        pha_truoc == DO_SONG_PHA["SONG_TANG"]
+        and f["dChoBan"] > 0
+        and f["dMua"] < 0
+        and f["tlChoBan"] < N["CHO_BAN_CAO"]
+    ):
+        return "S5"
+
+    if (
+        pha_truoc in (DO_SONG_PHA["CHAN_SONG"], DO_SONG_PHA["SONG_TANG"])
+        and f["ban"] < N["NGUONG_XAC_NHAN"]
+        and f["tlBan"] < N["BAN_CAO"]
+        and f["tlChoBan"] < N["CHO_BAN_CAO"]
+    ):
+        return "S4"
+
+    chenh_lech = f["tlChoMua"] - f["tlChoBan"]
+    if chenh_lech <= -N["BIEN_NGHIENG"]:
+        return "S0"
+    if chenh_lech >= N["BIEN_NGHIENG"]:
+        return "S1"
+    return "SN"
+
+
+def do_song_compute_state_chain(rows: list[dict]) -> dict:
+    """Nhan danh sach wave rows da sap xep theo ngay tang dan, replay tuan tu
+    (mo phong dung phaTruoc hysteresis cua doSongEngine.js) va tra ve trang
+    thai cua NGAY CUOI CUNG trong danh sach."""
+    pha_truoc = None
+    ma_trang_thai = "SN"
+    last_date = ""
+    truoc_metrics = None
+
+    for row in rows:
+        p = do_song_wave_row_metrics(row)
+        if not p["tong"]:
+            continue
+
+        f = do_song_tinh_dac_trung(p, truoc_metrics)
+        ma_trang_thai = do_song_phan_loai(f, pha_truoc)
+        pha_truoc = DO_SONG_STATE_PHASE.get(ma_trang_thai)
+        truoc_metrics = p
+        last_date = row_date(row)
+
+    return {"maTrangThai": ma_trang_thai, "pha": pha_truoc, "date": last_date}
+
 
 async def post_data_api(endpoint: str, params: dict | None = None):
     params = params or {}
@@ -405,10 +544,11 @@ def is_supported_condition_key(condition_key: str) -> bool:
 
 
 def is_realtime_wave_condition_key(condition_key: str) -> bool:
-    return str(condition_key or "").strip() in {
+    raw = str(condition_key or "").strip()
+    return raw in {
         WAITBUY_THRESHOLD_CONDITION_KEY,
         BUY_THRESHOLD_CONDITION_KEY,
-    }
+    } or raw in DO_SONG_STATE_KEYS
 
 def resolve_condition_key(condition_logic: str) -> str:
     raw = (condition_logic or "").strip()
@@ -632,6 +772,68 @@ async def condition_wave_metric_over_threshold(context: dict, threshold: float, 
             f"{label} hien o muc {metric_value:g}, vuot nguong {threshold:g}"
             if matched
             else "Khong dat dieu kien realtime wave"
+        ),
+    }
+
+
+async def condition_do_song_state(context: dict, condition_key: str):
+    target_state = condition_key.replace("do_song_state_", "").upper()
+    date = context.get("date")
+
+    if not date:
+        return {
+            "ok": False,
+            "matched": False,
+            "condition_key": condition_key,
+            "message": f"Thieu date de kiem tra trang thai do song {target_state}",
+        }
+
+    raw = await ensure_wave_snapshot(date)
+
+    if not raw:
+        return {
+            "ok": False,
+            "matched": False,
+            "condition_key": condition_key,
+            "message": f"Chua co du lieu realtime wave cho ngay {str(date)[:10]}",
+            "error": {
+                "type": "realtime_wave_unavailable",
+                "channel": "wave",
+                "date": str(date)[:10],
+            },
+        }
+
+    rows = [row for row in (raw.get("waveDatas") or []) if isinstance(row, dict)]
+    rows = sorted(rows, key=row_date)
+
+    if not rows:
+        return {
+            "ok": False,
+            "matched": False,
+            "condition_key": condition_key,
+            "message": "Realtime wave chua co du lieu de tinh trang thai do song",
+            "raw": raw,
+        }
+
+    state = do_song_compute_state_chain(rows)
+    matched = state["maTrangThai"] == target_state
+
+    return {
+        "ok": True,
+        "matched": matched,
+        "condition_key": condition_key,
+        "condition": f"do_song_state == {target_state}",
+        "data": {
+            "date": state["date"] or str(date)[:10],
+            "maTrangThai": state["maTrangThai"],
+            "pha": state["pha"],
+            "source": raw.get("_source"),
+            "used_fallback_latest": bool(raw.get("_usedFallbackLatest")),
+        },
+        "message": (
+            f"Trang thai hien tai la {state['maTrangThai']} ({state['pha']})"
+            if matched
+            else f"Trang thai hien tai la {state['maTrangThai']}, chua khop {target_state}"
         ),
     }
 
@@ -1653,6 +1855,10 @@ async def run_condition(template_id: int, context: dict):
             threshold=threshold,
             condition_key=condition_key,
         )
+
+    if condition_key in DO_SONG_STATE_KEYS:
+        return await condition_do_song_state(context, condition_key)
+
     handler = CONDITION_HANDLERS.get(condition_key)
 
     if handler:
