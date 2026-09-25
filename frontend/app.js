@@ -2630,7 +2630,12 @@ function isWaitbuySignalFlow(flow) {
   const normalized = normalizeConditionSearchText(parts.filter(Boolean).join(" "));
   const isWaitbuy = normalized.includes("waitbuy") || normalized.includes("cho mua");
   const isBuyThreshold = /(^|\s)mua\s*(>|>=|vuot|tren|lon hon|x|[0-9])/.test(normalized);
-  return isWaitbuy || isBuyThreshold;
+  const isDoSongState =
+    normalized.includes("do_song_state") ||
+    normalized.includes("do_song_phase") ||
+    normalized.includes("do_song_engine") ||
+    /\bdo song\b/.test(normalized);
+  return isWaitbuy || isBuyThreshold || isDoSongState;
 }
 
 function step3PromptPreview(flow) {
