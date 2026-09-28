@@ -1,3 +1,4 @@
+import asyncio
 import json, os, re, zipfile
 from io import BytesIO
 from xml.etree import ElementTree
@@ -19,6 +20,7 @@ from core.condition_engine import (
     waitbuy_threshold_from_key,
     buy_threshold_from_key,
     run_condition,
+    notify_stocktraders_resync,
 )
 
 from settings import (
@@ -813,6 +815,37 @@ def template_condition_key(template: dict) -> str:
         str(template.get("name") or "").strip(),
         str(template.get("condition_logic") or "").strip(),
     ]).strip()
+
+
+async def notify_do_song_states_for_flow(flow: dict) -> None:
+    """Sau khi luu prompt cua 1 flow (BAT KY loai dieu kien nao - do_song
+    state, waitbuy/buy, SMDT/nganh...), bao StockTraders AI biet dung
+    condition_key nao vua doi, khong chi gioi han o S0-S7/Mua/Cho mua. Gui
+    nguyen condition_key da resolve, de phia nhan (StockTraders AI) tu
+    quyet dinh co lam gi voi no khong - webchatai khong tu loc/gioi han.
+    Chay nen (fire-and-forget), khong bao gio lam fail request luu prompt
+    cua admin du webhook co loi gi di nua."""
+    try:
+        templates = await memory.list_condition_templates()
+        refs = resolve_flow_condition_refs(flow.get("expression") or "", templates)
+        templates_by_id = {
+            int(t["id"]): t for t in templates if str(t.get("id", "")).isdigit()
+        }
+        condition_keys = set()
+        for ref in refs:
+            template = templates_by_id.get(int(ref["id"]))
+            if not template:
+                continue
+            resolved = resolve_condition_key(template_condition_key(template))
+            if resolved:
+                condition_keys.add(resolved)
+
+        for condition_key in condition_keys:
+            asyncio.create_task(
+                notify_stocktraders_resync(condition_key, flow_id=flow.get("id"))
+            )
+    except Exception as exc:
+        print(f"NOTIFY_DO_SONG_STATES_FAILED flow_id={flow.get('id')}: {exc}")
 
 
 def make_sales_target_key(name: str) -> str:
@@ -1927,6 +1960,7 @@ async def update_condition_flow_trigger_prompt(
         trigger_docs_file_text=trigger_docs_file_text,
         trigger_docs_file_names=trigger_docs_file_names,
     )
+    await notify_do_song_states_for_flow(flow)
 
     return {
         "ok": True,
@@ -2058,6 +2092,7 @@ async def demo_check_condition_flow(
             "trigger_docs_file_text": trigger_docs_file_text,
             "trigger_docs_file_names": trigger_docs_file_names,
         }
+        await notify_do_song_states_for_flow(flow)
 
     context = dict(payload.context or {})
     context.setdefault("date", datetime.now().strftime("%Y-%m-%d"))

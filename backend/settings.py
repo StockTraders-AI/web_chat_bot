@@ -46,6 +46,12 @@ AI_QUOTA_ESTIMATED_REQUEST_TOKENS = int(os.getenv("AI_QUOTA_ESTIMATED_REQUEST_TO
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
+# Webhook bao StockTraders AI moi khi admin sua prompt/dieu kien (de "form
+# ep" ben do resync lai, tranh dong bang du lieu cu). De trong URL se tu
+# dong bo qua, khong bao loi.
+STOCKTRADERS_RESYNC_URL = os.getenv("STOCKTRADERS_RESYNC_URL", "").strip()
+STOCKTRADERS_RESYNC_SECRET = os.getenv("STOCKTRADERS_RESYNC_SECRET", "").strip()
+
 # Model options (UI dropdown) - báº¡n cÃ³ thá»ƒ thÃªm/bá»›t
 ALLOWED_MODELS = [
     "gpt-4o",

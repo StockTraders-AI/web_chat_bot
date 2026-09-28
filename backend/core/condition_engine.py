@@ -543,6 +543,59 @@ def is_supported_condition_key(condition_key: str) -> bool:
     )
 
 
+def recommendation_state_label_from_condition_key(condition_key: str) -> str | None:
+    """Doi 1 condition_key da resolve (do_song_state_s4, waitbuy_over_threshold...)
+    sang dung nhan trang thai ma StockTraders AI dung trong bang
+    recommendation_templates cua no (S0, S1, S4, S5, S6, S7, SN, WAITBUY, BUY).
+    Tra ve None neu condition_key khong lien quan gi toi cac trang thai nay
+    (vd dieu kien SMDT/nganh) - khong can bao StockTraders AI resync cho
+    truong hop do."""
+    raw = str(condition_key or "").strip()
+
+    if raw == WAITBUY_THRESHOLD_CONDITION_KEY:
+        return "WAITBUY"
+    if raw == BUY_THRESHOLD_CONDITION_KEY:
+        return "BUY"
+    if raw in DO_SONG_STATE_KEYS:
+        return raw.replace("do_song_state_", "").upper()
+
+    return None
+
+
+async def notify_stocktraders_resync(condition_key: str, flow_id: int | None = None) -> None:
+    """Bao StockTraders AI (hoac bat ky he thong nao dang nghe webhook nay)
+    biet dung 1 dieu kien vua duoc sua prompt xong - gui NGUYEN condition_key
+    da resolve, KHONG gioi han chi rieng do_song state/waitbuy/buy. Kem them
+    "state" (S4, WAITBUY...) neu map duoc, de ben nhan de dung ma khong can
+    tu resolve lai, nhung van co the tu xu ly theo condition_key neu muon
+    ho tro them loai dieu kien khac sau nay (SMDT, nganh...) ma khong can
+    webchatai sua lai cho nay.
+
+    Fire-and-forget: loi/timeout/chua cau hinh URL deu duoc nuot im lang,
+    KHONG duoc lam hong luong luu prompt cua admin chi vi webhook nay
+    that bai."""
+    from settings import STOCKTRADERS_RESYNC_URL, STOCKTRADERS_RESYNC_SECRET
+
+    if not STOCKTRADERS_RESYNC_URL or not condition_key:
+        return
+
+    payload = {
+        "condition_key": condition_key,
+        "state": recommendation_state_label_from_condition_key(condition_key),
+        "flow_id": flow_id,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await client.post(
+                STOCKTRADERS_RESYNC_URL,
+                headers={"X-Resync-Secret": STOCKTRADERS_RESYNC_SECRET},
+                json=payload,
+            )
+    except Exception as exc:
+        print(f"STOCKTRADERS_RESYNC_FAILED condition_key={condition_key}: {exc}")
+
+
 def is_realtime_wave_condition_key(condition_key: str) -> bool:
     # do_song_state_* duoc bat lai o day vi condition_do_song_state() gio
     # hoi thang API cong khai cua StockTraders AI (nguon that, khong tu tinh
