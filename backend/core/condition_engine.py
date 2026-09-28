@@ -1863,24 +1863,7 @@ async def run_condition(template_id: int, context: dict):
         )
 
     if condition_key in DO_SONG_STATE_KEYS:
-        # KHONG tu tinh lai S0-S7 o day nua (ke ca luc bam "Check demo" thu
-        # cong) - da xac nhan thuc te nguon du lieu lich su rieng cua
-        # webchatai (ensure_wave_history_rows) khong dong bo chinh xac voi
-        # StockTraders AI, tung tinh sai S5 trong khi thuc te la S4. Trang
-        # thai that su chi nen lay tu StockTraders AI gui sang qua
-        # /public/do-song-advice, khong tu suy doan lai o day.
-        target_state = condition_key.replace("do_song_state_", "").upper()
-        return {
-            "ok": True,
-            "matched": None,
-            "condition_key": condition_key,
-            "message": (
-                f"Khong tu kiem tra duoc trang thai {target_state} o day - "
-                "trang thai do StockTraders AI tinh va gui kem khi goi "
-                "/public/do-song-advice, webchatai khong tu tinh lai de "
-                "tranh sai lech du lieu."
-            ),
-        }
+        return await condition_do_song_state(context, condition_key)
 
     handler = CONDITION_HANDLERS.get(condition_key)
 
