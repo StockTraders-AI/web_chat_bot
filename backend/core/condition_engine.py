@@ -544,19 +544,14 @@ def is_supported_condition_key(condition_key: str) -> bool:
 
 
 def is_realtime_wave_condition_key(condition_key: str) -> bool:
-    # CHI danh cho WAITBUY/BUY (so 1 so voi 1 nguong, don gian, du lieu chi
-    # can dung 1 phien la tinh dung). KHONG bat do_song_state_* o day - bo
-    # phan loai S0-S7 can du lich su + phaTruoc chinh xac de tinh dung, va
-    # nguon du lieu lich su rieng cua webchatai (ensure_wave_history_rows)
-    # da chung minh khong dang tin cay (tung tinh sai S5 trong khi thuc te
-    # la S4, gui nham thong bao cho nguoi dung that). S0-S7 chi nen dung qua
-    # /public/do-song-advice (StockTraders AI tu tinh maTrangThai va gui
-    # sang, khong de webchatai tu tinh lai).
+    # do_song_state_* duoc bat lai o day vi condition_do_song_state() gio
+    # hoi thang API cong khai cua StockTraders AI (nguon that, khong tu tinh
+    # lai bang du lieu rieng nua) - an toan de tu dong chay theo tick.
     raw = str(condition_key or "").strip()
     return raw in {
         WAITBUY_THRESHOLD_CONDITION_KEY,
         BUY_THRESHOLD_CONDITION_KEY,
-    }
+    } or raw in DO_SONG_STATE_KEYS
 
 def resolve_condition_key(condition_logic: str) -> str:
     raw = (condition_logic or "").strip()
@@ -784,6 +779,26 @@ async def condition_wave_metric_over_threshold(context: dict, threshold: float, 
     }
 
 
+STOCKTRADERS_PUBLIC_DO_SONG_URL = (
+    "https://stocktradersai.vn/thi-truong/api/do-song-recommendation"
+)
+
+
+async def fetch_stocktraders_do_song_state(check_date: str) -> dict:
+    """Hoi thang StockTraders AI trang thai THAT cua 1 ngay - day la nguon
+    cong khai, chinh xac 100% vi day chinh la cai website thi-truong dang
+    hien thi (raw_state do Node tinh san, khong phai webchatai tu doan).
+    Thay the hoan toan cho viec webchatai tu tinh lai bang nguon rieng
+    (da chung minh khong dong bo, tung gui nham S5 trong khi that su la S4)."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        res = await client.get(
+            STOCKTRADERS_PUBLIC_DO_SONG_URL,
+            params={"date": check_date},
+        )
+        res.raise_for_status()
+        return res.json()
+
+
 async def condition_do_song_state(context: dict, condition_key: str):
     target_state = condition_key.replace("do_song_state_", "").upper()
     date = context.get("date")
@@ -796,33 +811,29 @@ async def condition_do_song_state(context: dict, condition_key: str):
             "message": f"Thieu date de kiem tra trang thai do song {target_state}",
         }
 
-    # Dung ham lay CA CHUOI lich su (khong phai ensure_wave_snapshot - ham do
-    # uu tien tra ve snapshot 1 ngay hien tai, thieu du lieu de tinh phaTruoc
-    # cho hysteresis, se lam ket qua sai lech ve SN).
-    rows = await ensure_wave_history_rows(date)
-    source = "stock_wave_history"
+    check_date = str(date)[:10]
 
-    if not rows:
-        raw = await ensure_wave_snapshot(date)
-        rows = [row for row in (raw or {}).get("waveDatas", []) if isinstance(row, dict)]
-        rows = sorted(rows, key=row_date)
-        source = (raw or {}).get("_source") or "realtime_wave"
-
-    if not rows:
+    try:
+        data = await fetch_stocktraders_do_song_state(check_date)
+    except Exception as exc:
         return {
             "ok": False,
             "matched": False,
             "condition_key": condition_key,
-            "message": f"Chua co du lieu realtime wave cho ngay {str(date)[:10]}",
-            "error": {
-                "type": "realtime_wave_unavailable",
-                "channel": "wave",
-                "date": str(date)[:10],
-            },
+            "message": f"Khong goi duoc API StockTraders AI de lay trang thai that: {exc}",
+            "error": {"type": "stocktraders_api_unavailable", "date": check_date},
         }
 
-    state = do_song_compute_state_chain(rows)
-    matched = state["maTrangThai"] == target_state
+    if not data.get("ok"):
+        return {
+            "ok": False,
+            "matched": False,
+            "condition_key": condition_key,
+            "message": data.get("error") or f"StockTraders AI chua co du lieu cho ngay {check_date}",
+        }
+
+    real_state = str(data.get("raw_state") or "").strip().upper()
+    matched = real_state == target_state
 
     return {
         "ok": True,
@@ -830,16 +841,15 @@ async def condition_do_song_state(context: dict, condition_key: str):
         "condition_key": condition_key,
         "condition": f"do_song_state == {target_state}",
         "data": {
-            "date": state["date"] or str(date)[:10],
-            "maTrangThai": state["maTrangThai"],
-            "pha": state["pha"],
-            "source": source,
-            "row_count": len(rows),
+            "date": data.get("date_key") or check_date,
+            "maTrangThai": real_state,
+            "pha": data.get("pha"),
+            "source": "stocktradersai_public_api",
         },
         "message": (
-            f"Trang thai hien tai la {state['maTrangThai']} ({state['pha']})"
+            f"Trang thai hien tai la {real_state} ({data.get('pha')})"
             if matched
-            else f"Trang thai hien tai la {state['maTrangThai']}, chua khop {target_state}"
+            else f"Trang thai hien tai la {real_state}, chua khop {target_state}"
         ),
     }
 
@@ -1863,24 +1873,11 @@ async def run_condition(template_id: int, context: dict):
         )
 
     if condition_key in DO_SONG_STATE_KEYS:
-        # KHONG tu tinh lai S0-S7 o day nua (ke ca luc bam "Check demo" thu
-        # cong) - da xac nhan thuc te nguon du lieu lich su rieng cua
-        # webchatai (ensure_wave_history_rows) khong dong bo chinh xac voi
-        # StockTraders AI, tung tinh sai S5 trong khi thuc te la S4. Trang
-        # thai that su chi nen lay tu StockTraders AI gui sang qua
-        # /public/do-song-advice, khong tu suy doan lai o day.
-        target_state = condition_key.replace("do_song_state_", "").upper()
-        return {
-            "ok": True,
-            "matched": None,
-            "condition_key": condition_key,
-            "message": (
-                f"Khong tu kiem tra duoc trang thai {target_state} o day - "
-                "trang thai do StockTraders AI tinh va gui kem khi goi "
-                "/public/do-song-advice, webchatai khong tu tinh lai de "
-                "tranh sai lech du lieu."
-            ),
-        }
+        # Hoi thang API cong khai cua StockTraders AI (fetch_stocktraders_do_song_state)
+        # de lay dung raw_state THAT, khong tu tinh lai bang nguon rieng nua
+        # (nguon rieng cu da chung minh khong dong bo, tung gui nham S5 trong
+        # khi thuc te la S4).
+        return await condition_do_song_state(context, condition_key)
 
     handler = CONDITION_HANDLERS.get(condition_key)
 
