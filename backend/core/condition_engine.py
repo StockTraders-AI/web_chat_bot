@@ -544,19 +544,11 @@ def is_supported_condition_key(condition_key: str) -> bool:
 
 
 def is_realtime_wave_condition_key(condition_key: str) -> bool:
-    # CHI danh cho WAITBUY/BUY (so 1 so voi 1 nguong, don gian, du lieu chi
-    # can dung 1 phien la tinh dung). KHONG bat do_song_state_* o day - bo
-    # phan loai S0-S7 can du lich su + phaTruoc chinh xac de tinh dung, va
-    # nguon du lieu lich su rieng cua webchatai (ensure_wave_history_rows)
-    # da chung minh khong dang tin cay (tung tinh sai S5 trong khi thuc te
-    # la S4, gui nham thong bao cho nguoi dung that). S0-S7 chi nen dung qua
-    # /public/do-song-advice (StockTraders AI tu tinh maTrangThai va gui
-    # sang, khong de webchatai tu tinh lai).
     raw = str(condition_key or "").strip()
     return raw in {
         WAITBUY_THRESHOLD_CONDITION_KEY,
         BUY_THRESHOLD_CONDITION_KEY,
-    }
+    } or raw in DO_SONG_STATE_KEYS
 
 def resolve_condition_key(condition_logic: str) -> str:
     raw = (condition_logic or "").strip()
