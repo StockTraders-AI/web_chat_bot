@@ -842,7 +842,13 @@ async def notify_do_song_states_for_flow(flow: dict) -> None:
 
         for condition_key in condition_keys:
             asyncio.create_task(
-                notify_stocktraders_resync(condition_key, flow_id=flow.get("id"))
+                notify_stocktraders_resync(
+                    condition_key,
+                    flow_id=flow.get("id"),
+                    trigger_title=flow.get("trigger_title"),
+                    trigger_prompt=flow.get("trigger_prompt"),
+                    trigger_recommendation=flow.get("trigger_recommendation"),
+                )
             )
     except Exception as exc:
         print(f"NOTIFY_DO_SONG_STATES_FAILED flow_id={flow.get('id')}: {exc}")

@@ -562,7 +562,13 @@ def recommendation_state_label_from_condition_key(condition_key: str) -> str | N
     return None
 
 
-async def notify_stocktraders_resync(condition_key: str, flow_id: int | None = None) -> None:
+async def notify_stocktraders_resync(
+    condition_key: str,
+    flow_id: int | None = None,
+    trigger_title: str | None = None,
+    trigger_prompt: str | None = None,
+    trigger_recommendation: str | None = None,
+) -> None:
     """Bao StockTraders AI (hoac bat ky he thong nao dang nghe webhook nay)
     biet dung 1 dieu kien vua duoc sua prompt xong - gui NGUYEN condition_key
     da resolve, KHONG gioi han chi rieng do_song state/waitbuy/buy. Kem them
@@ -570,6 +576,11 @@ async def notify_stocktraders_resync(condition_key: str, flow_id: int | None = N
     tu resolve lai, nhung van co the tu xu ly theo condition_key neu muon
     ho tro them loai dieu kien khac sau nay (SMDT, nganh...) ma khong can
     webchatai sua lai cho nay.
+
+    Gui kem nguyen van 3 truong admin da go (trigger_title/trigger_prompt/
+    trigger_recommendation) - KHONG qua AI xu ly lai. StockTraders AI tu thay
+    the cac token chomua_/mua_/choban_/ban_ ma admin go san trong do bang so
+    that cua tung ngay, nen ben nay khong can goi AI hay do so gi ca.
 
     Fire-and-forget: loi/timeout/chua cau hinh URL deu duoc nuot im lang,
     KHONG duoc lam hong luong luu prompt cua admin chi vi webhook nay
@@ -583,6 +594,9 @@ async def notify_stocktraders_resync(condition_key: str, flow_id: int | None = N
         "condition_key": condition_key,
         "state": recommendation_state_label_from_condition_key(condition_key),
         "flow_id": flow_id,
+        "trigger_title": trigger_title or "",
+        "trigger_prompt": trigger_prompt or "",
+        "trigger_recommendation": trigger_recommendation or "",
     }
 
     try:
