@@ -1480,34 +1480,6 @@ async def list_admin_ai_usage_by_route(
         "by_day": by_day,
     }
 
-@app.get("/public/ai-usage/by-route")
-async def list_public_ai_usage_by_route(
-    days: int = 30,
-    x_usage_secret: Optional[str] = Header(default=None, alias="X-Usage-Secret"),
-):
-    """Ban khong-can-cookie cua /admin/ai-usage/by-route - dung cho dashboard
-    chay tren may khac (vd ai-usage-dashboard cua admin) goi tu xa, xac thuc
-    bang shared secret thay vi session dang nhap trinh duyet."""
-    from settings import AI_USAGE_DASHBOARD_SECRET
-    import hmac
-
-    expected = (AI_USAGE_DASHBOARD_SECRET or "").strip()
-    provided = (x_usage_secret or "").strip()
-    if not expected:
-        raise HTTPException(status_code=503, detail="AI_USAGE_DASHBOARD_SECRET chua duoc cau hinh")
-    if not provided or not hmac.compare_digest(provided, expected):
-        raise HTTPException(status_code=401, detail="Sai usage secret")
-
-    since = datetime.utcnow() - timedelta(days=max(1, min(days, 365)))
-    by_route = await memory.list_ai_usage_by_route(since)
-    by_day = await memory.list_ai_usage_by_route_and_day(since)
-    return {
-        "since": since.isoformat(),
-        "days": days,
-        "by_route": by_route,
-        "by_day": by_day,
-    }
-
 @app.get("/accounts/{account_id}/permissions")
 async def get_account_permissions(
     account_id: int,
