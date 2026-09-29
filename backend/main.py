@@ -1473,13 +1473,11 @@ async def list_admin_ai_usage_by_route(
     since = datetime.utcnow() - timedelta(days=max(1, min(days, 365)))
     by_route = await memory.list_ai_usage_by_route(since)
     by_day = await memory.list_ai_usage_by_route_and_day(since)
-    events = await memory.list_ai_usage_events_recent(since, limit=500)
     return {
         "since": since.isoformat(),
         "days": days,
         "by_route": by_route,
         "by_day": by_day,
-        "events": events,
     }
 
 @app.get("/public/ai-usage/by-route")
@@ -1503,13 +1501,11 @@ async def list_public_ai_usage_by_route(
     since = datetime.utcnow() - timedelta(days=max(1, min(days, 365)))
     by_route = await memory.list_ai_usage_by_route(since)
     by_day = await memory.list_ai_usage_by_route_and_day(since)
-    events = await memory.list_ai_usage_events_recent(since, limit=500)
     return {
         "since": since.isoformat(),
         "days": days,
         "by_route": by_route,
         "by_day": by_day,
-        "events": events,
     }
 
 @app.get("/accounts/{account_id}/permissions")
