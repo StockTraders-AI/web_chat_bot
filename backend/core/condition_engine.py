@@ -853,10 +853,16 @@ STOCKTRADERS_PUBLIC_DO_SONG_URL = (
 
 async def fetch_stocktraders_do_song_state(check_date: str) -> dict:
     """Hoi thang StockTraders AI trang thai THAT cua 1 ngay - day la nguon
-    cong khai, chinh xac 100% vi day chinh la cai website thi-truong dang
-    hien thi (raw_state do Node tinh san, khong phai webchatai tu doan).
-    Thay the hoan toan cho viec webchatai tu tinh lai bang nguon rieng
-    (da chung minh khong dong bo, tung gui nham S5 trong khi that su la S4)."""
+    cong khai, chinh xac 100%. API tra ve CA raw_state (trang thai noi bo
+    cua engine, truoc khi bi WAITBUY/BUY override) LAN effective_state
+    (trang thai THAT SU dang hien thi cho nguoi dung that tren card
+    "Khuyen nghi tu AI" - vi du choMua>=60 se override sang WAITBUY du
+    engine tinh ra S4). condition_do_song_state() phai dung effective_state
+    de khop dung voi cai nguoi dung dang thay tren site, khong dung
+    raw_state (se gay nham lan, tung bao "S4" trong khi site dang hien thi
+    "Cho mua"). Thay the hoan toan cho viec webchatai tu tinh lai bang
+    nguon rieng (da chung minh khong dong bo, tung gui nham S5 trong khi
+    that su la S4)."""
     async with httpx.AsyncClient(timeout=15.0) as client:
         res = await client.get(
             STOCKTRADERS_PUBLIC_DO_SONG_URL,
@@ -899,7 +905,7 @@ async def condition_do_song_state(context: dict, condition_key: str):
             "message": data.get("error") or f"StockTraders AI chua co du lieu cho ngay {check_date}",
         }
 
-    real_state = str(data.get("raw_state") or "").strip().upper()
+    real_state = str(data.get("effective_state") or data.get("raw_state") or "").strip().upper()
     matched = real_state == target_state
 
     return {
