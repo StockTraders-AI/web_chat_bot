@@ -107,7 +107,7 @@ def normalize_intent_text(text: str) -> str:
 
 
 def extract_ticker(text: str) -> Optional[str]:
-    for token in re.findall(r"\b[A-Za-z][A-Za-z0-9]{1,6}\b", text or ""):
+    for token in re.findall(r"\b[A-Z][A-Z0-9]{1,6}\b", text or ""):
         ticker = token.upper()
         if ticker not in NON_TICKER_SYMBOLS and ticker in ALLOWED_TICKERS:
             return ticker
@@ -648,63 +648,6 @@ def format_stock_4key_history_answer(result: Dict[str, Any], user_text: str) -> 
 
     latest = max(matches, key=lambda m: str(m.get("date") or ""))
     return f"{ticker} bắt đầu đạt chuẩn \"{group_label}\" gần nhất từ ngày {latest.get('date')}."
-
-
-FOUR_KEY_LIST_INTENT_PHRASES = FOUR_KEY_SCREEN_INTENT_PHRASES
-
-
-def stock_4key_month_list_args(user_text: str) -> Optional[Dict[str, Any]]:
-    """"cho toi danh sach 4 key cua TCB thang 8/2026" - a request to enumerate
-    EVERY session's 4-key group for one ticker over a month/year, not a
-    single date snapshot (stock_4key_single_args) and not a "khi nao did it
-    first reach group X" lookup (stock_4key_history_args, which forces
-    group+transition=true and only returns the latest transition date).
-    Calls getStock4KeyHistory with ticker+date only (no group, no
-    transition) so the backend returns every session's group_4key in
-    'matches' - see the CACH 2 branch added to that tool's description in
-    tool_engine.py."""
-    if is_stock_4key_history_query(user_text):
-        return None
-    if requested_4key_groups(user_text):
-        return None
-
-    ticker = extract_ticker(user_text)
-    if not ticker:
-        return None
-
-    normalized = normalize_intent_text(user_text)
-    has_list_phrase = any(phrase in normalized for phrase in FOUR_KEY_LIST_INTENT_PHRASES)
-    has_4key_phrase = (
-        any(phrase in normalized for phrase in FOUR_KEY_ONLY_PHRASES)
-        or "4 key" in normalized
-        or "4key" in normalized
-    )
-    if not (has_list_phrase and has_4key_phrase):
-        return None
-
-    date_param = extract_4key_history_date_param(user_text)
-    if not date_param:
-        return None
-
-    return {"ticker": ticker, "date": date_param}
-
-
-def format_stock_4key_month_list_answer(result: Dict[str, Any], user_text: str = "") -> str:
-    ticker = str(result.get("ticker") or "").strip().upper()
-    branch = str(result.get("branch") or "").strip()
-    matches = result.get("matches") if isinstance(result.get("matches"), list) else []
-
-    if not matches:
-        return f"{ticker} không có dữ liệu 4 Key trong khoảng thời gian được hỏi."
-
-    ordered = sorted(matches, key=lambda m: str(m.get("date") or ""))
-    header = f"Danh sách 4 Key của {ticker}" + (f" (ngành {branch})" if branch else "") + ":"
-    lines = [header]
-    for i, m in enumerate(ordered, start=1):
-        date = m.get("date")
-        group_label = str(m.get("group_4key") or "").strip()
-        lines.append(f"{i}. {date}: {group_label}")
-    return "\n".join(lines)
 
 
 def stock_4key_single_args(user_text: str) -> Optional[Dict[str, Any]]:
@@ -1745,8 +1688,7 @@ class Orchestrator:
             messages=[
                 {"role": "system", "content": "Chỉ trả về đúng 1 từ: RULES hoặc BOOKS."},
                 {"role": "user", "content": prompt},
-            ],
-            route="chat_classify_query_source",
+            ]
         )
 
         raw = normalize_label(resp.choices[0].message.content or "")
@@ -1991,8 +1933,7 @@ class Orchestrator:
 
             resp = self.oa.chat(
                 model=model,
-                messages=messages,
-                route="chat_tool_loop_no_tools",
+                messages=messages
             )
 
             final_text = resp.choices[0].message.content or ""
@@ -2005,24 +1946,6 @@ class Orchestrator:
             return messages, final_text
 
         log("TRACE _run_tool_loop: enable_tools=True | allowed_apis=", allowed_apis, "| user_text=", user_text)
-
-        direct_4key_month_args = stock_4key_month_list_args(user_text)
-        if direct_4key_month_args and (not allowed_apis or "getStock4KeyHistory" in allowed_apis):
-            result = self.executor.call(
-                "getStock4KeyHistory",
-                direct_4key_month_args,
-                doc_name=current_doc,
-                user_text=user_text,
-            )
-            messages.append({
-                "role": "tool",
-                "tool_call_id": "DIRECT_4KEY_MONTH_LIST",
-                "content": json.dumps(result, ensure_ascii=False),
-            })
-            if isinstance(result, dict) and result.get("ok"):
-                return messages, format_stock_4key_month_list_answer(result, user_text=user_text)
-            error = result.get("error") if isinstance(result, dict) else None
-            return messages, str(error or "Khong lay duoc danh sach 4 Key.")
 
         direct_4key_single_args = stock_4key_single_args(user_text)
         if direct_4key_single_args and (not allowed_apis or "getStock4KeyEvaluation" in allowed_apis):
@@ -2080,8 +2003,7 @@ class Orchestrator:
                 model=model,
                 messages=messages,
                 tools=tools,
-                tool_choice="required" if must_call_rule_tool else "auto",
-                route="chat_tool_loop",
+                tool_choice="required" if must_call_rule_tool else "auto"
             )
 
             msg = resp.choices[0].message
@@ -2369,7 +2291,6 @@ Yêu cầu:
                 ],
                 tools=None,
                 tool_choice="auto",
-                route="chat_waitbuy_explanation",
             )
             text = (resp.choices[0].message.content or "").strip()
             return text or fallback
@@ -2412,7 +2333,6 @@ Yêu cầu:
                 ],
                 tools=None,
                 tool_choice="auto",
-                route="chat_case_idea_answer",
             )
             text = (resp.choices[0].message.content or "").strip()
             if text and not case_idea_answer_too_similar(text, fallback):
@@ -2432,7 +2352,6 @@ Yêu cầu:
                 ],
                 tools=None,
                 tool_choice="auto",
-                route="chat_case_idea_answer_retry",
             )
             retry_text = (retry.choices[0].message.content or "").strip()
             return retry_text or text or fallback

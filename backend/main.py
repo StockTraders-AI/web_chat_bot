@@ -2,7 +2,7 @@ import asyncio
 import json, os, re, zipfile
 from io import BytesIO
 from xml.etree import ElementTree
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import Cookie, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -695,7 +695,6 @@ def build_demo_flow_ai_signal(
             messages=messages,
             tools=None,
             tool_choice="auto",
-            route="condition_flow_ai_signal",
         )
         content = (resp.choices[0].message.content or "").strip()
         signal_card = parse_signal_card_ai_content(content, fallback)
@@ -710,7 +709,6 @@ def build_demo_flow_ai_signal(
                 messages=retry_messages,
                 tools=None,
                 tool_choice="auto",
-                route="condition_flow_ai_signal_retry",
             )
             retry_content = (retry_resp.choices[0].message.content or "").strip()
             retry_card = parse_signal_card_ai_content(retry_content, fallback)
@@ -805,7 +803,6 @@ def build_demo_flow_ai_response(
             messages=messages,
             tools=None,
             tool_choice="auto",
-            route="condition_flow_ai_response",
         )
         content = (resp.choices[0].message.content or "").strip()
         return parse_signal_response_ai_content(content, fallback)
@@ -1392,18 +1389,6 @@ def serve_index():
         headers={"Cache-Control": "no-store"},
     )
 
-STATIC_PAGES_DIR = os.path.join(BASE_DIR, "static_pages")
-
-@app.get("/admin/ai-usage-dashboard")
-def serve_ai_usage_dashboard():
-    """Trang rieng xem quota API key OpenAI tieu vao tung khau - khong chung
-    layout/tab voi admin SPA chinh, chi dung chung phien dang nhap (cookie).
-    Xac thuc thuc su nam o data endpoint /admin/ai-usage/by-route."""
-    return FileResponse(
-        os.path.join(STATIC_PAGES_DIR, "ai_usage_dashboard.html"),
-        headers={"Cache-Control": "no-store"},
-    )
-
 @app.post("/auth/login")
 async def auth_login(payload: LoginIn, response: Response):
     account = await memory.authenticate_account(payload.username, payload.password)
@@ -1460,25 +1445,6 @@ async def list_admin_ai_usage_users(
     await require_super_admin(authorization, session_cookie)
     quota = QuotaService(memory)
     return {"users": await quota.admin_usage_users()}
-
-@app.get("/admin/ai-usage/by-route")
-async def list_admin_ai_usage_by_route(
-    days: int = 30,
-    authorization: Optional[str] = Header(default=None),
-    session_cookie: Optional[str] = Cookie(default=None, alias=AUTH_COOKIE_NAME),
-):
-    """Tong hop quota API key OpenAI da tieu vao tung 'khau' (route) trong
-    app - dung cho trang dashboard rieng, khong chung layout admin."""
-    await require_super_admin(authorization, session_cookie)
-    since = datetime.utcnow() - timedelta(days=max(1, min(days, 365)))
-    by_route = await memory.list_ai_usage_by_route(since)
-    by_day = await memory.list_ai_usage_by_route_and_day(since)
-    return {
-        "since": since.isoformat(),
-        "days": days,
-        "by_route": by_route,
-        "by_day": by_day,
-    }
 
 @app.get("/accounts/{account_id}/permissions")
 async def get_account_permissions(
@@ -2599,7 +2565,6 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
             ],
             tools=None,
             tool_choice="auto",
-            route="do_song_advice_public",
         )
         content = (resp.choices[0].message.content or "").strip()
         card = parse_signal_card_ai_content(content, fallback)
