@@ -1660,6 +1660,25 @@ class MemoryStore:
 
         return [dict(row) for row in rows]
 
+    async def list_ai_usage_events_recent(self, since: datetime, limit: int = 500):
+        """Log tung request AI rieng le (khong gop), moi nhat truoc - dung cho
+        dashboard xem chi tiet 'cai gi goi, ton bao nhieu, luc may gio'."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT route, model, prompt_tokens, completion_tokens, total_tokens, created_at
+                FROM ai_token_usage_events
+                WHERE created_at >= ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (self._format_dt(since), int(limit)),
+            )
+            rows = await cur.fetchall()
+
+        return [dict(row) for row in rows]
+
     async def list_ai_usage_by_route(self, since: datetime):
         """Tong hop tieu thu API key theo tung 'khau' (route) da goi OpenAI -
         vd condition_flow_ai_signal, do_song_advice_public, chat_tool_loop...
