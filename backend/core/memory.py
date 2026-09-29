@@ -1660,6 +1660,55 @@ class MemoryStore:
 
         return [dict(row) for row in rows]
 
+    async def list_ai_usage_by_route(self, since: datetime):
+        """Tong hop tieu thu API key theo tung 'khau' (route) da goi OpenAI -
+        vd condition_flow_ai_signal, do_song_advice_public, chat_tool_loop...
+        Dung cho trang dashboard xem quota bi tieu vao dau."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT
+                    route,
+                    COUNT(*) AS request_count,
+                    COALESCE(SUM(prompt_tokens), 0) AS prompt_tokens,
+                    COALESCE(SUM(completion_tokens), 0) AS completion_tokens,
+                    COALESCE(SUM(total_tokens), 0) AS total_tokens,
+                    MAX(created_at) AS last_used_at
+                FROM ai_token_usage_events
+                WHERE created_at >= ?
+                GROUP BY route
+                ORDER BY total_tokens DESC
+                """,
+                (self._format_dt(since),),
+            )
+            rows = await cur.fetchall()
+
+        return [dict(row) for row in rows]
+
+    async def list_ai_usage_by_route_and_day(self, since: datetime):
+        """Nhu list_ai_usage_by_route nhung chia them theo ngay - dung ve
+        bieu do xu huong theo thoi gian cho tung khau."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cur = await db.execute(
+                """
+                SELECT
+                    date(created_at) AS day,
+                    route,
+                    COUNT(*) AS request_count,
+                    COALESCE(SUM(total_tokens), 0) AS total_tokens
+                FROM ai_token_usage_events
+                WHERE created_at >= ?
+                GROUP BY day, route
+                ORDER BY day ASC, total_tokens DESC
+                """,
+                (self._format_dt(since),),
+            )
+            rows = await cur.fetchall()
+
+        return [dict(row) for row in rows]
+
     async def list_ai_usage_subjects(self, since: datetime):
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
