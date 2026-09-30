@@ -1663,7 +1663,13 @@ class MemoryStore:
     async def list_ai_usage_by_route(self, since: datetime):
         """Tong hop tieu thu API key OpenAI theo tung 'khau' (route) da goi -
         vd 'Khuyen nghi tu AI', 'Tu van AI', 'RAG tra tai lieu'... Dung cho
-        trang dashboard xem quota bi tieu vao dau."""
+        trang dashboard xem quota bi tieu vao dau.
+
+        Chi lay cac dong tenant_id='system' (ghi boi OpenAIClient.chat() moi
+        them) - loai tru cac dong route='api/ai/chat' ma QuotaService.record_
+        usage() da ghi rieng cho tung doi tac ben ngoai (tenant_id/user_id
+        that), vi 2 nguon nay ghi TRUNG cho cung 1 request thuc te (cung 1
+        cuoc goi OpenAI vua bi log boi ca 2 co che)."""
         async with aiosqlite.connect(self.db_path) as db:
             db.row_factory = aiosqlite.Row
             cur = await db.execute(
@@ -1676,7 +1682,7 @@ class MemoryStore:
                     COALESCE(SUM(total_tokens), 0) AS total_tokens,
                     MAX(created_at) AS last_used_at
                 FROM ai_token_usage_events
-                WHERE created_at >= ?
+                WHERE created_at >= ? AND tenant_id = 'system'
                 GROUP BY route
                 ORDER BY total_tokens DESC
                 """,
@@ -1699,7 +1705,7 @@ class MemoryStore:
                     COUNT(*) AS request_count,
                     COALESCE(SUM(total_tokens), 0) AS total_tokens
                 FROM ai_token_usage_events
-                WHERE created_at >= ?
+                WHERE created_at >= ? AND tenant_id = 'system'
                 GROUP BY day, route
                 ORDER BY day ASC, total_tokens DESC
                 """,
@@ -1718,7 +1724,7 @@ class MemoryStore:
                 """
                 SELECT route, model, prompt_tokens, completion_tokens, total_tokens, created_at
                 FROM ai_token_usage_events
-                WHERE created_at >= ?
+                WHERE created_at >= ? AND tenant_id = 'system'
                 ORDER BY created_at DESC, id DESC
                 LIMIT ?
                 """,
