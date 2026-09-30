@@ -373,6 +373,7 @@ Yeu cau:
             ],
             tools=None,
             tool_choice="auto",
+            route="Tư vấn AI",
         )
         text = (resp.choices[0].message.content or "").strip()
         return text or base_answer, current_token_usage()

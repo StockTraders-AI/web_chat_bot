@@ -52,6 +52,11 @@ PORT = int(os.getenv("PORT", "8000"))
 STOCKTRADERS_RESYNC_URL = os.getenv("STOCKTRADERS_RESYNC_URL", "").strip()
 STOCKTRADERS_RESYNC_SECRET = os.getenv("STOCKTRADERS_RESYNC_SECRET", "").strip()
 
+# Shared secret cho /public/ai-usage/by-route - cho phep dashboard quota chay
+# tren may khac (vd log_quota cua admin) doc duoc so lieu usage theo route
+# ma khong can dang nhap session trinh duyet.
+AI_USAGE_DASHBOARD_SECRET = os.getenv("AI_USAGE_DASHBOARD_SECRET", "").strip()
+
 # Model options (UI dropdown) - báº¡n cÃ³ thá»ƒ thÃªm/bá»›t
 ALLOWED_MODELS = [
     "gpt-4o",

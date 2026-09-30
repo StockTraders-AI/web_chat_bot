@@ -2,7 +2,7 @@ import asyncio
 import json, os, re, zipfile
 from io import BytesIO
 from xml.etree import ElementTree
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from fastapi import Cookie, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -695,6 +695,7 @@ def build_demo_flow_ai_signal(
             messages=messages,
             tools=None,
             tool_choice="auto",
+            route="Khuyến nghị từ AI",
         )
         content = (resp.choices[0].message.content or "").strip()
         signal_card = parse_signal_card_ai_content(content, fallback)
@@ -709,6 +710,7 @@ def build_demo_flow_ai_signal(
                 messages=retry_messages,
                 tools=None,
                 tool_choice="auto",
+                route="Khuyến nghị từ AI",
             )
             retry_content = (retry_resp.choices[0].message.content or "").strip()
             retry_card = parse_signal_card_ai_content(retry_content, fallback)
@@ -803,6 +805,7 @@ def build_demo_flow_ai_response(
             messages=messages,
             tools=None,
             tool_choice="auto",
+            route="Khuyến nghị từ AI",
         )
         content = (resp.choices[0].message.content or "").strip()
         return parse_signal_response_ai_content(content, fallback)
@@ -1445,6 +1448,36 @@ async def list_admin_ai_usage_users(
     await require_super_admin(authorization, session_cookie)
     quota = QuotaService(memory)
     return {"users": await quota.admin_usage_users()}
+
+@app.get("/public/ai-usage/by-route")
+async def list_public_ai_usage_by_route(
+    days: int = 30,
+    x_usage_secret: Optional[str] = Header(default=None, alias="X-Usage-Secret"),
+):
+    """Ban khong-can-cookie, dung cho dashboard quota chay tren may khac (vd
+    log_quota cua admin) goi tu xa, xac thuc bang shared secret thay vi
+    session dang nhap trinh duyet."""
+    from settings import AI_USAGE_DASHBOARD_SECRET
+    import hmac
+
+    expected = (AI_USAGE_DASHBOARD_SECRET or "").strip()
+    provided = (x_usage_secret or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="AI_USAGE_DASHBOARD_SECRET chua duoc cau hinh")
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="Sai usage secret")
+
+    since = datetime.utcnow() - timedelta(days=max(1, min(days, 365)))
+    by_route = await memory.list_ai_usage_by_route(since)
+    by_day = await memory.list_ai_usage_by_route_and_day(since)
+    events = await memory.list_ai_usage_events_recent(since, limit=500)
+    return {
+        "since": since.isoformat(),
+        "days": days,
+        "by_route": by_route,
+        "by_day": by_day,
+        "events": events,
+    }
 
 @app.get("/accounts/{account_id}/permissions")
 async def get_account_permissions(
@@ -2565,6 +2598,7 @@ async def public_do_song_advice(payload: DoSongAdviceIn):
             ],
             tools=None,
             tool_choice="auto",
+            route="Khuyến nghị từ AI",
         )
         content = (resp.choices[0].message.content or "").strip()
         card = parse_signal_card_ai_content(content, fallback)

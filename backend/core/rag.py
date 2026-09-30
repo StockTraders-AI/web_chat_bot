@@ -605,7 +605,8 @@ class RAGStore:
                     "content": "Chỉ trả về đúng tên file trong danh sách."
                 },
                 {"role": "user", "content": prompt}
-            ]
+            ],
+            route="RAG tra tài liệu",
         )
 
         raw = (resp.choices[0].message.content or "").strip()

@@ -1688,7 +1688,8 @@ class Orchestrator:
             messages=[
                 {"role": "system", "content": "Chỉ trả về đúng 1 từ: RULES hoặc BOOKS."},
                 {"role": "user", "content": prompt},
-            ]
+            ],
+            route="Tư vấn AI (phân loại câu hỏi)",
         )
 
         raw = normalize_label(resp.choices[0].message.content or "")
@@ -1933,7 +1934,8 @@ class Orchestrator:
 
             resp = self.oa.chat(
                 model=model,
-                messages=messages
+                messages=messages,
+                route="Tư vấn AI",
             )
 
             final_text = resp.choices[0].message.content or ""
@@ -2003,7 +2005,8 @@ class Orchestrator:
                 model=model,
                 messages=messages,
                 tools=tools,
-                tool_choice="required" if must_call_rule_tool else "auto"
+                tool_choice="required" if must_call_rule_tool else "auto",
+                route="Tư vấn AI",
             )
 
             msg = resp.choices[0].message
@@ -2291,6 +2294,7 @@ Yêu cầu:
                 ],
                 tools=None,
                 tool_choice="auto",
+                route="Tư vấn AI",
             )
             text = (resp.choices[0].message.content or "").strip()
             return text or fallback
@@ -2333,6 +2337,7 @@ Yêu cầu:
                 ],
                 tools=None,
                 tool_choice="auto",
+                route="Tư vấn AI",
             )
             text = (resp.choices[0].message.content or "").strip()
             if text and not case_idea_answer_too_similar(text, fallback):
@@ -2352,6 +2357,7 @@ Yêu cầu:
                 ],
                 tools=None,
                 tool_choice="auto",
+                route="Tư vấn AI",
             )
             retry_text = (retry.choices[0].message.content or "").strip()
             return retry_text or text or fallback

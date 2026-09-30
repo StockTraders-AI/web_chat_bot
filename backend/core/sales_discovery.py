@@ -532,6 +532,7 @@ Chỉ trả JSON hợp lệ:
                     {"role": "system", "content": "Chỉ trả JSON hợp lệ, không markdown."},
                     {"role": "user", "content": prompt},
                 ],
+                route="Sales discovery",
             )
             parsed = safe_json_loads(resp.choices[0].message.content or "")
             route = (parsed.get("route") or "").strip().lower()
@@ -803,6 +804,7 @@ Chỉ trả về nội dung gửi cho khách.
                     {"role": "system", "content": "Chỉ viết phản hồi tiếng Việt tự nhiên để gửi cho khách, tối đa 2 câu ngắn."},
                     {"role": "user", "content": prompt},
                 ],
+                route="Sales discovery",
             )
             question = (resp.choices[0].message.content or "").strip()
             question = remove_formulaic_opening(question)
@@ -842,7 +844,7 @@ Chỉ trả về nội dung gửi cho khách.
         parsed_from_fallback = False
 
         try:
-            resp = self.oa.chat(model=self.model, messages=messages)
+            resp = self.oa.chat(model=self.model, messages=messages, route="Sales discovery")
             content = resp.choices[0].message.content or ""
             parsed = safe_json_loads(content)
         except Exception as exc:
