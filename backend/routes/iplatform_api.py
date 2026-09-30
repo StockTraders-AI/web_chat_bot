@@ -179,7 +179,7 @@ async def iplatform_ai_chat(
         user_key=identity.user_key,
         conversation_id=conversation_id,
         request_id=request_id,
-        route="api/ai/chat",
+        route="Chat AI",
         model=payload.model,
         usage=done_data.get("usage") or {},
         prompt_text=content,
