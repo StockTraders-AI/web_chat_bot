@@ -331,6 +331,17 @@ def _find_branch_drop_payload(value: Any) -> Optional[Dict[str, Any]]:
     return best
 
 
+_BRANCH_DROP_INTENT_PATTERN = re.compile(
+    r"\b(mat|het|roi|suy yeu|khong con|bi loai|tut|rot|giam)\b.{0,25}\b(vai tro|dan song|dan dat|chuan)\b"
+    r"|\b(vai tro|dan song|dan dat)\b.{0,25}\b(mat|het|suy yeu|yeu di)\b"
+)
+
+
+def _is_branch_drop_question(user_text: str) -> bool:
+    """True only when the user asks when a branch LOST its leading role (not when it led)."""
+    return bool(_BRANCH_DROP_INTENT_PATTERN.search(normalize_search_text(user_text or "")))
+
+
 def format_branch_drop_answer(payload: Dict[str, Any]) -> str:
     branch = str(payload.get("branch") or "ngành").strip()
     date_text = str(payload.get("date") or "").strip() or "ngày gần nhất"
@@ -2091,11 +2102,22 @@ class Orchestrator:
                 })
 
                 if op_name == "getSMDTBranchDrop":
-                    branch_drop_payload = _find_branch_drop_payload(result)
-                    if branch_drop_payload:
-                        final_text = format_branch_drop_answer(branch_drop_payload)
-                        log("BRANCH DROP FORMATTER APPLIED")
-                        return messages, final_text
+                    if _is_branch_drop_question(user_text):
+                        branch_drop_payload = _find_branch_drop_payload(result)
+                        if branch_drop_payload:
+                            final_text = format_branch_drop_answer(branch_drop_payload)
+                            log("BRANCH DROP FORMATTER APPLIED")
+                            return messages, final_text
+                    else:
+                        log("BRANCH DROP SKIPPED: question is not about losing the leading role")
+                        messages.append({
+                            "role": "system",
+                            "content": (
+                                "Cau hoi KHONG hoi ve viec mat vai tro dan song. Bo qua ket qua getSMDTBranchDrop. "
+                                "Hay goi getSMDTBranchCross voi keyName/path cua nganh va date (YYYY-MM hoac YYYY) "
+                                "duoc hoi de liet ke cac ngay nganh dan song."
+                            ),
+                        })
 
                 if op_name in {"getStock4KeyEvaluation", "getStock4KeyScreen"}:
                     stock_4key_payload = _find_stock_4key_payload(result)

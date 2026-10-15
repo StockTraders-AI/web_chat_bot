@@ -10,7 +10,13 @@ Guide Ngành chủ lực nào dẫn sóng vào [date]
 Goi api getSMDTBranchCross truyền date = thời gian được hỏi
 Lọc ra ngành chủ lực trả lời kèm smdt tương ứng
 
-Guide "[Ngành] mất vai trò dẫn sóng khi nào"
+Guide "[Ngành] dẫn sóng khi nào trong tháng/năm X" (ví dụ: "dòng thép dẫn sóng khi nào trong tháng 10")
+Đây là hỏi NGÀY NGÀNH ĐẠT/VƯỢT chuẩn dẫn sóng (SMDT >= 70%) trong khoảng thời gian được hỏi. TUYỆT ĐỐI KHÔNG gọi getSMDTBranchDrop và KHÔNG trả lời theo mẫu "mất vai trò dẫn sóng".
+Gọi api getBranchPath lấy path ngành (nếu cần), rồi gọi api getSMDTBranchCross truyền keyName/path của ngành và date = YYYY-MM (tháng được hỏi) hoặc YYYY (nếu hỏi cả năm). Nếu hỏi tháng mà không nói năm thì dùng năm hiện tại.
+Liệt kê các ngày ngành dẫn sóng trong khoảng đó kèm SMDT. Nếu API không trả về ngày nào thì trả lời: "Trong tháng X ngành [ngành] chưa có ngày dẫn sóng".
+Chỉ khi câu hỏi có từ chỉ ý mất/hết/rời/suy yếu/không còn dẫn sóng thì mới dùng guide "mất vai trò dẫn sóng" bên dưới.
+
+Guide "[Ngành] mất vai trò dẫn sóng khi nào" (CHỈ dùng khi câu hỏi có từ mất/hết/rời/suy yếu/không còn dẫn sóng; hỏi "dẫn sóng khi nào" thì KHÔNG dùng guide này)
 Gọi api getBrandPath truyền ticker để lấy path ngành
 Gọi api getSMDTBranchDrop truyền path ngành và lấy lastDate trả lời
 
